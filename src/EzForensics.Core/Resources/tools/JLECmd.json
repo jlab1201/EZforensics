@@ -1,0 +1,38 @@
+{
+  "id": "JLECmd",
+  "displayName": "JLECmd",
+  "category": "FileFolderAccess",
+  "description": "Parses Jump Lists (automaticDestinations-ms / customDestinations-ms).",
+  "usage": "Parses Jump List files, which record the files and destinations each application recently opened. Use it to see what documents a user opened and when, including from removable or network locations.",
+  "limitation": "Only applications that use jump lists create them, and only after a user opened items. Old entries age out.",
+  "kind": "cli",
+  "exe": "JLECmd.exe",
+  "zip": "JLECmd.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Users\\*\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\AutomaticDestinations", "Users\\*\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\CustomDestinations"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "Jump list file", "description": "File to process. Either this or -d is required.", "filter": "Jump lists|*.automaticDestinations-ms;*.customDestinations-ms|All files|*.*" },
+    { "id": "d", "flag": "-d", "type": "folder", "label": "Directory", "description": "Directory to recursively process. Either this or -f is required." },
+    { "id": "all", "flag": "--all", "type": "bool", "label": "All files", "description": "Process all files in directory vs. only *.automaticDestinations-ms or *.customDestinations-ms.", "default": "false", "advanced": true, "visibleWhen": "d" },
+    { "use": "csv" },
+    { "use": "csvf" },
+    { "use": "json" },
+    { "use": "jsonf" },
+    { "use": "html" },
+    { "use": "pretty" },
+    { "use": "q" },
+    { "id": "ld", "flag": "--ld", "type": "bool", "label": "LNK details", "description": "Include more information about lnk files.", "default": "false", "advanced": true },
+    { "id": "fd", "flag": "--fd", "type": "bool", "label": "Full LNK details", "description": "Include full information about lnk files.", "default": "false", "advanced": true },
+    { "id": "appIds", "flag": "--appIds", "type": "file", "label": "AppIDs file", "description": "Path to file containing AppIDs and descriptions (appid|description format).", "advanced": true, "filter": "Text files|*.txt|All files|*.*" },
+    { "id": "dumpTo", "flag": "--dumpTo", "type": "outputDir", "label": "Export LNK files to", "description": "Directory to save exported lnk files.", "advanced": true },
+    { "use": "dt" },
+    { "use": "mp" },
+    { "id": "withDir", "flag": "--withDir", "type": "bool", "label": "Show unaccounted entries", "description": "Show contents of Directory not accounted for in DestList entries.", "default": "false", "advanced": true },
+    { "use": "cp" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ],
+  "groups": [
+    { "mode": "exactlyOne", "params": ["f", "d"] }
+  ]
+}

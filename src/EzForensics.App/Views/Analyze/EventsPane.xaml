@@ -1,0 +1,497 @@
+﻿<UserControl x:Class="EzForensics.App.Views.Analyze.EventsPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
+             xmlns:c="clr-namespace:EzForensics.App.Controls"
+             xmlns:local="clr-namespace:EzForensics.App"
+             xmlns:svc="clr-namespace:EzForensics.App.Services"
+             xmlns:an="clr-namespace:EzForensics.App.Views.Analyze">
+    <UserControl.Resources>
+        <Style x:Key="SearchHelpToggle" TargetType="ToggleButton" BasedOn="{StaticResource HelpCircleToggle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasSearchText}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <DataTemplate DataType="{x:Type vm:AdvisoryBannerViewModel}"><an:AdvisoryBanner/></DataTemplate>
+        <!-- small header / chip button; defined before the row style and chip template that use it (StaticResource needs it first) -->
+        <Style x:Key="HeaderMiniButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="3,1"/>
+            <Setter Property="Focusable" Value="True"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+        </Style>
+
+        <!-- grid rows: light tint in the flag colour (Settings: Tint flagged rows) -->
+        <Style x:Key="FlagRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFlagged}" Value="True"/>
+                        <Condition Binding="{Binding DataContext.FlagRowTint, RelativeSource={RelativeSource AncestorType=DataGrid}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="{Binding FlagTintBrush}"/>
+                </MultiDataTrigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Control}"/>
+                </Trigger>
+                <!-- pivot group header line: one full-width row (chevron, column, bold value, muted count), indented 16 px per level -->
+                <DataTrigger Binding="{Binding IsGroupHeader}" Value="True">
+                    <Setter Property="AutomationProperties.AutomationId" Value="Results.Pivot.Header"/>
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Text}"/>
+                    <Setter Property="Focusable" Value="True"/>
+                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="DataGridRow">
+                                <Border x:Name="hb" Background="{DynamicResource Brush.Control}" BorderBrush="{DynamicResource Brush.Border}"
+                                        BorderThickness="0,0,0,1" ToolTip="{Binding Text}">
+                                    <StackPanel Orientation="Horizontal" Margin="{Binding Indent}" VerticalAlignment="Center">
+                                        <Button Style="{StaticResource HeaderMiniButton}" Tag="PivotToggle" Focusable="False"
+                                                Content="{Binding Chevron}" FontFamily="{StaticResource Font.Icon}" FontSize="10" VerticalAlignment="Center"
+                                                ToolTip="Collapse / expand (double-click, Left / Right)"
+                                                AutomationProperties.AutomationId="Results.Pivot.Header.Toggle" AutomationProperties.Name="Collapse or expand"/>
+                                        <TextBlock Text="{Binding Column, StringFormat={}{0}:}" Foreground="{DynamicResource Brush.TextSecondary}"
+                                                   Margin="6,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding ValueText}" FontWeight="SemiBold" VerticalAlignment="Center" MaxWidth="900" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding CountText}" Foreground="{DynamicResource Brush.TextSecondary}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsKeyboardFocused" Value="True">
+                                        <Setter TargetName="hb" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                                        <Setter TargetName="hb" Property="BorderThickness" Value="1"/>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="hb" Property="Background" Value="{DynamicResource Brush.Selection}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- pivot group panel chip: column name + sort glyph; click flips the order, drag reorders / drags off to ungroup, right-click for sort options -->
+        <DataTemplate x:Key="PivotChipTemplate" DataType="{x:Type vm:PivotGroupChip}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="sep" Text="&#xE76C;" FontFamily="{StaticResource Font.Icon}" FontSize="9" VerticalAlignment="Center"
+                           Foreground="{DynamicResource Brush.TextDisabled}" Margin="2,0,4,0"/>
+                <Border Background="{DynamicResource Brush.Control}" BorderBrush="{DynamicResource Brush.BorderStrong}" BorderThickness="1" CornerRadius="10"
+                        Padding="8,1,8,1" Margin="0,1" Cursor="Hand" Tag="{Binding}"
+                        PreviewMouseLeftButtonDown="PivotChip_PreviewMouseLeftButtonDown" PreviewMouseMove="PivotChip_PreviewMouseMove"
+                        PreviewMouseLeftButtonUp="PivotChip_PreviewMouseLeftButtonUp"
+                        AutomationProperties.AutomationId="{Binding AutomationId}" AutomationProperties.Name="{Binding Column}"
+                        AutomationProperties.HelpText="{Binding SortToolTip}">
+                    <Border.ToolTip>
+                        <TextBlock Text="{Binding SortToolTip}"/>
+                    </Border.ToolTip>
+                    <Border.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Sort by value" Click="PivotChipSortValue_Click" AutomationProperties.AutomationId="Results.Pivot.ChipMenu.SortByValue"/>
+                            <MenuItem Header="Sort by count" Click="PivotChipSortCount_Click" AutomationProperties.AutomationId="Results.Pivot.ChipMenu.SortByCount"/>
+                            <Separator/>
+                            <MenuItem Header="Ungroup" Click="PivotChipUngroup_Click" AutomationProperties.AutomationId="Results.Pivot.ChipMenu.Ungroup"/>
+                        </ContextMenu>
+                    </Border.ContextMenu>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Column}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding SortGlyph}" Margin="6,0,0,0" FontSize="10" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.Accent}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
+                    <Setter TargetName="sep" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- column header: name + funnel, then the auto-filter row (operator + text) -->
+        <Style x:Key="StretchHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+        </Style>
+
+        <DataTemplate x:Key="ColumnHeaderTemplate" DataType="{x:Type vm:ColumnFilterCell}">
+            <StackPanel>
+                <DockPanel>
+                    <Button x:Name="funnel" DockPanel.Dock="Right" Style="{StaticResource HeaderMiniButton}" Click="Funnel_Click"
+                            Content="&#xE71C;" FontFamily="{StaticResource Font.Icon}" FontSize="10" Margin="4,0,0,0"
+                            Foreground="{DynamicResource Brush.TextDisabled}"
+                            AutomationProperties.AutomationId="{Binding Column, StringFormat=Results.Header.Funnel.{0}}"
+                            AutomationProperties.Name="{Binding Column, StringFormat=Filter values of {0}}"
+                            AutomationProperties.HelpText="{Binding IsFiltered}"
+                            ToolTip="Filter by values, dates or a custom condition"/>
+                    <TextBlock x:Name="advIcon" DockPanel.Dock="Left" Visibility="Collapsed" FontFamily="{StaticResource Font.Icon}" FontSize="11" Margin="0,0,4,0"
+                               VerticalAlignment="Center" ToolTip="{Binding AdvisoryTip}"
+                               AutomationProperties.AutomationId="{Binding Column, StringFormat=Results.Header.Advisory.{0}}"
+                               AutomationProperties.Name="{Binding AdvisoryTip}" AutomationProperties.HelpText="{Binding AdvisoryKind}"/>
+                    <TextBlock Text="{Binding Column}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                </DockPanel>
+                <DockPanel Margin="0,4,0,0">
+                    <Button DockPanel.Dock="Left" Style="{StaticResource HeaderMiniButton}" Click="FilterOp_Click" MinWidth="22"
+                            Content="{Binding OpSymbol}" ToolTip="{Binding OpLabel}" FontFamily="{DynamicResource Font.UI}" FontSize="11"
+                            Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,0,3,0"
+                            AutomationProperties.AutomationId="{Binding Column, StringFormat=Results.FilterRow.{0}.Op}"
+                            AutomationProperties.Name="{Binding OpLabel}"/>
+                    <TextBox x:Name="box" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" MinHeight="0" Padding="3,1" FontSize="11"
+                             FontWeight="Normal" FontFamily="{DynamicResource Font.Mono}" IsEnabled="{Binding OpNeedsValue}"
+                             AutomationProperties.AutomationId="{Binding Column, StringFormat=Results.FilterRow.{0}}"
+                             AutomationProperties.Name="{Binding Column, StringFormat=Filter {0}}"
+                             ToolTip="{Binding OpLabel}"/>
+                </DockPanel>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <!-- column markers: also gated by ResultsViewModel.HintsVisible (Options > Display / Actions > Hide hints) -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding AdvisoryKind}" Value="warn"/>
+                        <Condition Binding="{Binding DataContext.HintsVisible, RelativeSource={RelativeSource AncestorType=DataGrid}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="advIcon" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="advIcon" Property="Text" Value="&#xE7BA;"/>
+                    <Setter TargetName="advIcon" Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding AdvisoryKind}" Value="crit"/>
+                        <Condition Binding="{Binding DataContext.HintsVisible, RelativeSource={RelativeSource AncestorType=DataGrid}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="advIcon" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="advIcon" Property="Text" Value="&#xEA39;"/>
+                    <Setter TargetName="advIcon" Property="Foreground" Value="{DynamicResource Brush.Error}"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding AdvisoryKind}" Value="info"/>
+                        <Condition Binding="{Binding DataContext.HintsVisible, RelativeSource={RelativeSource AncestorType=DataGrid}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="advIcon" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="advIcon" Property="Text" Value="&#xE946;"/>
+                    <Setter TargetName="advIcon" Property="Foreground" Value="{DynamicResource Brush.Info}"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding AdvisoryKind}" Value="ok"/>
+                        <Condition Binding="{Binding DataContext.HintsVisible, RelativeSource={RelativeSource AncestorType=DataGrid}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="advIcon" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="advIcon" Property="Text" Value="&#xE73E;"/>
+                    <Setter TargetName="advIcon" Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+                </MultiDataTrigger>
+                <DataTrigger Binding="{Binding IsFiltered}" Value="True">
+                    <Setter TargetName="funnel" Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+                    <Setter TargetName="funnel" Property="Background" Value="{DynamicResource Brush.Selection}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasError}" Value="True">
+                    <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource Brush.Error}"/>
+                    <Setter TargetName="box" Property="ToolTip" Value="Invalid regular expression"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- flag column header: tri-state all / flagged / unflagged -->
+        <DataTemplate x:Key="FlagHeaderTemplate">
+            <StackPanel HorizontalAlignment="Center">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE7C1;" FontSize="11" HorizontalAlignment="Center" ToolTip="Flag"/>
+                <c:CycleCheckBox Margin="0,6,0,0" HorizontalAlignment="Center"
+                                 IsChecked="{Binding DataContext.FlagFilter, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                 AutomationProperties.AutomationId="Results.FilterRow.Flag" AutomationProperties.Name="Flag filter"
+                                 ToolTip="Flag filter: all rows (■) → flagged only (✓) → unflagged only (empty)"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- flag cell -->
+        <DataTemplate x:Key="FlagCellTemplate" DataType="{x:Type vm:RowItem}">
+            <Button x:Name="b" Focusable="False" Cursor="Hand" Background="Transparent" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Click="FlagCell_Click" Margin="{Binding DataContext.PivotRowIndent, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                    AutomationProperties.AutomationId="Results.FlagCell"
+                    AutomationProperties.Name="{Binding RowNumber, StringFormat=Flag row {0}}"
+                    AutomationProperties.HelpText="{Binding IsFlagged}"
+                    AutomationProperties.ItemStatus="{Binding FlagText}"
+                    ToolTip="{Binding FlagToolTip}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent" Padding="2,0" VerticalAlignment="Center">
+                            <Canvas Width="14" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Path x:Name="flag" Data="M3,2 H13 L10,5.5 L13,9 H3 Z" StrokeThickness="1.2"
+                                      Stroke="{DynamicResource Brush.TextDisabled}" Fill="Transparent"/>
+                                <Path x:Name="pole" Data="M3,1 V15" StrokeThickness="1.4" Stroke="{DynamicResource Brush.TextDisabled}"/>
+                            </Canvas>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="flag" Property="Stroke" Value="{DynamicResource Brush.Text}"/>
+                                <Setter TargetName="pole" Property="Stroke" Value="{DynamicResource Brush.Text}"/>
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsFlagged}" Value="True">
+                                <Setter TargetName="flag" Property="Fill" Value="{Binding FlagBrush}"/>
+                                <Setter TargetName="flag" Property="Stroke" Value="{Binding FlagBrush}"/>
+                                <Setter TargetName="pole" Property="Stroke" Value="{Binding FlagBrush}"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel>
+
+        <!-- filter bar -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="10" Margin="0,0,0,8">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <ToggleButton x:Name="FlagFilterButton" AutomationProperties.AutomationId="Results.FlagFilter" AutomationProperties.Name="Flag filter"
+                              AutomationProperties.ItemStatus="{Binding FlagFilterText}"
+                              IsChecked="{Binding IsOpen, ElementName=FlagFilterPopup, Mode=TwoWay}" Margin="0,0,6,0" MinHeight="30"
+                              ToolTip="Flag filter: all rows, all flagged, or flagged with chosen colours (combines with the other filters)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE7C1;" FontSize="12" Foreground="{DynamicResource Brush.Warning}"/>
+                        <TextBlock Text="{Binding FlagFilterText}" Margin="6,0,0,0" MinWidth="64"/>
+                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Font.Icon}" FontSize="9" Margin="8,0,0,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    </StackPanel>
+                </ToggleButton>
+                <Popup x:Name="FlagFilterPopup" PlacementTarget="{Binding ElementName=FlagFilterButton}" Placement="Bottom" StaysOpen="False"
+                       AllowsTransparency="True" Opened="FlagFilterPopup_Opened">
+                    <Border x:Name="FlagFilterPopupRoot" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.BorderStrong}"
+                            BorderThickness="1" CornerRadius="4" Padding="10,8" MinWidth="260" TextElement.Foreground="{DynamicResource Brush.Text}"
+                            AutomationProperties.AutomationId="Results.FlagFilter.Popup">
+                        <StackPanel>
+                            <CheckBox x:Name="FlagModeAll" Content="All rows" Checked="FlagMode_Changed" Unchecked="FlagMode_Changed" Tag="all" Margin="0,2"
+                                      AutomationProperties.AutomationId="Results.FlagFilter.All" AutomationProperties.Name="All rows"/>
+                            <CheckBox x:Name="FlagModeFlagged" Checked="FlagMode_Changed" Unchecked="FlagMode_Changed" Tag="flagged" Margin="0,2"
+                                      AutomationProperties.AutomationId="Results.ShowOnlyFlagged" AutomationProperties.Name="All flagged">
+                                <TextBlock>
+                                    <Run Text="All flagged"/>
+                                    <Run Text="{Binding FlaggedCount, Mode=OneWay, StringFormat=  ({0:N0})}" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                </TextBlock>
+                            </CheckBox>
+                            <CheckBox x:Name="FlagModeUnflagged" Content="Not flagged" Checked="FlagMode_Changed" Unchecked="FlagMode_Changed" Tag="unflagged" Margin="0,2"
+                                      AutomationProperties.AutomationId="Results.FlagFilter.Unflagged" AutomationProperties.Name="Not flagged"/>
+                            <Separator/>
+                            <TextBlock Text="Flagged with any of these flags" Style="{StaticResource Caption}" Margin="0,0,0,4"/>
+                            <ItemsControl ItemsSource="{Binding FlagOptions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:FlagOption}">
+                                        <DockPanel Margin="0,2">
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="only" MinHeight="0" Padding="6,1" FontSize="11"
+                                                    Foreground="{DynamicResource Brush.Accent}" Click="FlagOnly_Click" Margin="8,0,0,0"
+                                                    AutomationProperties.AutomationId="{Binding Id, StringFormat=Results.FlagFilter.{0}.Only}"
+                                                    AutomationProperties.Name="{Binding Label, StringFormat=Only {0}}"
+                                                    ToolTip="{Binding Label, StringFormat=Show only rows flagged {0}}"/>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Count, StringFormat=N0}" VerticalAlignment="Center" MinWidth="28"
+                                                       TextAlignment="Right" Foreground="{DynamicResource Brush.TextSecondary}" Typography.NumeralAlignment="Tabular"/>
+                                            <CheckBox IsChecked="{Binding IsSelected}"
+                                                      AutomationProperties.AutomationId="{Binding Id, StringFormat=Results.FlagFilter.{0}}"
+                                                      AutomationProperties.Name="{Binding Display}"
+                                                      AutomationProperties.ItemStatus="{Binding Count}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Border Style="{StaticResource FlagSwatch}" Background="{Binding Brush}"/>
+                                                    <TextBlock Text="{Binding Display}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </CheckBox>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Separator/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Caption}" Text="How to flag"/>
+                                <c:HelpTip Margin="6,0,0,0"
+                                           Text="Click the flag cell to cycle flags, right-click to choose one, Ctrl+1..9 to flag, Ctrl+0 to clear. Edit flags in Options."/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+                <TextBlock AutomationProperties.AutomationId="Results.FlaggedCount" Text="{Binding FlaggedText}" VerticalAlignment="Center"
+                           Margin="0,0,12,0" Foreground="{DynamicResource Brush.TextSecondary}" ToolTip="{Binding FlagsPath}"/>
+                <Button x:Name="ActionsButton" AutomationProperties.AutomationId="Results.Actions" AutomationProperties.Name="Actions" MinHeight="30"
+                        Click="ActionsButton_Click" Margin="0,0,6,0" ToolTip="Export, copy, open in default app, show in Explorer, column widths">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Actions"/>
+                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Font.Icon}" FontSize="9" Margin="8,0,0,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    </StackPanel>
+                    <Button.ContextMenu>
+                <ContextMenu x:Name="ActionsMenu" Placement="Bottom"
+                             AutomationProperties.AutomationId="Results.Actions.Menu" Opened="ActionsMenu_Opened">
+                    <MenuItem Header="Export" Style="{StaticResource MenuCaptionItem}" AutomationProperties.AutomationId="Results.Actions.Caption.Export"/>
+                    <MenuItem x:Name="ActExportFiltered" Header="Export filtered rows…" Click="ActExportFiltered_Click" AutomationProperties.AutomationId="Results.Export"
+                              ToolTip="Exports every column of the filtered rows (hidden columns included)"><MenuItem.Icon><TextBlock Text="&#xE78C;" Style="{StaticResource MenuIconSuccess}"/></MenuItem.Icon></MenuItem>
+                    <MenuItem x:Name="ActExportFlagged" Header="Export flagged rows…" Click="ActExportFlagged_Click" AutomationProperties.AutomationId="Results.ExportFlagged"
+                              ToolTip="Exports every column of the flagged rows (hidden columns included)"><MenuItem.Icon><TextBlock Text="&#xE78C;" Style="{StaticResource MenuIconSuccess}"/></MenuItem.Icon></MenuItem>
+                    <Separator/>
+                    <MenuItem Header="Copy" Style="{StaticResource MenuCaptionItem}" AutomationProperties.AutomationId="Results.Actions.Caption.Copy"/>
+                    <MenuItem x:Name="ActCopySelected" Header="Copy selected rows" Click="ActCopySelected_Click" AutomationProperties.AutomationId="Results.Actions.CopySelected"
+                              ToolTip="Tab-separated with a header row, visible columns"><MenuItem.Icon><TextBlock Text="&#xE8C8;" Style="{StaticResource MenuIconAccent}"/></MenuItem.Icon></MenuItem>
+                    <MenuItem x:Name="ActCopyFlagged" Header="Copy flagged rows" Click="ActCopyFlagged_Click" AutomationProperties.AutomationId="Results.Actions.CopyFlagged"><MenuItem.Icon><TextBlock Text="&#xE8C8;" Style="{StaticResource MenuIconAccent}"/></MenuItem.Icon></MenuItem>
+                    <MenuItem x:Name="ActCopyFiltered" Header="Copy all filtered rows" Click="ActCopyFiltered_Click" AutomationProperties.AutomationId="Results.Actions.CopyFiltered"><MenuItem.Icon><TextBlock Text="&#xE8C8;" Style="{StaticResource MenuIconAccent}"/></MenuItem.Icon></MenuItem>
+                    <Separator/>
+                    <MenuItem Header="Open" Style="{StaticResource MenuCaptionItem}" AutomationProperties.AutomationId="Results.Actions.Caption.Open"/>
+                    <MenuItem x:Name="ActTimeline" Header="Open in default app" Click="ActTimeline_Click" AutomationProperties.AutomationId="Results.Actions.OpenDefaultApp"><MenuItem.Icon><TextBlock Text="&#xE8A7;" Style="{StaticResource MenuIconInfo}"/></MenuItem.Icon></MenuItem>
+                    <MenuItem x:Name="ActShowFile" Header="Show file in Explorer" Click="ActShowFile_Click" AutomationProperties.AutomationId="Results.Actions.ShowInExplorer"><MenuItem.Icon><TextBlock Text="&#xE838;" Style="{StaticResource MenuIconInfo}"/></MenuItem.Icon></MenuItem>
+                    <Separator/>
+                    <MenuItem Header="Views" Style="{StaticResource MenuCaptionItem}" AutomationProperties.AutomationId="Results.Actions.Caption.Views"/>
+                    <MenuItem x:Name="ActViewSave" Header="Save view" Click="ActViewSave_Click" AutomationProperties.AutomationId="Results.Actions.View.Save"><MenuItem.Icon><TextBlock Text="&#xE74E;" Style="{StaticResource MenuIconSuccess}"/></MenuItem.Icon></MenuItem>
+                    <MenuItem x:Name="ActViewSaveAs" Header="Save view as…" Click="ActViewSaveAs_Click" AutomationProperties.AutomationId="Results.Actions.View.SaveAs"><MenuItem.Icon><TextBlock Text="&#xE792;" Style="{StaticResource MenuIconSuccess}"/></MenuItem.Icon></MenuItem>
+                    <MenuItem x:Name="ActViewList" Header="Views" SubmenuOpened="ActViewList_SubmenuOpened" AutomationProperties.AutomationId="Results.Actions.View.List"
+                              ToolTip="Saved column layouts for this kind of CSV"><MenuItem.Icon><TextBlock Text="&#xE8FD;" Style="{StaticResource MenuIconAccent}"/></MenuItem.Icon><MenuItem Header="-"/></MenuItem>
+                    <MenuItem x:Name="ActViewManage" Header="Manage views…" Click="ActViewManage_Click" AutomationProperties.AutomationId="Results.Actions.View.Manage"><MenuItem.Icon><TextBlock Text="&#xE713;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon></MenuItem>
+                    <MenuItem x:Name="ActViewClear" Header="Clear view" Click="ActViewClear_Click" AutomationProperties.AutomationId="Results.Actions.View.Clear"
+                              ToolTip="Forgets the active view and restores all columns in file order (filters stay)"><MenuItem.Icon><TextBlock Text="&#xE894;" Style="{StaticResource MenuIconError}"/></MenuItem.Icon></MenuItem>
+                    <Separator/>
+                    <MenuItem Header="View" Style="{StaticResource MenuCaptionItem}" AutomationProperties.AutomationId="Results.Actions.Caption.View"/>
+                    <MenuItem x:Name="ActResetWidths" Header="Reset column widths" Click="ActResetWidths_Click" AutomationProperties.AutomationId="Results.Actions.ResetColumnWidths"><MenuItem.Icon><TextBlock Text="&#xE72C;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon></MenuItem>
+                    <MenuItem x:Name="ActHideHints" Header="Hide hints (this session)" IsCheckable="True" Click="ActHideHints_Click" AutomationProperties.AutomationId="Results.Actions.HideHints"
+                              ToolTip="Hides reliability banners and column markers on Analyze until you close the app"/>
+                    <Separator/>
+                    <MenuItem x:Name="ActShortcuts" Header="Keyboard shortcuts…" Click="ActShortcuts_Click" AutomationProperties.AutomationId="Results.Actions.Shortcuts"><MenuItem.Icon><TextBlock Text="&#xE765;" Style="{StaticResource MenuIconWarn}"/></MenuItem.Icon></MenuItem>
+                </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
+                <ToggleButton x:Name="FocusButton" AutomationProperties.AutomationId="Results.FocusMode" AutomationProperties.Name="Focus mode"
+                              Click="FocusButton_Click" MinHeight="30" MinWidth="34" Padding="6,0" ToolTip="Focus mode (F11)">
+                    <TextBlock x:Name="FocusGlyph" Style="{StaticResource Icon}" Text="&#xE740;" FontSize="13"/>
+                </ToggleButton>
+                </StackPanel>
+                <Grid>
+                    <TextBox AutomationProperties.AutomationId="Results.Search" Text="{Binding GlobalText, UpdateSourceTrigger=PropertyChanged}"
+                             Tag="Search all columns… (AND, OR, NOT, &quot;phrase&quot;)"
+                             Padding="6,4,26,4" PreviewKeyDown="Search_PreviewKeyDown">
+                        <TextBox.Style>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSearchError}" Value="True">
+                                        <Setter Property="ToolTip" Value="{Binding SearchError}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBox.Style>
+                    </TextBox>
+                    <Border BorderBrush="{DynamicResource Brush.Error}" BorderThickness="1" CornerRadius="4" IsHitTestVisible="False"
+                            Visibility="{Binding HasSearchError, Converter={StaticResource BoolToVis}}"
+                            AutomationProperties.AutomationId="Results.Search.Error"/>
+
+                    <ToggleButton x:Name="SearchHelpButton" Style="{StaticResource SearchHelpToggle}" AutomationProperties.AutomationId="Results.SearchHelp"
+                                  AutomationProperties.Name="Search help" Margin="0,0,5,0" HorizontalAlignment="Right"
+                                  MouseEnter="SearchHelp_MouseEnter" MouseLeave="SearchHelp_MouseLeave" Click="SearchHelpButton_Click" KeyDown="SearchHelp_KeyDown"/>
+                    <Popup x:Name="SearchHelpPopup" PlacementTarget="{Binding ElementName=SearchHelpButton}" Placement="Bottom" StaysOpen="True"
+                           AllowsTransparency="True" Opened="SearchHelpPopup_Opened" Closed="SearchHelpPopup_Closed">
+                        <Border x:Name="SearchHelpPopupRoot" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.BorderStrong}"
+                                BorderThickness="1" CornerRadius="4" Padding="12,10" MinWidth="380" TextElement.Foreground="{DynamicResource Brush.Text}"
+                                AutomationProperties.AutomationId="Results.SearchHelp.Popup"
+                                MouseEnter="SearchHelp_MouseEnter" MouseLeave="SearchHelp_MouseLeave" KeyDown="SearchHelp_KeyDown">
+                            <StackPanel>
+                                <TextBlock Text="Search all columns" FontWeight="SemiBold"/>
+                                <TextBlock Text="Every word must appear somewhere in the row. Operators must be UPPERCASE." Style="{StaticResource Caption}"
+                                           TextWrapping="Wrap" MaxWidth="400" Margin="0,2,0,8"/>
+                                <ItemsControl x:Name="SearchExamplesList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource SubtleButton}" HorizontalContentAlignment="Stretch" Padding="6,3" Click="SearchExample_Click"
+                                                    Tag="{Binding Query}" AutomationProperties.AutomationId="{Binding AutomationId}" AutomationProperties.Name="{Binding Query}"
+                                                    ToolTip="Click to search for this">
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Left" Text="{Binding Query}" FontFamily="{DynamicResource Font.Mono}" Foreground="{DynamicResource Brush.Accent}"
+                                                               MinWidth="190" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding Description}" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                                </DockPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="Need column-specific conditions? Use Filter actions → Edit filter… below the grid." Style="{StaticResource Caption}"
+                                           TextWrapping="Wrap" MaxWidth="400" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                    <Button HorizontalAlignment="Right" Style="{StaticResource ClearCircleButton}" Margin="0,0,5,0" ToolTip="Clear search"
+                            Command="{Binding ClearSearchCommand}"
+                            Visibility="{Binding HasSearchText, Converter={StaticResource BoolToVis}}"
+                            AutomationProperties.AutomationId="Results.Search.Clear" AutomationProperties.Name="Clear search"/>
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <!-- status -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+            <Button DockPanel.Dock="Right" Content="Cancel filter" Command="{Binding CancelFilterCommand}" MinHeight="24" Padding="8,2"
+                    Visibility="{Binding IsFiltering, Converter={StaticResource BoolToVis}}"/>
+            <ProgressBar DockPanel.Dock="Right" Width="140" Maximum="1" Value="{Binding FilterProgress}" Margin="8,0"
+                         Visibility="{Binding IsFiltering, Converter={StaticResource BoolToVis}}"/>
+            <ProgressBar DockPanel.Dock="Right" Width="140" Maximum="1" Value="{Binding IndexProgress}" Margin="8,0"
+                         Visibility="{Binding IsIndexing, Converter={StaticResource BoolToVis}}" ToolTip="Indexing"/>
+            <TextBlock AutomationProperties.AutomationId="Results.Status" Text="{Binding StatusText}" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center"/>
+        </DockPanel>
+
+        <!-- filter panel (Timeline Explorer style) -->
+        <an:FilterPanel DockPanel.Dock="Bottom"/>
+
+        <!-- reserved slot for advisory banners (set ResultsViewModel.AdvisoryBanner) -->
+        <ContentControl x:Name="AdvisoryBannerHost" DockPanel.Dock="Top" Content="{Binding AdvisoryBanner}" IsTabStop="False"
+                        Visibility="{Binding HintsVisible, Converter={StaticResource BoolToVis}}"/>
+
+        <!-- pivot group panel (Timeline Explorer style): drop column headers here; a thin hint bar while empty -->
+        <Border x:Name="PivotPanel" DockPanel.Dock="Top" AllowDrop="True" Margin="0,0,0,6" Padding="6,2" MinHeight="24" CornerRadius="4" BorderThickness="1"
+                Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
+                DragEnter="PivotPanel_DragOver" DragOver="PivotPanel_DragOver" DragLeave="PivotPanel_DragLeave" Drop="PivotPanel_Drop"
+                AutomationProperties.AutomationId="Results.Pivot.Panel" AutomationProperties.Name="Group panel"
+                Visibility="{Binding HasFile, Converter={StaticResource BoolToVis}}">
+            <Border.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Full Expand" Click="PivotPanelExpandAll_Click" AutomationProperties.AutomationId="Results.Pivot.Menu.ExpandAll"/>
+                    <MenuItem Header="Full Collapse" Click="PivotPanelCollapseAll_Click" AutomationProperties.AutomationId="Results.Pivot.Menu.CollapseAll"/>
+                    <Separator/>
+                    <MenuItem Header="Clear Grouping" Click="PivotPanelClear_Click" AutomationProperties.AutomationId="Results.Pivot.Menu.Clear"/>
+                </ContextMenu>
+            </Border.ContextMenu>
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                            Visibility="{Binding IsGrouped, Converter={StaticResource BoolToVis}}">
+                    <Button Style="{StaticResource HeaderMiniButton}" Content="Full Expand" Command="{Binding ExpandAllGroupsCommand}" Margin="4,0,0,0"
+                            AutomationProperties.AutomationId="Results.Pivot.ExpandAll" AutomationProperties.Name="Full Expand"/>
+                    <Button Style="{StaticResource HeaderMiniButton}" Content="Full Collapse" Command="{Binding CollapseAllGroupsCommand}" Margin="4,0,0,0"
+                            AutomationProperties.AutomationId="Results.Pivot.CollapseAll" AutomationProperties.Name="Full Collapse"/>
+                    <Button Style="{StaticResource HeaderMiniButton}" Content="Clear Grouping" Command="{Binding ClearGroupingCommand}" Margin="4,0,0,0"
+                            AutomationProperties.AutomationId="Results.Pivot.Clear" AutomationProperties.Name="Clear Grouping"/>
+                </StackPanel>
+                <TextBlock Text="&#xF168;" FontFamily="{StaticResource Font.Icon}" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                <Grid VerticalAlignment="Center">
+                    <TextBlock Text="Drag a column header here to group by that column" Style="{StaticResource Caption}" VerticalAlignment="Center"
+                               Visibility="{Binding IsGrouped, Converter={StaticResource BoolToVisInv}}" AutomationProperties.AutomationId="Results.Pivot.Hint"/>
+                    <ItemsControl x:Name="PivotChips" ItemsSource="{Binding GroupColumns}" ItemTemplate="{StaticResource PivotChipTemplate}" IsTabStop="False"
+                                  Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <Grid>
+            <DataGrid x:Name="Grid" AutomationProperties.AutomationId="Results.Grid" AllowDrop="True" DragEnter="Grid_ChipDragOver" DragOver="Grid_ChipDragOver" Drop="Grid_ChipDrop" ItemsSource="{Binding Rows}" IsReadOnly="True"
+                      EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                      VirtualizingPanel.ScrollUnit="Item" ScrollViewer.IsDeferredScrollingEnabled="False"
+                      SelectionUnit="CellOrRowHeader" SelectionMode="Extended" RowHeight="{DynamicResource Grid.RowHeight}" FrozenColumnCount="1"
+                      FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
+                      ClipboardCopyMode="ExcludeHeader" Sorting="Grid_Sorting"
+                      PreviewMouseRightButtonDown="Grid_PreviewMouseRightButtonDown" ContextMenuOpening="Grid_ContextMenuOpening"
+                      PreviewKeyDown="Grid_PreviewKeyDown" MouseDoubleClick="Grid_MouseDoubleClick"
+                      PreviewMouseLeftButtonDown="Grid_PreviewMouseLeftButtonDown" PreviewMouseMove="Grid_PreviewMouseMove" ButtonBase.Click="GroupChevron_Click"
+                      RowStyle="{StaticResource FlagRowStyle}" svc:Appearance.HandlesCtrlZero="True">
+                <DataGrid.ContextMenu>
+                    <ContextMenu AutomationProperties.AutomationId="Results.Menu"/>
+                </DataGrid.ContextMenu>
+            </DataGrid>
+            <TextBlock Text="Pick a CSV from the tree." HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="{DynamicResource Brush.TextSecondary}" Visibility="{Binding HasFile, Converter={StaticResource BoolToVisInv}}"/>
+        </Grid>
+    </DockPanel>
+</UserControl>

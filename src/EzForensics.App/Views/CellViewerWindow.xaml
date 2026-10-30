@@ -1,0 +1,39 @@
+<Window x:Class="EzForensics.App.Views.CellViewerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cell value" Width="760" Height="520" MinWidth="360" MinHeight="220"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}" TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}"
+        AutomationProperties.AutomationId="CellViewer.Window" PreviewKeyDown="Window_PreviewKeyDown">
+    <DockPanel Margin="14" LayoutTransform="{DynamicResource Ui.Scale}">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="PrevButton" Content="&#xE70E;  Prev row" FontFamily="{DynamicResource Font.UI}" Click="Prev_Click" Margin="0,0,6,0"
+                        ToolTip="Previous row, same column (Ctrl+Up)" AutomationProperties.AutomationId="CellViewer.Prev" AutomationProperties.Name="Previous row"/>
+                <Button x:Name="NextButton" Content="Next row  &#xE70D;" Click="Next_Click"
+                        ToolTip="Next row, same column (Ctrl+Down)" AutomationProperties.AutomationId="CellViewer.Next" AutomationProperties.Name="Next row"/>
+            </StackPanel>
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock x:Name="HeaderText" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="CellViewer.Header"/>
+                <TextBlock x:Name="InfoText" Style="{StaticResource Caption}" AutomationProperties.AutomationId="CellViewer.Info"/>
+            </StackPanel>
+        </DockPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                <CheckBox x:Name="WrapCheck" Content="Word wrap" IsChecked="True" Click="Options_Changed" Margin="0,0,16,0"
+                          AutomationProperties.AutomationId="CellViewer.Wrap"/>
+                <CheckBox x:Name="PrettyCheck" Content="Pretty" Click="Options_Changed" ToolTip="Indent JSON / XML"
+                          AutomationProperties.AutomationId="CellViewer.Pretty"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Copy" Click="Copy_Click" Margin="0,0,6,0" AutomationProperties.AutomationId="CellViewer.Copy"/>
+                <Button Content="Close" Click="Close_Click" MinWidth="80" AutomationProperties.AutomationId="CellViewer.Close"/>
+            </StackPanel>
+        </DockPanel>
+        <TextBox x:Name="ValueBox" Style="{StaticResource MonoBox}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8"
+                 AutomationProperties.AutomationId="CellViewer.Text" AutomationProperties.Name="Cell value"/>
+    </DockPanel>
+</Window>

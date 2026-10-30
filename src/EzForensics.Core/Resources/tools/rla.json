@@ -1,0 +1,26 @@
+{
+  "id": "rla",
+  "displayName": "RLA (Registry Log Applier)",
+  "category": "Registry",
+  "description": "Replays transaction logs into dirty registry hives and saves clean copies.",
+  "usage": "Replays registry transaction logs into dirty hives and saves clean copies. Use it before parsing hives collected live, so recent changes held only in the logs are not missed.",
+  "limitation": "Only repairs hives that have transaction logs. Clean hives are not copied unless you add --ca.",
+  "kind": "cli",
+  "exe": "rla.exe",
+  "zip": "rla.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Windows\\System32\\config\\*", "Users\\*\\NTUSER.DAT", "Users\\*\\AppData\\Local\\Microsoft\\Windows\\UsrClass.dat"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "Hive", "description": "File to process. Either this or -d is required.", "filter": "Registry hives|SYSTEM;SOFTWARE;SAM;SECURITY;NTUSER.DAT;UsrClass.dat;*.hve|All files|*.*" },
+    { "id": "d", "flag": "-d", "type": "folder", "label": "Hive directory", "description": "Directory to recursively process. Either this or -f is required." },
+    { "id": "out", "flag": "--out", "type": "outputDir", "label": "Output folder", "description": "Directory to save updated hives to. Only dirty hives with logs applied will end up in --out directory." },
+    { "id": "ca", "flag": "--ca", "type": "bool", "label": "Always copy", "description": "Always copy hives to --out directory, even if they aren't dirty.", "default": "false", "advanced": true, "visibleWhen": "out" },
+    { "id": "cn", "flag": "--cn", "type": "bool", "label": "Compress names", "description": "Compress names for profile based hives.", "default": "false", "advanced": true },
+    { "id": "nop", "flag": "--nop", "type": "bool", "label": "Flat output", "description": "Do not recreate paths where the hives were located.", "default": "false", "advanced": true },
+    { "use": "debug" },
+    { "use": "trace" }
+  ],
+  "groups": [
+    { "mode": "exactlyOne", "params": ["f", "d"] }
+  ]
+}

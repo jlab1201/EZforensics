@@ -1,0 +1,24 @@
+{
+  // Shared parameter definitions. Reference from a tool with {"use":"<key>"}; any other
+  // property on that entry overrides the shared one. The key becomes the parameter id.
+  // Note: System.CommandLine help never prints defaults for bool options; the bool defaults
+  // below were checked against the tools' behaviour (e.g. EvtxECmd dedupes and shows metrics without flags).
+  "csv":   { "flag": "--csv",   "type": "outputDir", "label": "CSV output folder", "description": "Directory to save CSV formatted results to." },
+  "csvf":  { "flag": "--csvf",  "type": "string", "label": "CSV file name", "description": "File name to save CSV formatted results to. When present, overrides default name.", "advanced": true, "visibleWhen": "csv", "placeholder": "results.csv" },
+  "json":  { "flag": "--json",  "type": "outputDir", "label": "JSON output folder", "description": "Directory to save JSON formatted results to." },
+  "jsonf": { "flag": "--jsonf", "type": "string", "label": "JSON file name", "description": "File name to save JSON formatted results to. When present, overrides default name.", "advanced": true, "visibleWhen": "json", "placeholder": "results.json" },
+  "xml":   { "flag": "--xml",   "type": "outputDir", "label": "XML output folder", "description": "Directory to save XML formatted results to.", "advanced": true },
+  "xmlf":  { "flag": "--xmlf",  "type": "string", "label": "XML file name", "description": "File name to save XML formatted results to. When present, overrides default name.", "advanced": true, "visibleWhen": "xml", "placeholder": "results.xml" },
+  "html":  { "flag": "--html",  "type": "outputDir", "label": "HTML output folder", "description": "Directory to save xhtml formatted results to.", "advanced": true },
+  "pretty": { "flag": "--pretty", "type": "bool", "label": "Pretty JSON", "description": "When exporting to json, use a more human readable layout.", "default": "false", "advanced": true, "visibleWhen": "json" },
+  "q":     { "flag": "-q", "type": "bool", "label": "Quiet", "description": "Do not dump full details about each file processed. Speeds up processing when using --json or --csv.", "default": "false" },
+  "dt":    { "flag": "--dt", "type": "string", "label": "Timestamp format", "description": "The custom date/time format to use when displaying time stamps (.NET format string).", "default": "yyyy-MM-dd HH:mm:ss", "advanced": true },
+  "mp":    { "flag": "--mp", "type": "bool", "label": "High-precision timestamps", "description": "Display higher precision for timestamps.", "default": "false", "advanced": true },
+  "nl":    { "flag": "--nl", "type": "bool", "label": "Ignore transaction logs", "description": "Allow transaction log files to not exist for dirty hives (ignore logs).", "default": "false", "advanced": true },
+  "cp":    { "flag": "--cp", "type": "int", "label": "Code page", "description": "Code page to parse strings.", "default": "1252", "advanced": true },
+  "vss":   { "flag": "--vss", "type": "bool", "label": "Volume Shadow Copies", "description": "Process all Volume Shadow Copies that exist on the drive specified by -f or -d (live system, requires Administrator).", "default": "false", "advanced": true },
+  "dedupe": { "flag": "--dedupe", "type": "bool", "label": "Deduplicate", "description": "Deduplicate -f or -d & VSCs based on SHA-1. First file found wins.", "default": "true", "advanced": true },
+  "sync":  { "flag": "--sync", "type": "bool", "label": "Sync maps", "description": "Download the latest maps/batch files from GitHub and update the local copies.", "default": "false", "advanced": true },
+  "debug": { "flag": "--debug", "type": "bool", "label": "Debug output", "description": "Show debug information during processing.", "default": "false", "advanced": true },
+  "trace": { "flag": "--trace", "type": "bool", "label": "Trace output", "description": "Show trace information during processing.", "default": "false", "advanced": true }
+}

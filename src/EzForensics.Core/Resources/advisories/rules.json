@@ -1,0 +1,368 @@
+{
+  "version": 1,
+  "notes": "Timestamp-reliability advisories (EzForensics.Core.Advisories). artifacts: first match wins, header signatures are tried before file names, so list specific signatures first. headerSignatures: alternative header sets, all names in one set must be present (case-insensitive). fileNamePatterns: case-insensitive regexes over the CSV file name; (^|_) also matches the EZ run-time prefix (20261007123456_). rules.when: always | copyDetected | copyNotDetected | liveAcquisition | hiveDirtyReplayed | eseDatabaseDirty. rules.artifacts: ids, or [\"*\"] for any CSV (knownArtifactOnly restricts * to identified artifacts). affectedColumns / reliableColumns: header names, trailing * = prefix wildcard; with requireColumns (default true) a rule with affectedColumns is skipped when none is in the CSV. message placeholders: {artifact}, {inputNoun}, {copyEvidence} (appended automatically for copyDetected rules).",
+  "artifacts": [
+    {
+      "id": "prefetch-timeline", "label": "Prefetch timeline (PECmd)", "inputNoun": "prefetch files",
+      "fileNamePatterns": [ "(^|_)PECmd_Output_Timeline\\.csv$", "(^|_)Prefetch_Timeline\\.csv$" ],
+      "headerSignatures": [ [ "RunTime", "ExecutableName" ] ]
+    },
+    {
+      "id": "prefetch", "label": "Prefetch (PECmd)", "inputNoun": "prefetch files",
+      "fileNamePatterns": [ "(^|_)PECmd_Output\\.csv$", "(^|_)Prefetch(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "ExecutableName", "RunCount", "SourceCreated" ], [ "ExecutableName", "RunCount", "LastRun" ] ]
+    },
+    {
+      "id": "jumplist", "label": "Jump Lists (JLECmd)", "inputNoun": "jump list files",
+      "fileNamePatterns": [ "(^|_)(Automatic|Custom)Destinations\\.csv$", "(^|_)JumpLists?(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "SourceFile", "AppId", "SourceCreated" ], [ "AppId", "AppIdDescription", "TargetCreated" ] ]
+    },
+    {
+      "id": "lnk", "label": "LNK shortcut files (LECmd)", "inputNoun": "LNK files",
+      "fileNamePatterns": [ "(^|_)LECmd_Output\\.csv$", "(^|_)LNK(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "SourceCreated", "TargetCreated", "LocalPath" ], [ "SourceFile", "TargetCreated", "TargetModified" ] ]
+    },
+    {
+      "id": "mft", "label": "$MFT (MFTECmd)", "inputNoun": "$MFT files",
+      "fileNamePatterns": [ "(^|_)MFTECmd_\\$MFT_Output\\.csv$", "(^|_)MFT(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "EntryNumber", "Created0x10", "Created0x30" ], [ "EntryNumber", "ParentPath", "Created0x10" ] ]
+    },
+    {
+      "id": "usnjournal", "label": "USN journal $J (MFTECmd)", "inputNoun": "$J files",
+      "fileNamePatterns": [ "(^|_)MFTECmd_\\$J_Output\\.csv$", "(^|_)Usn(Journal|Jrnl)(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "UpdateTimestamp", "UpdateReasons" ] ]
+    },
+    {
+      "id": "i30", "label": "$I30 index (MFTECmd)", "inputNoun": "$I30 files",
+      "fileNamePatterns": [ "(^|_)MFTECmd_\\$I30_Output\\.csv$", "(^|_)I30(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "FromSlack", "CreatedOn", "ParentMftEntry" ] ]
+    },
+    {
+      "id": "eventlog", "label": "Event logs (EvtxECmd)", "inputNoun": "event log files",
+      "fileNamePatterns": [ "(^|_)EvtxECmd_Output\\.csv$", "(^|_)EventLogs?(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "EventId", "Channel", "Computer" ] ]
+    },
+    {
+      "id": "registry-plugin", "label": "Registry plugin output (RECmd)", "inputNoun": "registry hives",
+      "fileNamePatterns": [],
+      "headerSignatures": [ [ "BatchKeyPath", "BatchValueName" ] ]
+    },
+    {
+      "id": "registry", "label": "Registry (RECmd batch)", "inputNoun": "registry hives",
+      "fileNamePatterns": [ "(^|_)RECmd_Batch_.*_Output\\.csv$", "(^|_)Registry(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "HivePath", "KeyPath", "LastWriteTimestamp" ] ]
+    },
+    {
+      "id": "shimcache", "label": "ShimCache / AppCompatCache (AppCompatCacheParser)", "inputNoun": "SYSTEM hives",
+      "fileNamePatterns": [ "(^|_)AppCompatCache\\.csv$", "(^|_)ShimCache(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "CacheEntryPosition", "LastModifiedTimeUTC" ] ]
+    },
+    {
+      "id": "amcache", "label": "Amcache (AmcacheParser)", "inputNoun": "Amcache hives",
+      "fileNamePatterns": [ "(^|_)Amcache(_.+)?\\.csv$", "(^|_)(Associated|Unassociated)FileEntries\\.csv$", "(^|_)(ProgramEntries|DeviceContainers|DevicePnps|DriveBinaries|DriverPackages|ShortCuts)\\.csv$" ],
+      "headerSignatures": [ [ "FullPath", "SHA1", "FileKeyLastWriteTimestamp" ], [ "ProgramId", "KeyLastWriteTimestamp" ], [ "LnkName", "KeyLastWriteTimestamp" ], [ "KeyName", "KeyLastWriteTimestamp" ] ]
+    },
+    {
+      "id": "srum", "label": "SRUM (SrumECmd)", "inputNoun": "SRUM databases",
+      "fileNamePatterns": [ "(^|_)SrumECmd_.+_Output\\.csv$", "(^|_)SRUM(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "Id", "Timestamp", "AppId" ], [ "Timestamp", "ExeInfo", "SidType" ] ]
+    },
+    {
+      "id": "activitiescache", "label": "Windows Timeline / ActivitiesCache (WxTCmd)", "inputNoun": "ActivitiesCache databases",
+      "fileNamePatterns": [ "(^|_)Activity(_PackageIDs)?\\.csv$", "(^|_)ActivitiesCache(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "ActivityType", "StartTime", "Executable" ], [ "ActivityType", "StartTime" ] ]
+    },
+    {
+      "id": "recyclebin", "label": "Recycle Bin (RBCmd)", "inputNoun": "$I files",
+      "fileNamePatterns": [ "(^|_)RBCmd_Output\\.csv$", "(^|_)RecycleBin(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "FileName", "DeletedOn", "FileSize" ], [ "FileName", "DeletedOn" ] ]
+    },
+    {
+      "id": "shellbags", "label": "ShellBags (SBECmd)", "inputNoun": "registry hives",
+      "fileNamePatterns": [ "(^|_)ShellBags(_.+)?\\.csv$", "(^|_)(UsrClass|NTUSER)\\.csv$" ],
+      "headerSignatures": [ [ "BagPath", "AbsolutePath", "ShellType" ] ]
+    },
+    {
+      "id": "recentfilecache", "label": "RecentFileCache.bcf (RecentFileCacheParser)", "inputNoun": "RecentFileCache files",
+      "fileNamePatterns": [ "(^|_)RecentFileCacheParser_Output\\.csv$", "(^|_)RecentFileCache(_.+)?\\.csv$" ],
+      "headerSignatures": []
+    },
+    {
+      "id": "ual", "label": "User Access Logging (SumECmd)", "inputNoun": "UAL databases",
+      "fileNamePatterns": [ "(^|_)SumECmd_.+\\.csv$", "(^|_)UAL(_.+)?\\.csv$" ],
+      "headerSignatures": []
+    },
+    {
+      "id": "memory-carved", "label": "Memory scan plugin output (Volatility 3 psscan / netscan / filescan)", "inputNoun": "memory images",
+      "aliases": [ "memory-psscan", "memory-netscan", "memory-filescan" ],
+      "fileNamePatterns": [ "(^|_)Memory_(PsScan|NetScan|FileScan)(_.+)?\\.csv$" ],
+      "headerSignatures": []
+    },
+    {
+      "id": "memory-process", "label": "Memory process list (Volatility 3 pslist / pstree)", "inputNoun": "memory images",
+      "aliases": [ "memory-pslist", "memory-pstree" ],
+      "fileNamePatterns": [ "(^|_)Memory_Ps(List|Tree)(_.+)?\\.csv$" ],
+      "headerSignatures": []
+    },
+    {
+      "id": "memory-network", "label": "Memory network connections (Volatility 3 netstat)", "inputNoun": "memory images",
+      "aliases": [ "memory-netstat" ],
+      "fileNamePatterns": [ "(^|_)Memory_NetStat(_.+)?\\.csv$" ],
+      "headerSignatures": []
+    },
+    {
+      "id": "memory-timeliner", "label": "Memory timeline (Volatility 3 timeliner)", "inputNoun": "memory images",
+      "fileNamePatterns": [ "(^|_)Memory_Timeliner(_.+)?\\.csv$" ],
+      "headerSignatures": [ [ "Plugin", "Description", "Created Date", "Modified Date" ] ]
+    },
+    {
+      "id": "memory-info", "label": "Memory image info (Volatility 3 windows.info)", "inputNoun": "memory images",
+      "fileNamePatterns": [ "(^|_)Memory_Info(_.+)?\\.csv$" ],
+      "headerSignatures": []
+    },
+    {
+      "id": "rita", "label": "RITA network findings (threats, beacons, long connections, DNS tunneling)", "inputNoun": "network captures",
+      "aliases": [ "rita-threats", "rita-beacons", "rita-long-connections", "rita-dns-tunneling" ],
+      "fileNamePatterns": [ "(^|_)Rita_(Threats|Beacons|LongConnections|DnsTunneling)(_.+)?\\.csv$" ],
+      "headerSignatures": []
+    }
+  ],
+  "rules": [
+    {
+      "id": "archive-times-mtime-only", "artifacts": [ "*" ], "exceptArtifacts": [ "rita" ], "knownArtifactOnly": true, "when": "archiveExtracted", "archiveCoverage": [ "ModifiedOnly", "Mixed", "DosLocal" ], "severity": "warning",
+      "title": "Extracted files: only Modified times came from the archive",
+      "message": "The evidence was extracted from an archive. The file-system Created and Accessed times of the extracted files are the time of extraction, not the original times; only Modified was stored in the archive and restored. SourceCreated and SourceAccessed therefore show extraction time. Values the tool read from inside the files are not affected. {copyEvidence}",
+      "affectedColumns": [ "SourceCreated", "SourceAccessed" ],
+      "reliableColumns": [ "SourceModified" ],
+      "requireColumns": false
+    },
+    {
+      "id": "archive-times-dos-local", "artifacts": [ "*" ], "exceptArtifacts": [ "rita" ], "knownArtifactOnly": true, "when": "archiveExtracted", "archiveCoverage": [ "DosLocal" ], "severity": "warning",
+      "title": "Archive Modified times are local time with unknown time zone",
+      "message": "This archive stores plain DOS timestamps: local time of the machine that created the archive, with no time zone, and only 2-second precision. The restored Modified times may therefore be offset from UTC by an unknown amount and are rounded to even seconds.",
+      "affectedColumns": [ "SourceModified" ],
+      "requireColumns": false
+    },
+    {
+      "id": "archive-times-restored", "artifacts": [ "*" ], "exceptArtifacts": [ "rita" ], "knownArtifactOnly": true, "when": "archiveExtracted", "archiveCoverage": [ "All" ], "severity": "info",
+      "title": "Extracted files: times restored from archive metadata",
+      "message": "The evidence was extracted from an archive that stored Created, Accessed and Modified times, and these were restored on the extracted files. They reflect the archive's metadata, which is only as accurate as the tool that created the archive (some tools store the time the archive was made). {copyEvidence}",
+      "affectedColumns": []
+    },
+    {
+      "id": "rita-heuristic-scores", "artifacts": [ "rita" ], "when": "always", "severity": "info",
+      "title": "RITA scores are heuristics, not verdicts",
+      "message": "Beacon, long connection and DNS tunneling scores and severities are statistical heuristics computed from Zeek logs. Legitimate software (updaters, monitoring agents, chat clients, CDNs) regularly scores high, and real command and control can score low. Treat a finding as a lead to verify, not as proof.",
+      "affectedColumns": [ "Severity", "Beacon Score", "Long Connection Score", "C2 Over DNS Score" ], "requireColumns": false
+    },
+    {
+      "id": "rita-short-capture", "artifacts": [ "rita" ], "when": "ritaShortCapture", "severity": "warning",
+      "title": "Capture is shorter than 24 hours",
+      "message": "The analysed traffic spans less than 24 hours. Beacon detection needs many repeated connections over time, so low-and-slow beaconing can be missed and the scores of what is found are less reliable. The absence of findings does not show the absence of beaconing.",
+      "affectedColumns": [ "Beacon Score", "Severity" ], "requireColumns": false
+    },
+    {
+      "id": "rita-nat-proxy", "artifacts": [ "rita" ], "when": "always", "severity": "info",
+      "title": "NAT or a proxy can hide the real internal host",
+      "message": "RITA only sees the addresses present in the capture. Behind NAT, or when the capture was taken on the far side of a proxy, many internal hosts share one source address, so a finding may stand for several machines (or hide the real source behind the proxy address).",
+      "affectedColumns": [ "Src", "Source IP" ], "requireColumns": false
+    },
+    {
+      "id": "rita-internal-subnets", "artifacts": [ "rita" ], "when": "always", "severity": "info",
+      "title": "Direction depends on the configured internal subnets",
+      "message": "RITA treats traffic from the configured internal subnets to outside addresses as the interesting direction. Connections from external addresses to internal hosts (inbound) are ignored, and a wrong or incomplete internal subnet list changes which findings appear.",
+      "affectedColumns": [ "Src", "Dst" ], "requireColumns": false
+    },
+    {
+      "id": "rita-threat-intel-offline", "artifacts": [ "rita" ], "when": "always", "severity": "info",
+      "title": "Threat intelligence was not checked",
+      "message": "RITA runs offline unless online threat intelligence is enabled in Tools, so destinations are normally not looked up in online threat intelligence feeds. A Threat Intel value of no or empty only means no feed was consulted; check suspicious addresses and domains yourself.",
+      "affectedColumns": [ "Threat Intel" ], "requireColumns": false
+    },
+    {
+      "id": "memory-point-in-time", "artifacts": [ "memory-process", "memory-network", "memory-carved", "memory-timeliner", "memory-info" ], "when": "always", "severity": "info",
+      "title": "Memory shows one moment in time",
+      "message": "A memory image reflects the state of the system at the moment it was acquired. Processes that already exited, closed network connections and past activity are largely absent; their absence does not show they never existed.",
+      "affectedColumns": []
+    },
+    {
+      "id": "memory-smear", "artifacts": [ "memory-process", "memory-network", "memory-carved", "memory-timeliner", "memory-info" ], "when": "memorySmear", "severity": "warning",
+      "title": "Memory acquired while running can be internally inconsistent",
+      "message": "Acquiring memory from a running system takes minutes, during which the system keeps changing. Data structures can be captured half-updated or at different moments (page smear), so lists may be incomplete, linked structures may not agree with each other and some values may be wrong.",
+      "affectedColumns": []
+    },
+    {
+      "id": "memory-carved-objects", "artifacts": [ "memory-carved" ], "when": "always", "severity": "warning",
+      "title": "Scan results can include stale or false objects",
+      "message": "Scanning plugins (psscan, netscan, filescan) search raw memory for object signatures instead of walking live lists. They can return freed, stale or overwritten objects and false positives, and their timestamps and other fields may be garbage. Corroborate before relying on any single row.",
+      "affectedColumns": [ "CreateTime", "ExitTime", "Created" ],
+      "requireColumns": false
+    },
+    {
+      "id": "memory-kernel-dump", "artifacts": [ "memory-process", "memory-network", "memory-carved", "memory-timeliner", "memory-info" ], "when": "memoryKernelDump", "severity": "info",
+      "title": "Kernel memory dump: user-mode pages are missing",
+      "message": "This is a kernel-only (or active) memory dump. User-mode memory is not included, so user process contents, heaps and some per-process structures cannot be read and may be absent from the results.",
+      "affectedColumns": []
+    },
+    {
+      "id": "prefetch-source-times-copied", "artifacts": [ "prefetch" ], "when": "copyDetected", "severity": "warning",
+      "title": "Prefetch file times probably show the copy, not the system",
+      "message": "SourceCreated, SourceModified and SourceAccessed are the file-system times of the .pf files as they exist in this collection. The collection appears to have been copied, so these columns may show when the files were copied rather than when programs ran (copy tools often keep Modified but reset Created and Accessed). LastRun, PreviousRun0-6 and RunCount are read from inside each .pf file and remain reliable. {copyEvidence}",
+      "affectedColumns": [ "SourceCreated", "SourceModified", "SourceAccessed" ],
+      "reliableColumns": [ "LastRun", "PreviousRun*", "RunCount" ],
+      "referenceUrl": "https://github.com/EricZimmerman/PECmd"
+    },
+    {
+      "id": "prefetch-source-times-original", "artifacts": [ "prefetch" ], "when": "copyNotDetected", "severity": "info",
+      "title": "Prefetch file times are only meaningful on the original volume",
+      "message": "No sign of copying was found. On the original volume SourceCreated roughly matches the first recorded run (Windows creates the .pf shortly after launch) and SourceModified roughly matches the last run. If the files were copied without preserving their times, these columns are not reliable; LastRun, PreviousRun0-6 and RunCount come from inside the .pf file and are the better source either way.",
+      "affectedColumns": [ "SourceCreated", "SourceModified" ],
+      "reliableColumns": [ "LastRun", "PreviousRun*", "RunCount" ],
+      "referenceUrl": "https://github.com/EricZimmerman/PECmd"
+    },
+    {
+      "id": "lnk-source-times-copied", "artifacts": [ "lnk" ], "when": "copyDetected", "severity": "warning",
+      "title": "LNK file times probably show the copy, not the system",
+      "message": "SourceCreated, SourceModified and SourceAccessed are the file-system times of the .lnk files in this collection. The collection appears to have been copied, so these columns may show the copy time instead of when the shortcut was first or last used. The Target* times are stored inside the LNK file and are not changed by copying. {copyEvidence}",
+      "affectedColumns": [ "SourceCreated", "SourceModified", "SourceAccessed" ],
+      "reliableColumns": [ "TargetCreated", "TargetModified", "TargetAccessed", "TrackerCreatedOn" ],
+      "referenceUrl": "https://github.com/EricZimmerman/LECmd"
+    },
+    {
+      "id": "jumplist-source-times-copied", "artifacts": [ "jumplist" ], "when": "copyDetected", "severity": "warning",
+      "title": "Jump list file times probably show the copy, not the system",
+      "message": "SourceCreated, SourceModified and SourceAccessed are the file-system times of the jump list files in this collection. The collection appears to have been copied, so these columns may show the copy time. Times stored inside the jump list (DestList CreationTime and LastModified, and the embedded Target* times) are not changed by copying. {copyEvidence}",
+      "affectedColumns": [ "SourceCreated", "SourceModified", "SourceAccessed" ],
+      "reliableColumns": [ "CreationTime", "LastModified", "TargetCreated", "TargetModified", "TargetAccessed", "TrackerCreatedOn" ],
+      "referenceUrl": "https://github.com/EricZimmerman/JLECmd"
+    },
+    {
+      "id": "lnk-target-times", "artifacts": [ "lnk", "jumplist" ], "when": "always", "severity": "info",
+      "title": "Target times describe the target file when the link was last updated",
+      "message": "TargetCreated, TargetModified and TargetAccessed are copied into the shortcut from the target file when the link is created or updated. They describe the target at that moment, not its current state, and they survive copying of the LNK or jump list.",
+      "affectedColumns": [ "TargetCreated", "TargetModified", "TargetAccessed" ],
+      "reliableColumns": [ "TargetCreated", "TargetModified", "TargetAccessed" ]
+    },
+    {
+      "id": "recyclebin-deletedon", "artifacts": [ "recyclebin" ], "when": "always", "severity": "info",
+      "title": "DeletedOn comes from inside the $I file",
+      "message": "DeletedOn is stored inside each $I file when the item is moved to the Recycle Bin, so it is not changed by copying the collection. File-system times of the $I/$R files themselves (if shown) only reflect the original system when the evidence was not copied.",
+      "affectedColumns": [ "DeletedOn" ],
+      "reliableColumns": [ "DeletedOn" ],
+      "referenceUrl": "https://github.com/EricZimmerman/RBCmd"
+    },
+    {
+      "id": "source-times-copied", "artifacts": [ "*" ], "exceptArtifacts": [ "prefetch", "lnk", "jumplist" ], "when": "copyDetected", "severity": "warning",
+      "title": "Source file times probably show the copy, not the system",
+      "message": "Columns named Source* are the file-system times of the input files as they exist in this collection. The collection appears to have been copied, so they may show when the files were copied rather than original activity. Values the tool read from inside the files are not affected. {copyEvidence}",
+      "affectedColumns": [ "SourceCreated", "SourceModified", "SourceAccessed" ]
+    },
+    {
+      "id": "source-accessed-weak", "artifacts": [ "*" ], "when": "always", "severity": "info",
+      "title": "Last-access times are weak evidence",
+      "message": "SourceAccessed is the file-system last-access time. Windows may not update it at all (last-access updates are disabled on many systems) and, when enabled, updates it lazily (up to about an hour late). Reading a file (antivirus, backup, collection tools) can also change it. Treat it as a hint, not proof of user activity.",
+      "affectedColumns": [ "SourceAccessed" ],
+      "referenceUrl": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-behavior"
+    },
+    {
+      "id": "source-accessed-live", "artifacts": [ "*" ], "when": "liveAcquisition", "severity": "warning",
+      "title": "Collecting from a live system may have changed access times",
+      "message": "The evidence was read from a running system. If last-access updates are enabled, reading the files during collection or parsing may have set SourceAccessed to the collection time.",
+      "affectedColumns": [ "SourceAccessed" ]
+    },
+    {
+      "id": "mft-internal-times", "artifacts": [ "mft" ], "when": "always", "severity": "info",
+      "title": "$MFT times are internal; compare $SI (0x10) with $FN (0x30)",
+      "message": "These timestamps are read from the MFT records themselves, so copying the $MFT file does not change them. $STANDARD_INFORMATION times (0x10) can be changed by ordinary tools (timestomping); $FILE_NAME times (0x30) are harder to change. A Created0x10 earlier than Created0x30, or 0x10 times with zero sub-seconds (see the SI<FN and uSecZeros columns), deserve a closer look but are not proof on their own.",
+      "affectedColumns": [ "Created0x10", "LastModified0x10", "LastRecordChange0x10", "LastAccess0x10" ],
+      "reliableColumns": [ "Created0x30", "LastModified0x30", "LastRecordChange0x30", "LastAccess0x30" ],
+      "referenceUrl": "https://github.com/EricZimmerman/MFTECmd"
+    },
+    {
+      "id": "usn-circular", "artifacts": [ "usnjournal" ], "when": "always", "severity": "info",
+      "title": "The USN journal only covers a limited window",
+      "message": "UpdateTimestamp is recorded by NTFS and is reliable, but $J is a circular log: older records are discarded as it fills, so a missing record does not mean nothing happened.",
+      "affectedColumns": [ "UpdateTimestamp" ],
+      "reliableColumns": [ "UpdateTimestamp" ],
+      "referenceUrl": "https://github.com/EricZimmerman/MFTECmd"
+    },
+    {
+      "id": "ntfs-live", "artifacts": [ "mft", "usnjournal", "i30" ], "when": "liveAcquisition", "severity": "warning",
+      "title": "File system was changing while it was read",
+      "message": "The NTFS metadata was read from a live volume. Records may be slightly inconsistent with each other, and the collection itself (tools, output files, prefetch) shows up in the data around the collection time.",
+      "affectedColumns": []
+    },
+    {
+      "id": "live-generic", "artifacts": [ "*" ], "exceptArtifacts": [ "mft", "usnjournal", "i30", "memory-process", "memory-network", "memory-carved", "memory-timeliner", "memory-info", "rita" ], "knownArtifactOnly": true, "when": "liveAcquisition", "severity": "info",
+      "title": "Evidence was read from a running system",
+      "message": "Files may have changed while they were collected, and the collection itself can leave traces (for example new prefetch files or event log entries for the tools that ran). Activity around the collection time may be the examiner's own.",
+      "affectedColumns": []
+    },
+    {
+      "id": "registry-dirty-replayed", "artifacts": [ "registry", "registry-plugin", "amcache", "shimcache", "shellbags" ], "when": "hiveDirtyReplayed", "severity": "info",
+      "title": "Hive transaction logs were replayed",
+      "message": "The hive was dirty (not cleanly written to disk), so its transaction logs (.LOG1/.LOG2) were replayed before parsing. Recent changes are included and key last-write times reflect the replayed state. Had the logs been missing, the most recent changes could have been absent.",
+      "affectedColumns": []
+    },
+    {
+      "id": "registry-lastwrite", "artifacts": [ "registry", "registry-plugin" ], "when": "always", "severity": "info",
+      "title": "Last-write time belongs to the key, not the value",
+      "message": "LastWriteTimestamp is when the registry key last changed (any value or subkey), not when a particular value was set. Several values of one key share the same time.",
+      "affectedColumns": [ "LastWriteTimestamp" ],
+      "referenceUrl": "https://github.com/EricZimmerman/RECmd"
+    },
+    {
+      "id": "shimcache-not-execution", "artifacts": [ "shimcache" ], "when": "always", "severity": "warning",
+      "title": "ShimCache times are file modification times, not execution times",
+      "message": "LastModifiedTimeUTC is the file's own last-modified time captured when the entry was cached, NOT when the program ran. Being listed in ShimCache does not by itself prove execution (the Executed flag is only meaningful on some Windows versions), and the cache is written to the hive only at shutdown or reboot, so recent entries may be missing.",
+      "affectedColumns": [ "LastModifiedTimeUTC", "Executed" ],
+      "referenceUrl": "https://github.com/EricZimmerman/AppCompatCacheParser"
+    },
+    {
+      "id": "amcache-semantics", "artifacts": [ "amcache" ], "when": "always", "severity": "info",
+      "title": "Amcache key times are not execution times",
+      "message": "Key last-write times show when Windows last updated the Amcache entry; this is often near installation or first execution but is not a reliable execution time. An entry shows the file was present on the system and does not by itself prove it ran. LinkDate is the compile time stored in the PE header and can be forged.",
+      "affectedColumns": [ "FileKeyLastWriteTimestamp", "FileIDLastWriteTimestamp", "KeyLastWriteTimestamp", "LastWriteTimestamp", "LinkDate" ],
+      "referenceUrl": "https://github.com/EricZimmerman/AmcacheParser"
+    },
+    {
+      "id": "srum-lag", "artifacts": [ "srum" ], "when": "always", "severity": "info",
+      "title": "SRUM data is written in batches",
+      "message": "Windows keeps SRUM data in memory and writes it to SRUDB.dat roughly once an hour (and at shutdown), so the most recent activity may be missing. Timestamp marks the recording interval, not the exact moment of an event.",
+      "affectedColumns": [ "Timestamp" ],
+      "referenceUrl": "https://github.com/EricZimmerman/Srum"
+    },
+    {
+      "id": "ese-dirty", "artifacts": [ "srum", "ual" ], "when": "eseDatabaseDirty", "severity": "warning",
+      "title": "ESE database was not cleanly shut down",
+      "message": "The database was in a dirty state when collected. Records written shortly before collection may be missing or incomplete unless its transaction logs were collected and replayed (for example with esentutl /r) before parsing.",
+      "affectedColumns": []
+    },
+    {
+      "id": "activitiescache-wal", "artifacts": [ "activitiescache" ], "when": "always", "severity": "info",
+      "title": "Recent activity may be in the SQLite write-ahead log",
+      "message": "ActivitiesCache.db is a SQLite database; the newest activity can still be in ActivitiesCache.db-wal. If the -wal and -shm files were not collected together with the database, the most recent records may be missing.",
+      "affectedColumns": [ "StartTime", "EndTime", "LastModifiedTime" ],
+      "referenceUrl": "https://github.com/EricZimmerman/WxTCmd"
+    },
+    {
+      "id": "eventlog-cleared", "artifacts": [ "eventlog" ], "when": "always", "severity": "info",
+      "title": "Check whether logs were cleared or rolled over",
+      "message": "Look for log-cleared events (Security 1102, System 104) and gaps in EventRecordId. A cleared or full (overwritten) log is missing history, so the absence of an event is weak evidence.",
+      "affectedColumns": [ "EventId", "EventRecordId" ],
+      "referenceUrl": "https://github.com/EricZimmerman/evtx"
+    },
+    {
+      "id": "eventlog-computer", "artifacts": [ "eventlog" ], "when": "always", "severity": "info",
+      "title": "Computer is the name recorded by the logging host",
+      "message": "Computer is the host name written into each event by the system that logged it. Forwarded events, logs copied from other machines or a renamed host can show a name different from the system you are investigating.",
+      "affectedColumns": [ "Computer" ]
+    },
+    {
+      "id": "ez-utc", "artifacts": [ "*" ], "exceptArtifacts": [ "memory-process", "memory-network", "memory-carved", "memory-timeliner", "memory-info", "rita" ], "knownArtifactOnly": true, "when": "always", "severity": "info",
+      "title": "Timestamps are UTC",
+      "message": "Eric Zimmerman's tools write all timestamps in UTC. Convert to the system's local time zone (registry TimeZoneInformation) only when comparing with local-time sources.",
+      "affectedColumns": []
+    }
+  ]
+}

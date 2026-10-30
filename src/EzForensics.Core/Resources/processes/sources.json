@@ -1,0 +1,36 @@
+{
+  // Process evidence catalog: one entry per source that can be linked to a process (see ProcessEvidenceCatalog / ProcessEvidenceIndex).
+  // Rule (user decision 2026-10-25): rows link on facts only. Exact = same PID inside the process lifetime or same Sysmon ProcessGuid; PathTime = same full path +
+  // a row time that fits the instance + exactly one instance fitting. Name-only, path-only and time-window links do not exist, so sources that offer nothing
+  // more (Amcache, Shimcache, SRUM, MFT, USN, registry, persistence, LNK, jump lists, ActivitiesCache, Recycle Bin, RecentFileCache) are not process evidence.
+  // reader "csv" = indexed generically by the columns below; "evtx" = EvtxECmd payload text, read by ProcessEventLogs (listed so the UI can say where it comes from).
+  // joinKind: pid-time | guid | path-time | socket. Columns are matched by name ignoring case and punctuation, first alias present wins (time: all present columns count).
+  //   path-time needs timeRole: "start" with toleranceSec [min, max] (row time - process start, in seconds) or "during" (start <= time <= exit, else the acquisition time,
+  //   else before the next instance with the same path);
+  //   pathList: the cell holds several comma separated paths, only those ending with the row name count;
+  //   pathJoin: path = these columns joined by "\"; exeFromCommand: the cell is a command line, its program path is used; rowFilter: regex on the row name.
+  // verified false = column names written from memory of the tool, not checked against real output yet.
+  "version": 2,
+  "sources": [
+    {
+      // Prefetch records a run about 10 s after the launch: the window [-2, 15] s around the process start (no case with both Memory_PsList and Prefetch was available to measure it).
+      "id": "prefetch", "label": "Prefetch (path + run time)", "artifactId": "prefetch", "fileRegex": "^Prefetch(_[0-9]+)?\\.csv$", "reader": "csv",
+      "joinKind": "path-time", "timeRole": "start", "toleranceSec": [-2, 15], "tab": "BinaryOnDisk", "howToGet": "Ingest › Prefetch", "verified": true,
+      "columns": { "path": ["FilesLoaded"], "pathList": true, "name": ["ExecutableName"],
+        "time": ["LastRun", "PreviousRun0", "PreviousRun1", "PreviousRun2", "PreviousRun3", "PreviousRun4", "PreviousRun5", "PreviousRun6", "PreviousRun7"],
+        "display": ["ExecutableName", "RunCount", "LastRun", "PreviousRun0", "PreviousRun1", "PreviousRun2", "Hash", "SourceFilename"] }
+    },
+    {
+      "id": "eventlog", "label": "Event logs (Security 4688, Sysmon)", "artifactId": "eventlog", "fileRegex": "^(EventLogs|EvtxECmd_Output)(_[^.]*)?\\.csv$", "reader": "evtx",
+      "joinKind": "pid-time", "tab": "Timeline", "howToGet": "Ingest › Event logs", "verified": true,
+      "columns": { "time": ["TimeCreated"], "display": ["TimeCreated", "EventId", "Channel", "Provider", "UserName", "ExecutableInfo", "PayloadData1", "PayloadData2", "PayloadData3"] }
+    },
+    {
+      // Zeek conn / dns / http / ssl, read by ZeekSocketIndex: a conn row links only through the exact 5-tuple of a socket already Exact-linked to the process
+      // (netscan / netstat of its PID, Sysmon 3, Security 5156), with its ts inside the lifetime and a single owner at that time. Layout v1 names conn.csv etc.
+      "id": "zeek", "label": "Zeek (via the process's sockets)", "artifactId": "zeek-conn", "fileRegex": "^(Zeek_(Conn|Dns|Http|Ssl)(_[^.]*)?|conn|dns|http|ssl)\\.csv$", "reader": "zeek",
+      "joinKind": "socket", "tab": "Network", "howToGet": "Ingest › Zeek on a pcap", "verified": true,
+      "columns": { "time": ["DateTimeUtc", "ts"], "display": ["DateTimeUtc", "uid", "id.orig_h", "id.orig_p", "id.resp_h", "id.resp_p", "proto", "service", "duration", "orig_bytes", "resp_bytes", "conn_state"] }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "TimelineExplorer",
+  "displayName": "Timeline Explorer",
+  "category": "Timeline",
+  "description": "Viewer for CSV and Excel files with filtering, grouping and highlighting; opens EZ tool CSV output.",
+  "usage": "Graphical viewer for CSV and Excel output with column filters, drag-to-group, conditional formatting and tagging. Use it to review EZ tool and timeline CSVs interactively.",
+  "kind": "gui",
+  "exe": "TimelineExplorer.exe",
+  "zip": "TimelineExplorer.zip",
+  "builds": ["net9"],
+  "requiresAdmin": false
+}

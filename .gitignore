@@ -1,0 +1,23 @@
+bin/
+obj/
+.devtools/
+.vs/
+*.user
+TestResults/
+samples/
+*.suo
+publish/
+
+# Claude Code agent worktrees
+.claude/worktrees/
+
+# Installer build output (build\make-installer.ps1)
+artifacts/
+dist/
+
+# Per-agent progress notes (see CLAUDE.md)
+PROGRESS.md
+
+# Local agent configuration
+CLAUDE.md
+.claude/

@@ -1,0 +1,34 @@
+{
+  "id": "PECmd",
+  "displayName": "PECmd",
+  "category": "ProgramExecution",
+  "description": "Parses Windows Prefetch (.pf) files.",
+  "usage": "Parses Windows Prefetch (.pf) files, which record when programs ran, how often and which files they loaded. Use it to establish program execution and run times.",
+  "limitation": "Prefetch keeps only the last 8 run times per program and is off by default on Windows Server. A missing file does not prove a program never ran.",
+  "kind": "cli",
+  "exe": "PECmd.exe",
+  "zip": "PECmd.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Windows\\Prefetch\\*.pf"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "Prefetch file", "description": "File to process. Either this or -d is required.", "filter": "Prefetch files|*.pf|All files|*.*" },
+    { "id": "d", "flag": "-d", "type": "folder", "label": "Prefetch directory", "description": "Directory to recursively process. Either this or -f is required.", "placeholder": "C:\\Windows\\Prefetch" },
+    { "use": "csv" },
+    { "use": "csvf" },
+    { "use": "json" },
+    { "use": "jsonf" },
+    { "use": "html" },
+    { "use": "q" },
+    { "id": "k", "flag": "-k", "type": "string", "label": "Highlight keywords", "description": "Comma separated list of keywords to highlight in output. 'temp' and 'tmp' are always highlighted.", "advanced": true, "placeholder": "psexec,mimikatz" },
+    { "id": "o", "flag": "-o", "type": "file", "label": "Save decompressed bytes to", "description": "Save prefetch file bytes to the given path. Useful to look at decompressed Win10 files.", "advanced": true, "visibleWhen": "f" },
+    { "use": "dt" },
+    { "use": "mp" },
+    { "use": "vss" },
+    { "use": "dedupe" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ],
+  "groups": [
+    { "mode": "exactlyOne", "params": ["f", "d"] }
+  ]
+}

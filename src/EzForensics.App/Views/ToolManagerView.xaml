@@ -1,0 +1,1018 @@
+<UserControl x:Class="EzForensics.App.Views.ToolManagerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:EzForensics.App.Controls"
+             xmlns:tools="clr-namespace:EzForensics.Core.Tools;assembly=EzForensics.Core"
+             xmlns:plaso="clr-namespace:EzForensics.Core.Plaso;assembly=EzForensics.Core"
+             xmlns:zeek="clr-namespace:EzForensics.Core.Zeek;assembly=EzForensics.Core"
+             xmlns:rita="clr-namespace:EzForensics.Core.Rita;assembly=EzForensics.Core">
+    <UserControl.Resources>
+        <!-- one Volatility plugin of the Ingest set (MemoryPluginItem) -->
+        <DataTemplate x:Key="PluginCheck">
+            <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanChange}" Width="280" Margin="0,2,8,2"
+                      ToolTip="{Binding ToolTip}" AutomationProperties.AutomationId="{Binding AutomationId}" AutomationProperties.Name="{Binding Label}">
+                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+            </CheckBox>
+        </DataTemplate>
+    </UserControl.Resources>
+    <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
+        <StackPanel x:Name="RootPanel">
+            <ContentControl Tag="always" Content="{Binding Banner}" ContentTemplate="{StaticResource InfoBarTemplate}"
+                            Visibility="{Binding Banner, Converter={StaticResource BoolToVis}}"/>
+
+            <Border x:Name="PlasoCard" Margin="0,0,0,14" AutomationProperties.AutomationId="ToolManager.Plaso"
+                    AutomationProperties.Name="log2timeline / plaso">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,10">
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Top" Padding="10,2">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource Chip}">
+                                    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PlasoToolStatus}" Value="Installed">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.SuccessBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding PlasoToolStatus}" Value="UpdateAvailable">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.InfoBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding PlasoToolStatus}" Value="NotInstalled">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding PlasoToolStatus}" Value="PythonMissing">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding PlasoStatus}" FontWeight="SemiBold" FontSize="12" AutomationProperties.AutomationId="ToolManager.Plaso.Status">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding PlasoToolStatus}" Value="Installed">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Success}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding PlasoToolStatus}" Value="UpdateAvailable">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Info}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding PlasoToolStatus}" Value="NotInstalled">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding PlasoToolStatus}" Value="PythonMissing">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="log2timeline / plaso" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="ToolManager.Plaso.Title"/>
+                            <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="10,0,0,0">
+                                <TextBlock Text="Timeline" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            </Border>
+                        </StackPanel>
+                    </DockPanel>
+                    <TabControl Style="{StaticResource FlatTabs}">
+                        <TabItem Header="Overview" AutomationProperties.AutomationId="Tools.Tab.Overview">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Forensic Value" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}" ToolTip="{x:Static tools:ToolDisplay.PlasoUsage}"/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <TextBlock Text="One timeline of every artifact, sorted by time." TextWrapping="Wrap" AutomationProperties.AutomationId="ToolManager.Plaso.Usage"/>
+                                </Border>
+
+                                <!-- plaso timeline options: used by every super timeline build (Ingest panel, auto build) -->
+                                <StackPanel x:Name="PlasoOptionsCard" DataContext="{Binding PlasoOptions}" AutomationProperties.AutomationId="ToolManager.Plaso.Options"
+                                            AutomationProperties.Name="Timeline options">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Timeline options" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Style="{StaticResource InfoGlyph}" ToolTip="Applied to every plaso super timeline build. Saved as you change them."/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource Tile}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="Parsers" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding ParserPresets}"
+                                                      Text="{Binding PlasoParsers, UpdateSourceTrigger=PropertyChanged}"
+                                                      ToolTip="Preset or parser filter expression for --parsers (e.g. win7, win_gen,!filestat). Empty = plaso auto-selects."
+                                                      AutomationProperties.AutomationId="ToolManager.Plaso.Options.Parsers" AutomationProperties.Name="plaso parsers"/>
+                                            <TextBlock Grid.Row="1" Text="Output format" VerticalAlignment="Center" Margin="0,8,16,0"/>
+                                            <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" ItemsSource="{Binding Formats}" SelectedItem="{Binding Format}"
+                                                      DisplayMemberPath="Label" AutomationProperties.AutomationId="ToolManager.Plaso.Options.Format" AutomationProperties.Name="psort output format"
+                                                      ToolTip="dynamic: ISO 8601 datetime (sorts and filters in Analyze) with macb. l2tcsv: legacy 17 columns incl. MACB, second precision."/>
+                                            <TextBlock Grid.Row="2" Text="Workers" VerticalAlignment="Center" Margin="0,8,16,0"/>
+                                            <TextBox Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Width="70" HorizontalAlignment="Left" Tag="auto"
+                                                     Text="{Binding PlasoWorkers, UpdateSourceTrigger=PropertyChanged}"
+                                                     ToolTip="--workers (empty = CPUs minus one)" AutomationProperties.AutomationId="ToolManager.Plaso.Options.Workers"/>
+                                            <WrapPanel Grid.Row="3" Grid.ColumnSpan="2" Margin="0,10,0,0">
+                                                <CheckBox Content="Time zone UTC" IsChecked="{Binding PlasoTimezoneUtc}" Margin="0,0,16,4"
+                                                          ToolTip="--timezone UTC for timestamps stored without a time zone"
+                                                          AutomationProperties.AutomationId="ToolManager.Plaso.Options.Utc"/>
+                                                <CheckBox Content="Volume Shadow Copies" IsChecked="{Binding PlasoVss}" Margin="0,0,16,4"
+                                                          ToolTip="--vss_stores all (off: --vss_stores none)"
+                                                          AutomationProperties.AutomationId="ToolManager.Plaso.Options.Vss"/>
+                                                <CheckBox Content="Unattended" IsChecked="{Binding PlasoUnattended}" Margin="0,0,16,4"
+                                                          ToolTip="--unattended: never prompt, fail instead"
+                                                          AutomationProperties.AutomationId="ToolManager.Plaso.Options.Unattended"/>
+                                            </WrapPanel>
+                                            <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,6,0,0">
+                                                <TextBlock Text="From (UTC)" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <DatePicker SelectedDate="{Binding FromDate}" Width="125" ToolTip="From (inclusive, UTC; a psort event filter)"
+                                                            AutomationProperties.AutomationId="ToolManager.Plaso.Options.From"/>
+                                                <TextBlock Text="to" VerticalAlignment="Center" Margin="8,0,6,0"/>
+                                                <DatePicker SelectedDate="{Binding ToDate}" Width="125" ToolTip="To (inclusive, whole day, UTC)"
+                                                            AutomationProperties.AutomationId="ToolManager.Plaso.Options.To"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Source, output folder, log2timeline / psort as they will run (+ additional arguments), Run -->
+                                <ContentControl Content="{Binding PlasoCommand}" ContentTemplate="{StaticResource SpecialCommandTile}" Focusable="False"/>
+                            </StackPanel>
+                        </TabItem>
+
+                        <TabItem Header="Release" AutomationProperties.AutomationId="Tools.Tab.Release">
+                            <StackPanel AutomationProperties.AutomationId="ToolManager.Plaso.Configuration">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Installed" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}"
+                                               ToolTip="Discovery order: configured path, EZ Forensics' venv (%LOCALAPPDATA%\EzForensicsData\plaso\venv), log2timeline/psort on PATH, then Docker (log2timeline/plaso). plaso publishes no Windows binaries, so on Windows it is installed with pip or run from Docker. Free and open source; installs into its own folder: no admin rights, no PATH changes."/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="Version" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding PlasoVersion}" FontWeight="SemiBold" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Plaso.Version"/>
+                                            <TextBlock Grid.Row="1" Text="Latest" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LatestVersionText}" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Plaso.Latest"/>
+                                            <TextBlock Grid.Row="2" Text="psort / pinfo" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Plaso.Tools">
+                                                <Run Text="psort"/> <Run Text="{Binding PsortVersion, Mode=OneWay}"/><Run Text="   ·   pinfo"/> <Run Text="{Binding PinfoVersion, Mode=OneWay}"/>
+                                            </TextBlock>
+                                            <TextBlock Grid.Row="3" Text="Engine" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PlasoEngineType}" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Plaso.Engine"/>
+                                            <TextBlock Grid.Row="4" Text="Location" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding PlasoLocation}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding PlasoLocation}" AutomationProperties.AutomationId="ToolManager.Plaso.Location"/>
+                                            <TextBlock Grid.Row="5" Text="Path" Style="{StaticResource Caption}" Margin="0,0,16,6" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PlasoConfiguredPath}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding PlasoConfiguredPath}"
+                                                       AutomationProperties.AutomationId="ToolManager.Plaso.ConfiguredPath"/>
+                                            <StackPanel Grid.Row="5" Grid.Column="2" Orientation="Horizontal" Margin="6,0,0,6">
+                                                <Button Content="Folder…" Command="{Binding SetPlasoFolderCommand}" Margin="0,0,4,0" MinHeight="24" Padding="8,2"
+                                                        ToolTip="A folder with log2timeline.exe/psort.exe (or .py), or a venv" AutomationProperties.AutomationId="ToolManager.Plaso.SetFolder"/>
+                                                <Button Content="python.exe…" Command="{Binding SetPlasoPythonCommand}" Margin="0,0,4,0" MinHeight="24" Padding="8,2"
+                                                        ToolTip="A python.exe that has plaso installed (python -m plaso.scripts.log2timeline)" AutomationProperties.AutomationId="ToolManager.Plaso.SetPython"/>
+                                                <Button Content="Automatic" Command="{Binding ClearPlasoPathCommand}" MinHeight="24" Padding="8,2"
+                                                        ToolTip="Clear the configured path (managed venv, PATH, Docker)" AutomationProperties.AutomationId="ToolManager.Plaso.ClearPath"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Row="6" Text="Python" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding PythonText}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding PythonText}" AutomationProperties.AutomationId="ToolManager.Plaso.Python"/>
+                                            <TextBlock Grid.Row="7" Text="Links" Style="{StaticResource Caption}"/>
+                                            <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" FontSize="12" TextWrapping="Wrap"
+                                                       AutomationProperties.AutomationId="ToolManager.Plaso.Links">
+                                                <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.Docs}" ToolTip="{x:Static plaso:PlasoLinks.Docs}"
+                                                           AutomationProperties.AutomationId="ToolManager.Plaso.LinkDocs">Website / Docs</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.GitHub}" ToolTip="{x:Static plaso:PlasoLinks.GitHub}"
+                                                           AutomationProperties.AutomationId="ToolManager.Plaso.LinkGitHub">GitHub</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.Releases}" ToolTip="{x:Static plaso:PlasoLinks.Releases}"
+                                                           AutomationProperties.AutomationId="ToolManager.Plaso.LinkReleases">Releases</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.PyPI}" ToolTip="{x:Static plaso:PlasoLinks.PyPI}"
+                                                           AutomationProperties.AutomationId="ToolManager.Plaso.LinkPyPI">PyPI</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.DockerHub}" ToolTip="{x:Static plaso:PlasoLinks.DockerHub}"
+                                                           AutomationProperties.AutomationId="ToolManager.Plaso.LinkDocker">Docker Hub</Hyperlink>
+                                            </TextBlock>
+                                        </Grid>
+                                        <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding PlasoNotes}"
+                                                   Visibility="{Binding HasPlasoNotes, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="ToolManager.Plaso.Notes"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="Manage" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding PlasoHeadline}" TextWrapping="Wrap" FontWeight="SemiBold" AutomationProperties.AutomationId="ToolManager.Plaso.Headline"/>
+                                        <TextBlock Text="Install or update it from the Tools table on the Overview tab." Style="{StaticResource Caption}" Margin="0,10,0,0"/>
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button Content="Cancel" Command="{Binding CancelPlasoSetupCommand}" Margin="0,0,6,6"
+                                                    Visibility="{Binding IsPlasoInstalling, Converter={StaticResource BoolToVis}}"
+                                                    AutomationProperties.AutomationId="ToolManager.Plaso.Cancel"/>
+                                            <Button Content="Detect again" Command="{Binding DetectPlasoCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Look for plaso again and re-check the latest version on PyPI" AutomationProperties.AutomationId="ToolManager.Plaso.Detect"/>
+                                            <Button Content="Open folder" Command="{Binding OpenPlasoFolderCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Open the folder of the plaso in use (or EZ Forensics' plaso folder)" AutomationProperties.AutomationId="ToolManager.Plaso.OpenFolder"/>
+                                            <Button Content="Use existing install…" Command="{Binding UseExistingPlasoCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Browse to a log2timeline.exe / log2timeline.py you already have (psort next to it), or a python.exe with plaso"
+                                                    AutomationProperties.AutomationId="ToolManager.Plaso.UseExisting"/>
+                                            <Button Content="Pull Docker image" Command="{Binding PullDockerImageCommand}" Margin="0,0,6,6"
+                                                    Visibility="{Binding CanPullDocker, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="docker pull log2timeline/plaso (runs as a job)" AutomationProperties.AutomationId="ToolManager.Plaso.PullDocker"/>
+                                            <Button Content="Uninstall" Command="{Binding UninstallPlasoCommand}" Margin="0,0,6,6" Style="{StaticResource SubtleButton}"
+                                                    Visibility="{Binding ManagedFilesExist, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Remove EZ Forensics' plaso venv and private Python only (%LOCALAPPDATA%\EzForensicsData\plaso\venv and \python)"
+                                                    AutomationProperties.AutomationId="ToolManager.Plaso.Uninstall"/>
+                                        </WrapPanel>
+
+                                        <StackPanel Margin="0,2,0,0" Visibility="{Binding IsPlasoInstalling, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="{Binding PlasoStepText}" Style="{StaticResource Caption}" AutomationProperties.AutomationId="ToolManager.Plaso.Step"/>
+                                            <ProgressBar Height="4" Margin="0,4,0,0" Maximum="1" Value="{Binding PlasoSetupProgress}"
+                                                         IsIndeterminate="{Binding PlasoSetupDeterminate, Converter={StaticResource Not}}"/>
+                                        </StackPanel>
+
+                                        <!-- no Python found: Install brings its own -->
+                                        <Border Margin="0,8,0,0" Padding="10,8" CornerRadius="4" Background="{DynamicResource Brush.InfoBg}"
+                                                Visibility="{Binding ShowPythonGuidance, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="ToolManager.Plaso.Guidance">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock TextWrapping="Wrap" FontWeight="SemiBold">
+                                                        <Run Text="No Python needed: Install downloads a private Python"/> <Run Text="{Binding PrivatePythonVersion, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Style="{StaticResource InfoGlyph}" Margin="6,0,0,0"
+                                                               ToolTip="plaso needs Python 3.10 to 3.13 and none was found. Install fetches python.org's official NuGet package from nuget.org (SHA-512 checked) into %LOCALAPPDATA%\EzForensicsData\plaso\python, used only by EZ Forensics: no installer, no admin rights, no PATH changes. Prefer your own Python? Install it from python.org (tick &quot;Add python.exe to PATH&quot;), then click Detect again. Docker Desktop with the plaso image also works."/>
+                                                </StackPanel>
+                                                <TextBlock FontSize="12" Margin="0,4,0,0">
+                                                    <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.PythonDownloads}"
+                                                               AutomationProperties.AutomationId="ToolManager.Plaso.LinkPython">python.org downloads</Hyperlink>
+                                                    <Run Text="   "/>
+                                                    <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.PythonNuGet}"
+                                                               AutomationProperties.AutomationId="ToolManager.Plaso.LinkPythonNuGet">python on nuget.org</Hyperlink>
+                                                    <Run Text="   "/>
+                                                    <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.DockerDocs}"
+                                                               AutomationProperties.AutomationId="ToolManager.Plaso.LinkDockerDocs">plaso with Docker</Hyperlink>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- install / update / pull log -->
+                                <StackPanel Visibility="{Binding PlasoLog, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding PlasoJob.Spec.Label}" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Text="{Binding PlasoJob.State}" Style="{StaticResource Caption}" Margin="8,0,0,6" VerticalAlignment="Center"
+                                                   AutomationProperties.AutomationId="ToolManager.Plaso.JobState"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource Tile}">
+                                        <c:LogConsole Buffer="{Binding PlasoLog}" Height="160" AutomationProperties.AutomationId="ToolManager.Plaso.Log"/>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </TabItem>
+                    </TabControl>
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="ZeekCard" Margin="0,0,0,14" DataContext="{Binding Zeek}" AutomationProperties.AutomationId="ToolManager.Zeek"
+                    AutomationProperties.Name="Zeek (packet capture → logs)">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,10">
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Top" Padding="10,2">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource Chip}">
+                                    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Status}" Value="Installed">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.SuccessBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.InfoBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="NotInstalled">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="NeedsRuntime">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding StatusLabel}" FontWeight="SemiBold" FontSize="12" AutomationProperties.AutomationId="ToolManager.Zeek.Status">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Status}" Value="Installed">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Success}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Info}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="NotInstalled">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="NeedsRuntime">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Zeek" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="ToolManager.Zeek.Title"/>
+                            <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="10,0,0,0">
+                                <TextBlock Text="Network" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            </Border>
+                        </StackPanel>
+                    </DockPanel>
+                    <TabControl Style="{StaticResource FlatTabs}">
+                        <TabItem Header="Overview" AutomationProperties.AutomationId="Tools.Tab.Overview">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Forensic Value" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}" ToolTip="{x:Static tools:ToolDisplay.ZeekUsage}"/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <TextBlock Text="Turns packet captures into searchable network logs." TextWrapping="Wrap"
+                                               AutomationProperties.AutomationId="ToolManager.Zeek.Usage"/>
+                                </Border>
+                                <!-- input, options, command and output: supplied by the Tools page (its view model runs the job) -->
+                                <ContentPresenter Content="{Binding ZeekRun, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                            </StackPanel>
+                        </TabItem>
+
+                        <TabItem Header="Release" AutomationProperties.AutomationId="Tools.Tab.Release">
+                            <StackPanel AutomationProperties.AutomationId="ToolManager.Zeek.Configuration">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Installed" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}"
+                                               ToolTip="Zeek (BSD license) has no Windows installer. It runs in EZ Forensics' own Linux environment in WSL (default), your own WSL distro, or Docker Desktop. Discovery order: configured zeek.exe, zeek.exe on PATH / in Program Files, the Docker image zeek/zeek:lts (when Docker Desktop runs), then Zeek inside a WSL distro (/opt/zeek/bin/zeek). Captures are processed with 'zeek -C -r &lt;capture&gt; local'; the Docker container gets the capture read-only and no network."/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="Version" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Zeek.Version"/>
+                                            <TextBlock Grid.Row="1" Text="Latest" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LatestText}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
+                                                       AutomationProperties.AutomationId="ToolManager.Zeek.Latest"/>
+                                            <TextBlock Grid.Row="2" Text="Engine" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding EngineText}" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Zeek.Engine"/>
+                                            <TextBlock Grid.Row="3" Text="Location" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LocationText}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding LocationText}" AutomationProperties.AutomationId="ToolManager.Zeek.Location"/>
+                                            <TextBlock Grid.Row="4" Text="Docker" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding DockerText}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding DockerText}" AutomationProperties.AutomationId="ToolManager.Zeek.Docker"/>
+                                            <TextBlock Grid.Row="5" Text="WSL" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding WslText}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding WslText}" AutomationProperties.AutomationId="ToolManager.Zeek.Wsl"/>
+                                            <TextBlock Grid.Row="6" Text="Path" Style="{StaticResource Caption}" Margin="0,0,16,6" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ConfiguredPath}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding ConfiguredPath}" AutomationProperties.AutomationId="ToolManager.Zeek.ConfiguredPath"/>
+                                            <Button Grid.Row="6" Grid.Column="2" Content="Automatic" Command="{Binding ClearPathCommand}" MinHeight="24" Padding="8,2" Margin="6,0,0,6"
+                                                    ToolTip="Clear the configured zeek.exe (PATH, Docker, WSL)" AutomationProperties.AutomationId="ToolManager.Zeek.ClearPath"/>
+                                            <TextBlock Grid.Row="7" Text="Links" Style="{StaticResource Caption}"/>
+                                            <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" FontSize="12" TextWrapping="Wrap"
+                                                       AutomationProperties.AutomationId="ToolManager.Zeek.Links">
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.Docs}"
+                                                           ToolTip="{x:Static zeek:ZeekLinks.Docs}" AutomationProperties.AutomationId="ToolManager.Zeek.LinkDocs">Docs</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.LogsDocs}"
+                                                           ToolTip="{x:Static zeek:ZeekLinks.LogsDocs}">Log reference</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.GitHub}"
+                                                           ToolTip="{x:Static zeek:ZeekLinks.GitHub}">GitHub</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.Releases}"
+                                                           ToolTip="{x:Static zeek:ZeekLinks.Releases}">Releases</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.DockerHub}"
+                                                           ToolTip="{x:Static zeek:ZeekLinks.DockerHub}">Docker Hub</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.InstallDocs}"
+                                                           ToolTip="{x:Static zeek:ZeekLinks.InstallDocs}">Linux packages</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.License}"
+                                                           ToolTip="{x:Static zeek:ZeekLinks.License}">License (BSD)</Hyperlink>
+                                            </TextBlock>
+                                        </Grid>
+                                        <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding Notes}"
+                                                   Visibility="{Binding HasNotes, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="ToolManager.Zeek.Notes"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="Manage" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Headline}" TextWrapping="Wrap" FontWeight="SemiBold" AutomationProperties.AutomationId="ToolManager.Zeek.Headline"/>
+                                        <TextBlock Text="Install or update it from the Tools table on the Overview tab." Style="{StaticResource Caption}" Margin="0,10,0,0"/>
+                                        <!-- Tools page: Set up Zeek + engine text while Zeek is not ready -->
+                                        <ContentPresenter Margin="0,8,0,0" Content="{Binding ZeekRelease, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,6,6"
+                                                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="ToolManager.Zeek.Cancel"/>
+                                            <Button Content="Detect again" Command="{Binding DetectCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Look for Zeek again (zeek.exe, Docker, WSL) and re-check the latest version" AutomationProperties.AutomationId="ToolManager.Zeek.Detect"/>
+                                            <Button Content="Use existing install…" Command="{Binding UseExistingCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Browse to a zeek.exe you built or installed yourself" AutomationProperties.AutomationId="ToolManager.Zeek.UseExisting"/>
+                                            <Button Content="Open folder" Command="{Binding OpenFolderCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Open the folder of the zeek.exe in use, or EZ Forensics' Zeek folder (setup state)" AutomationProperties.AutomationId="ToolManager.Zeek.OpenFolder"/>
+                                            <Button Content="Uninstall" Command="{Binding UninstallCommand}" Margin="0,0,6,6" Style="{StaticResource SubtleButton}"
+                                                    Visibility="{Binding ShowUninstall, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Remove only what EZ Forensics installed: the zeek/zeek image it pulled, or the Zeek packages it added to WSL"
+                                                    AutomationProperties.AutomationId="ToolManager.Zeek.Uninstall"/>
+                                            <Button Content="Move to EZ Forensics distro" Command="{Binding MoveToEzDistroCommand}" Margin="0,0,6,6"
+                                                    Visibility="{Binding ShowMoveToEzDistro, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Install Zeek in EZ Forensics' own Linux environment (private WSL distro, no admin rights) and use it from now on; your WSL distro keeps its copy unless you choose to remove it"
+                                                    AutomationProperties.AutomationId="ToolManager.Zeek.MoveToEzDistro"/>
+                                            <Button Content="Remove Linux environment…" Command="{Binding RemoveEzDistroCommand}" Margin="0,0,6,6" Style="{StaticResource SubtleButton}"
+                                                    Visibility="{Binding ShowRemoveEzDistro, Converter={StaticResource BoolToVis}}" ToolTip="{Binding RemoveEzDistroToolTip}"
+                                                    AutomationProperties.AutomationId="ToolManager.Zeek.RemoveEzDistro"/>
+                                        </WrapPanel>
+                                        <StackPanel Margin="0,2,0,0" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="{Binding StepText}" Style="{StaticResource Caption}" AutomationProperties.AutomationId="ToolManager.Zeek.Step"/>
+                                            <ProgressBar Height="4" Margin="0,4,0,0" IsIndeterminate="True"/>
+                                        </StackPanel>
+
+                                        <!-- neither Docker nor a usable WSL distro: explain, never install them silently (admin) -->
+                                        <Border Margin="0,8,0,0" Padding="10,8" CornerRadius="4" Background="{DynamicResource Brush.InfoBg}"
+                                                Visibility="{Binding ShowGuidance, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="ToolManager.Zeek.Guidance">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="Install Docker Desktop or WSL with Ubuntu, then Detect again."/>
+                                                    <TextBlock Style="{StaticResource InfoGlyph}" Margin="6,0,0,0"
+                                                               ToolTip="Both need administrator rights and your consent, so EZ Forensics does not install them for you. Afterwards a single click on Install sets Zeek up: with Docker it downloads the official zeek/zeek image (about 180 MB); with WSL it installs the official Zeek packages inside your Ubuntu or Debian distro."/>
+                                                </StackPanel>
+                                                <TextBlock FontSize="12" Margin="0,4,0,0">
+                                                    <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.DockerDesktopDocs}"
+                                                               AutomationProperties.AutomationId="ToolManager.Zeek.LinkDockerDesktop">Install Docker Desktop</Hyperlink>
+                                                    <Run Text="   "/>
+                                                    <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.WslInstall}"
+                                                               AutomationProperties.AutomationId="ToolManager.Zeek.LinkWsl">Install WSL (wsl --install)</Hyperlink>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Visibility="{Binding Log, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Job.Spec.Label}" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Text="{Binding Job.State}" Style="{StaticResource Caption}" Margin="8,0,0,6" VerticalAlignment="Center"
+                                                   AutomationProperties.AutomationId="ToolManager.Zeek.JobState"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource Tile}">
+                                        <c:LogConsole Buffer="{Binding Log}" Height="160" AutomationProperties.AutomationId="ToolManager.Zeek.Log"/>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </TabItem>
+                    </TabControl>
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="RitaCard" Margin="0,0,0,14" DataContext="{Binding Rita}" AutomationProperties.AutomationId="ToolManager.Rita"
+                    AutomationProperties.Name="RITA (beacons, long connections, DNS tunneling)">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,10">
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Top" Padding="10,2">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource Chip}">
+                                    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Status}" Value="Installed">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.SuccessBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.InfoBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="NotInstalled">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="NeedsRuntime">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding StatusLabel}" FontWeight="SemiBold" FontSize="12" AutomationProperties.AutomationId="ToolManager.Rita.Status">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Status}" Value="Installed">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Success}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Info}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="NotInstalled">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="NeedsRuntime">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="RITA" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="ToolManager.Rita.Title"/>
+                            <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="10,0,0,0">
+                                <TextBlock Text="Network" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            </Border>
+                        </StackPanel>
+                    </DockPanel>
+                    <TabControl Style="{StaticResource FlatTabs}">
+                        <TabItem Header="Overview" AutomationProperties.AutomationId="Tools.Tab.Overview">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Forensic Value" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}" ToolTip="{x:Static tools:ToolDisplay.RitaUsage}"/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <TextBlock Text="Flags beaconing, long connections and DNS tunneling in Zeek logs." TextWrapping="Wrap"
+                                               AutomationProperties.AutomationId="ToolManager.Rita.Usage"/>
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Ingest" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}" ToolTip="Ingest queues RITA after the Zeek jobs, one analysis per host."/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <CheckBox IsChecked="{Binding RitaEnabled}" Content="Run RITA after Zeek"
+                                                  AutomationProperties.AutomationId="ToolManager.Rita.Enabled"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                            <CheckBox IsChecked="{Binding OnlineThreatIntel}" Content="Online threat intel (abuse.ch Feodo Tracker)"
+                                                      AutomationProperties.AutomationId="ToolManager.Rita.ThreatIntel"/>
+                                            <TextBlock Style="{StaticResource InfoGlyph}" Margin="6,0,0,0" ToolTip="{Binding ThreatIntelText, Mode=OneWay}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Internal subnets" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}"
+                                               ToolTip="RITA only scores connections between an internal address and any other address. One CIDR per line (an address alone counts as /32). Changes apply to the next analysis; no reinstall needed."/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <Border Padding="10,8" CornerRadius="4" Background="{DynamicResource Brush.WarningBg}" Margin="0,0,0,8" AutomationProperties.AutomationId="ToolManager.Rita.InternalNote">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Warning}" Text="Internal-to-internal traffic is filtered out."/>
+                                                <TextBlock Style="{StaticResource InfoGlyph}" Margin="6,0,0,0"
+                                                           ToolTip="If the command-and-control server is itself on a private range (a lab, or an attacker inside the network), narrow the list to the victim's subnet. Example: in a test capture the backdoor's C2 at 10.0.2.15 only appeared after the internal subnets were set to 192.168.227.0/24 (the victim network) instead of all private ranges."/>
+                                            </StackPanel>
+                                        </Border>
+                                        <DockPanel>
+                                            <StackPanel DockPanel.Dock="Right" Margin="8,0,0,0">
+                                                <Button Content="Save subnets" Command="{Binding SaveSubnetsCommand}" Style="{StaticResource AccentButton}" Margin="0,0,0,6"
+                                                        AutomationProperties.AutomationId="ToolManager.Rita.SaveSubnets"/>
+                                                <Button Content="Reset to private ranges" Command="{Binding ResetSubnetsCommand}"
+                                                        ToolTip="10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 and fd00::/8 (RFC 1918 + IPv6 unique local)"
+                                                        AutomationProperties.AutomationId="ToolManager.Rita.ResetSubnets"/>
+                                            </StackPanel>
+                                            <TextBox Text="{Binding SubnetsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="80" MaxHeight="160"
+                                                     VerticalScrollBarVisibility="Auto" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                                     AutomationProperties.AutomationId="ToolManager.Rita.Subnets" AutomationProperties.Name="RITA internal subnets"/>
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding SubnetsValidation}" Margin="0,4,0,0" TextWrapping="Wrap" FontSize="12" AutomationProperties.AutomationId="ToolManager.Rita.SubnetsValidation">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SubnetsHasError}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Error}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Zeek logs folder, case folder, the pipeline's key lines (+ rita import arguments), Run -->
+                                <ContentControl Content="{Binding Command}" ContentTemplate="{StaticResource SpecialCommandTile}" Focusable="False"/>
+                            </StackPanel>
+                        </TabItem>
+
+                        <TabItem Header="Release" AutomationProperties.AutomationId="Tools.Tab.Release">
+                            <StackPanel AutomationProperties.AutomationId="ToolManager.Rita.Configuration">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Installed" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}"
+                                               ToolTip="Real Intelligence Threat Analytics from Active Countermeasures (GPL-3.0), with ClickHouse as its database. Runs only in EZ Forensics' own Linux environment in WSL."/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="Version" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Rita.Version"/>
+                                            <TextBlock Grid.Row="1" Text="Pinned" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PinnedText, Mode=OneWay}" Margin="0,0,0,6" TextWrapping="Wrap"
+                                                       AutomationProperties.AutomationId="ToolManager.Rita.Pinned"/>
+                                            <TextBlock Grid.Row="2" Text="Engine" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding EngineText}" Margin="0,0,0,6" TextWrapping="Wrap" AutomationProperties.AutomationId="ToolManager.Rita.Engine"/>
+                                            <TextBlock Grid.Row="3" Text="Location" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding LocationText, Mode=OneWay}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding LocationText, Mode=OneWay}" AutomationProperties.AutomationId="ToolManager.Rita.Location"/>
+                                            <TextBlock Grid.Row="4" Text="Data" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding DataText}" Margin="0,0,0,6" TextWrapping="Wrap" AutomationProperties.AutomationId="ToolManager.Rita.Data"/>
+                                            <TextBlock Grid.Row="5" Text="Links" Style="{StaticResource Caption}"/>
+                                            <TextBlock Grid.Row="5" Grid.Column="1" FontSize="12" TextWrapping="Wrap" AutomationProperties.AutomationId="ToolManager.Rita.Links">
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static rita:RitaLinks.SourceAtTag}"
+                                                           ToolTip="{x:Static rita:RitaLinks.SourceAtTag}" AutomationProperties.AutomationId="ToolManager.Rita.LinkSource">Source code (v5.1.2)</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static rita:RitaLinks.License}"
+                                                           ToolTip="{x:Static rita:RitaLinks.License}" AutomationProperties.AutomationId="ToolManager.Rita.LinkLicense">License (GPL-3.0)</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static rita:RitaLinks.Website}"
+                                                           ToolTip="{x:Static rita:RitaLinks.Website}">Website</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static rita:RitaLinks.ImagePackage}"
+                                                           ToolTip="{x:Static rita:RitaLinks.ImagePackage}">Container image</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static rita:RitaLinks.Releases}"
+                                                           ToolTip="{x:Static rita:RitaLinks.Releases}">Releases</Hyperlink>
+                                                <Run Text="  ·  "/>
+                                                <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static rita:RitaLinks.ClickHouseLicense}"
+                                                           ToolTip="{x:Static rita:RitaLinks.ClickHouseLicense}">ClickHouse license (Apache-2.0)</Hyperlink>
+                                            </TextBlock>
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <TextBlock Text="Licence" Style="{StaticResource Caption}"/>
+                                            <TextBlock Style="{StaticResource InfoGlyph}" Margin="6,0,0,0" ToolTip="{Binding LicenseNotice, Mode=OneWay}"
+                                                       AutomationProperties.AutomationId="ToolManager.Rita.License"/>
+                                        </StackPanel>
+                                        <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0" TextWrapping="Wrap" Text="{Binding NoteText}"
+                                                   Visibility="{Binding HasNote, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="ToolManager.Rita.Note"/>
+                                        <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding DockerNote, Mode=OneWay}"
+                                                   Visibility="{Binding ShowDockerNote, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="ToolManager.Rita.DockerNote"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="Manage" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Headline}" TextWrapping="Wrap" FontWeight="SemiBold" AutomationProperties.AutomationId="ToolManager.Rita.Headline"/>
+                                        <TextBlock Text="Install or update it from the Tools table on the Overview tab." Style="{StaticResource Caption}" Margin="0,10,0,0"/>
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,6,6"
+                                                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="ToolManager.Rita.Cancel"/>
+                                            <Button Content="Detect again" Command="{Binding DetectCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Look for RITA in the EZ Forensics Linux environment again" AutomationProperties.AutomationId="ToolManager.Rita.Detect"/>
+                                            <Button Content="Delete RITA databases…" Command="{Binding DeleteDatabasesCommand}" Margin="0,0,6,6" Style="{StaticResource SubtleButton}"
+                                                    Visibility="{Binding ShowDeleteDatabases, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Delete the ClickHouse databases of earlier analyses (the Rita_*.csv results in your cases stay)"
+                                                    AutomationProperties.AutomationId="ToolManager.Rita.DeleteDatabases"/>
+                                            <Button Content="Uninstall" Command="{Binding UninstallCommand}" Margin="0,0,6,6" Style="{StaticResource SubtleButton}"
+                                                    Visibility="{Binding ShowUninstall, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Remove RITA, ClickHouse and every RITA database from the EZ Forensics Linux environment (Zeek and your cases are not touched)"
+                                                    AutomationProperties.AutomationId="ToolManager.Rita.Uninstall"/>
+                                        </WrapPanel>
+                                        <StackPanel Margin="0,2,0,0" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="{Binding StepText}" Style="{StaticResource Caption}" AutomationProperties.AutomationId="ToolManager.Rita.Step"/>
+                                            <ProgressBar Height="4" Margin="0,4,0,0" Minimum="0" Maximum="1" Value="{Binding Progress}" AutomationProperties.AutomationId="ToolManager.Rita.Progress"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Visibility="{Binding Log, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Job.Spec.Label}" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Text="{Binding Job.State}" Style="{StaticResource Caption}" Margin="8,0,0,6" VerticalAlignment="Center"
+                                                   AutomationProperties.AutomationId="ToolManager.Rita.JobState"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource Tile}">
+                                        <c:LogConsole Buffer="{Binding Log}" Height="160" AutomationProperties.AutomationId="ToolManager.Rita.Log"/>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </TabItem>
+                    </TabControl>
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="VolatilityCard" Margin="0,0,0,14" DataContext="{Binding Volatility}" AutomationProperties.AutomationId="ToolManager.Volatility"
+                    AutomationProperties.Name="Volatility 3 (memory images)">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,10">
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Top" Padding="10,2">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource Chip}">
+                                    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Status}" Value="Installed">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.SuccessBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.InfoBg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="NotInstalled">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding StatusLabel}" FontWeight="SemiBold" FontSize="12" AutomationProperties.AutomationId="ToolManager.Volatility.Status">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Status}" Value="Installed">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Success}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="UpdateAvailable">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Info}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="NotInstalled">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Volatility 3" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="ToolManager.Volatility.Title"/>
+                            <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="10,0,0,0">
+                                <TextBlock Text="Memory" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            </Border>
+                        </StackPanel>
+                    </DockPanel>
+                    <TabControl Style="{StaticResource FlatTabs}">
+                        <TabItem Header="Overview" AutomationProperties.AutomationId="Tools.Tab.Overview">
+                            <StackPanel AutomationProperties.AutomationId="ToolManager.Volatility.Configuration">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Forensic Value" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}" ToolTip="{x:Static tools:ToolDisplay.VolatilityUsage}"/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <TextBlock Text="Finds processes, connections and injected code in memory images." TextWrapping="Wrap"
+                                               AutomationProperties.AutomationId="ToolManager.Volatility.Usage"/>
+                                </Border>
+
+                                <!-- plugins Ingest runs on every memory image (AppSettings.VolatilityPlugins) -->
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Ingest plugins" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}"
+                                               ToolTip="Run on every memory image Ingest processes, read-only: 'vol -r csv -f &lt;image&gt; --symbol-dirs &lt;symbols&gt; --cache-path &lt;cache&gt; &lt;plugin&gt;'. Linux images need an ISF that matches their kernel."/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}" AutomationProperties.AutomationId="ToolManager.Volatility.Plugins">
+                                    <StackPanel>
+                                        <DockPanel Margin="0,0,0,6">
+                                            <TextBlock DockPanel.Dock="Right" FontSize="12">
+                                                <Hyperlink Command="{Binding PluginDefaultsCommand}" AutomationProperties.AutomationId="ToolManager.Volatility.PluginDefaults">Defaults</Hyperlink>
+                                                <Run Text="  "/>
+                                                <Hyperlink Command="{Binding PluginsAllCommand}" AutomationProperties.AutomationId="ToolManager.Volatility.PluginsAll">All</Hyperlink>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding PluginsSummary, Mode=OneWay}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                        <TextBlock Text="Windows" FontWeight="SemiBold" FontSize="12"/>
+                                        <ItemsControl ItemsSource="{Binding WindowsPlugins}" Focusable="False" ItemTemplate="{StaticResource PluginCheck}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                        <TextBlock Text="Linux" FontWeight="SemiBold" FontSize="12" Margin="0,8,0,0"/>
+                                        <ItemsControl ItemsSource="{Binding LinuxPlugins}" Focusable="False" ItemTemplate="{StaticResource PluginCheck}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Symbols" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}"
+                                               ToolTip="Windows symbols are downloaded automatically when online. Install the symbol pack or import ISF files (e.g. made with dwarf2json for a Linux kernel) to work offline."/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right" Content="Open" Command="{Binding OpenSymbolsFolderCommand}" MinHeight="24" Padding="8,2" Margin="6,0,0,0"
+                                                    ToolTip="{Binding SymbolsDir}" AutomationProperties.AutomationId="ToolManager.Volatility.OpenSymbols"/>
+                                            <TextBlock Text="{Binding SymbolsText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                                       ToolTip="{Binding SymbolsDir}" AutomationProperties.AutomationId="ToolManager.Volatility.Symbols"/>
+                                        </DockPanel>
+                                        <CheckBox IsChecked="{Binding Offline}" Margin="0,10,0,0" Content="Offline (--offline)"
+                                                  ToolTip="Never download symbols: Volatility does not contact the internet and uses only the symbols folder. Install the Windows symbol pack or import ISF files first, otherwise memory jobs fail with a missing-symbols message."
+                                                  AutomationProperties.AutomationId="ToolManager.Volatility.Offline"/>
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button Content="{Binding SymbolPackButtonText, Mode=OneWay}" Command="{Binding InstallSymbolPackCommand}" Margin="0,0,12,0"
+                                                    Visibility="{Binding ShowSymbolPack, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Official windows.zip from downloads.volatilityfoundation.org, extracted into the symbols folder, so Windows memory images can be analysed without an internet connection"
+                                                    AutomationProperties.AutomationId="ToolManager.Volatility.SymbolPack"/>
+                                            <TextBlock Text="Import ISF for" VerticalAlignment="Center" Margin="0,0,6,0" Style="{StaticResource Caption}"/>
+                                            <ComboBox ItemsSource="{Binding IsfTargets}" SelectedItem="{Binding IsfTarget}" DisplayMemberPath="Label" MinWidth="100" Margin="0,0,6,0"
+                                                      AutomationProperties.AutomationId="ToolManager.Volatility.IsfOs" AutomationProperties.Name="Operating system of the ISF files"/>
+                                            <Button Content="Import ISF…" Command="{Binding ImportIsfCommand}"
+                                                    ToolTip="Copy symbol files (ISF, .json or .json.xz) into symbols\windows, symbols\linux or symbols\mac"
+                                                    AutomationProperties.AutomationId="ToolManager.Volatility.ImportIsf"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- memory image, case folder, one command per ticked plugin (+ plugin arguments), Run -->
+                                <ContentControl Content="{Binding Command}" ContentTemplate="{StaticResource SpecialCommandTile}" Focusable="False"/>
+                            </StackPanel>
+                        </TabItem>
+
+                        <TabItem Header="Release" AutomationProperties.AutomationId="Tools.Tab.Release">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Installed" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource InfoGlyph}"
+                                               ToolTip="Discovery order: configured vol.exe, EZ Forensics' environment (%LOCALAPPDATA%\EzForensicsData\volatility\venv), then vol.exe on PATH. Runs natively on Windows from its own Python environment: no WSL, Docker, admin rights or PATH changes."/>
+                                </StackPanel>
+                                <Border Style="{StaticResource Tile}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Version" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Volatility.Version"/>
+                                        <TextBlock Grid.Row="1" Text="Tested" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PinnedText, Mode=OneWay}" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Volatility.Pinned"/>
+                                        <TextBlock Grid.Row="2" Text="Latest" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LatestText}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
+                                                   AutomationProperties.AutomationId="ToolManager.Volatility.Latest"/>
+                                        <TextBlock Grid.Row="3" Text="Location" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LocationText}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding LocationText}" AutomationProperties.AutomationId="ToolManager.Volatility.Location"/>
+                                        <TextBlock Grid.Row="4" Text="Path" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ConfiguredPath}" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding ConfiguredPath}"
+                                                   AutomationProperties.AutomationId="ToolManager.Volatility.ConfiguredPath"/>
+                                        <Button Grid.Row="4" Grid.Column="2" Content="Automatic" Command="{Binding ClearPathCommand}" MinHeight="24" Padding="8,2" Margin="6,0,0,0"
+                                                ToolTip="Clear the configured vol.exe (EZ Forensics' environment, then PATH)" AutomationProperties.AutomationId="ToolManager.Volatility.ClearPath"/>
+                                    </Grid>
+                                </Border>
+
+                                <TextBlock Text="Manage" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Tile}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Headline}" TextWrapping="Wrap" FontWeight="SemiBold" AutomationProperties.AutomationId="ToolManager.Volatility.Headline"/>
+                                        <TextBlock Text="Install or update it from the Tools table on the Overview tab." Style="{StaticResource Caption}" Margin="0,10,0,0"/>
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,6,6"
+                                                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="ToolManager.Volatility.Cancel"/>
+                                            <Button Content="Detect again" Command="{Binding DetectCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Look for Volatility 3 again (configured path, EZ Forensics' environment, PATH)" AutomationProperties.AutomationId="ToolManager.Volatility.Detect"/>
+                                            <Button Content="Use existing install…" Command="{Binding UseExistingCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Browse to a vol.exe in a Python environment that has volatility3" AutomationProperties.AutomationId="ToolManager.Volatility.UseExisting"/>
+                                            <Button Content="Open folder" Command="{Binding OpenFolderCommand}" Margin="0,0,6,6"
+                                                    ToolTip="Open EZ Forensics' Volatility folder (venv, symbols, cache)" AutomationProperties.AutomationId="ToolManager.Volatility.OpenFolder"/>
+                                            <Button Content="Uninstall" Command="{Binding UninstallCommand}" Margin="0,0,6,6" Style="{StaticResource SubtleButton}"
+                                                    Visibility="{Binding ShowUninstall, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Remove EZ Forensics' Volatility environment and symbol cache (the private Python shared with plaso stays)"
+                                                    AutomationProperties.AutomationId="ToolManager.Volatility.Uninstall"/>
+                                            <CheckBox Content="Keep symbols" IsChecked="{Binding KeepSymbolsOnUninstall}" Margin="2,0,6,6" VerticalAlignment="Center"
+                                                      Visibility="{Binding ShowUninstall, Converter={StaticResource BoolToVis}}"
+                                                      ToolTip="Uninstall keeps the symbols folder (Windows symbol pack, imported ISF files). Untick to delete it too."
+                                                      AutomationProperties.AutomationId="ToolManager.Volatility.KeepSymbols"/>
+                                        </WrapPanel>
+                                        <StackPanel Margin="0,2,0,0" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="{Binding StepText}" Style="{StaticResource Caption}" AutomationProperties.AutomationId="ToolManager.Volatility.Step"/>
+                                            <ProgressBar Height="4" Margin="0,4,0,0" Maximum="1" Value="{Binding Progress, Mode=OneWay}" IsIndeterminate="{Binding ProgressIndeterminate, Mode=OneWay}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Visibility="{Binding Log, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Job.Spec.Label}" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Text="{Binding Job.State}" Style="{StaticResource Caption}" Margin="8,0,0,6" VerticalAlignment="Center"
+                                                   AutomationProperties.AutomationId="ToolManager.Volatility.JobState"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource Tile}">
+                                        <c:LogConsole Buffer="{Binding Log}" Height="160" AutomationProperties.AutomationId="ToolManager.Volatility.Log"/>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </TabItem>
+                    </TabControl>
+                </StackPanel>
+            </Border>
+
+            <!-- every catalog tool and its download, plus the maps / batch files sync (one table) -->
+            <TextBlock Text="Tools" Style="{StaticResource SectionTitle}"/>
+            <DataGrid ItemsSource="{Binding ToolRowsView}" IsReadOnly="False" MaxHeight="620" AutomationProperties.AutomationId="ToolManager.ToolsTable"
+                      EnableRowVirtualization="False">
+                <DataGrid.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="4,8,0,4"/>
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                    </GroupStyle>
+                </DataGrid.GroupStyle>
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Width="44" IsReadOnly="True" CanUserSort="False" CanUserResize="False">
+                        <DataGridTemplateColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="DataGridColumnHeader">
+                                            <Border Background="{TemplateBinding Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,1"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </DataGridTemplateColumn.HeaderStyle>
+                        <DataGridTemplateColumn.Header>
+                            <CheckBox IsThreeState="False" HorizontalAlignment="Center" ToolTip="Tick all / none"
+                                      IsEnabled="{Binding DataContext.CanAct, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                      IsChecked="{Binding DataContext.AllSelected, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"
+                                      AutomationProperties.AutomationId="ToolManager.ToolsTable.All" AutomationProperties.Name="Select all"/>
+                        </DataGridTemplateColumn.Header>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center"
+                                          IsEnabled="{Binding DataContext.CanAct, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="130" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="100" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="ToolTip" Value="{Binding VersionToolTip}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="80" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" IsReadOnly="True"/>
+                </DataGrid.Columns>
+            </DataGrid>
+            <DockPanel Margin="0,8,0,0">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,6,0"
+                            Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                    <Button Content="{Binding PrimaryActionText}" Style="{StaticResource AccentButton}" MinWidth="150" Command="{Binding PrimaryActionCommand}"
+                            AutomationProperties.AutomationId="ToolManager.PrimaryAction" IsEnabled="{Binding CanAct}"
+                            ToolTip="Nothing ticked: check for updates (EZ tools site, plaso, Volatility, Zeek). Ticked rows: install / update them (a missing tool is installed, an installed one is updated; the maps row runs EvtxECmd, RECmd and SQLECmd --sync)."/>
+                </StackPanel>
+                <StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="{Binding RemoteSummary}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                    <ProgressBar Maximum="1" Height="4" Margin="0,4,0,0" Value="{Binding Progress}" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                    <ProgressBar IsIndeterminate="True" Height="4" Margin="0,4,0,0" Visibility="{Binding IsSyncing, Converter={StaticResource BoolToVis}}"
+                                 AutomationProperties.AutomationId="ToolManager.SyncBusy"/>
+                    <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                    <TextBlock Text="{Binding SyncStatus}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                </StackPanel>
+            </DockPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

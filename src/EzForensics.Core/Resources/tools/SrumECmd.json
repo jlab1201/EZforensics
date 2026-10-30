@@ -1,0 +1,25 @@
+{
+  "id": "SrumECmd",
+  "displayName": "SrumECmd",
+  "category": "SRUMDatabase",
+  "description": "Parses the System Resource Usage Monitor database (SRUDB.dat), optionally with the SOFTWARE hive.",
+  "usage": "Parses the System Resource Usage Monitor database (SRUDB.dat) to show per-application CPU, network and energy use over time. Use it to find what ran and how much data it sent, even weeks back.",
+  "limitation": "SRUM keeps about 30 days of hourly resource-use totals per application. It does not give exact activity times.",
+  "kind": "cli",
+  "exe": "SrumECmd.exe",
+  "zip": "SrumECmd.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Windows\\System32\\SRU\\SRUDB.dat", "Windows\\System32\\config\\SOFTWARE"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "SRUDB.dat", "description": "SRUDB.dat file to parse.", "filter": "SRUM database|SRUDB.dat|All files|*.*" },
+    { "id": "r", "flag": "-r", "type": "file", "label": "SOFTWARE hive", "description": "SOFTWARE hive to process. Optional, but recommended.", "visibleWhen": "f", "filter": "SOFTWARE hive|SOFTWARE|All files|*.*" },
+    { "id": "d", "flag": "-d", "type": "folder", "label": "Directory", "description": "Directory to recursively process, looking for SRUDB.dat and SOFTWARE hive (KAPE-style output)." },
+    { "use": "csv", "required": true },
+    { "use": "dt" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ],
+  "groups": [
+    { "mode": "exactlyOne", "params": ["f", "d"] }
+  ]
+}

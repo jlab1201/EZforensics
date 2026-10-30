@@ -1,0 +1,92 @@
+<UserControl x:Class="EzForensics.App.Views.Analyze.AdvisoryBanner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:EzForensics.App.Controls">
+    <!-- reliability advisory strip above the events grid. DataContext = AdvisoryBannerViewModel.
+         AutomationIds: Results.Advisory.Banner|Icon|Headline|Summary|Details|Dismiss|HidePermanently|Item.{Id}|Item.{Id}.Link -->
+    <UserControl.Resources>
+        <!-- Kind (crit / warn / info) -> brushes -->
+        <Style x:Key="KindStrip" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Brush.InfoBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Info}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="warn">
+                    <Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="crit">
+                    <Setter Property="Background" Value="{DynamicResource Brush.ErrorBg}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Error}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="KindText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Info}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="warn"><Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/></DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="crit"><Setter Property="Foreground" Value="{DynamicResource Brush.Error}"/></DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="KindGlyph" TargetType="TextBlock" BasedOn="{StaticResource KindText}">
+            <Setter Property="FontFamily" Value="{StaticResource Font.Icon}"/>
+            <Setter Property="Text" Value="&#xE946;"/> <!-- Info -->
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="warn"><Setter Property="Text" Value="&#xE7BA;"/></DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="crit"><Setter Property="Text" Value="&#xEA39;"/></DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+    <c:AutomationPane Style="{StaticResource KindStrip}" BorderThickness="0,0,0,1" Padding="10,4" 
+                      AutomationProperties.AutomationId="Results.Advisory.Banner" AutomationProperties.Name="Reliability advisory">
+        <StackPanel>
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Dismiss" MinHeight="0" Padding="8,2" Margin="6,0,0,0"
+                        Command="{Binding DismissCommand}" ToolTip="Hide this notice for this file until the app restarts"
+                        AutomationProperties.AutomationId="Results.Advisory.Dismiss" AutomationProperties.Name="Dismiss advisory"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Hide hints" MinHeight="0" Padding="8,2" Margin="6,0,0,0"
+                        Command="{Binding HidePermanentlyCommand}" ToolTip="Hide reliability banners and column markers on Analyze, also after a restart"
+                        AutomationProperties.AutomationId="Results.Advisory.HidePermanently" AutomationProperties.Name="Hide hints permanently"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" MinHeight="0" Padding="8,2" Margin="6,0,0,0"
+                              Command="{Binding ToggleDetailsCommand}" Content="Details"
+                              AutomationProperties.AutomationId="Results.Advisory.Details" AutomationProperties.Name="Advisory details"/>
+                <TextBlock Style="{StaticResource KindGlyph}" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"
+                           AutomationProperties.AutomationId="Results.Advisory.Icon"/>
+                <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="Results.Advisory.Headline" AutomationProperties.Name="{Binding Headline}">
+                    <Run Text="{Binding Headline, Mode=OneWay}" FontWeight="SemiBold"/>
+                    <Run Text="{Binding Extra, Mode=OneWay}" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                </TextBlock>
+            </DockPanel>
+            <!-- one line; the full text is the tooltip and the items are behind Details -->
+            <TextBlock Text="{Binding Summary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Summary}" Margin="22,2,0,0" Foreground="{DynamicResource Brush.TextSecondary}"
+                       Visibility="{Binding HasSummary, Converter={StaticResource BoolToVis}}"
+                       AutomationProperties.AutomationId="Results.Advisory.Summary" AutomationProperties.Name="{Binding Summary}"/>
+            <ItemsControl ItemsSource="{Binding Items}" Margin="22,6,0,2"
+                          Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,0,0,8" AutomationProperties.AutomationId="{Binding Id, StringFormat=Results.Advisory.Item.{0}}">
+                            <StackPanel Orientation="Horizontal">
+                                <Border CornerRadius="3" Padding="5,0" Margin="0,0,6,0" VerticalAlignment="Center" BorderThickness="1" Style="{StaticResource KindStrip}">
+                                    <TextBlock Text="{Binding SeverityText}" FontSize="10" FontWeight="SemiBold" Style="{StaticResource KindText}"/>
+                                </Border>
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            <TextBlock Text="{Binding AffectedText}" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource Brush.TextSecondary}"
+                                       Visibility="{Binding HasAffected, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Text="{Binding ReliableText}" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource Brush.TextSecondary}"
+                                       Visibility="{Binding HasReliable, Converter={StaticResource BoolToVis}}"/>
+                            <Button Style="{StaticResource SubtleButton}" HorizontalAlignment="Left" MinHeight="0" Padding="0,2" Content="Reference"
+                                    Visibility="{Binding HasReference, Converter={StaticResource BoolToVis}}" ToolTip="{Binding ReferenceUrl}"
+                                    Command="{Binding DataContext.OpenReferenceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding ReferenceUrl}"
+                                    AutomationProperties.AutomationId="{Binding Id, StringFormat=Results.Advisory.Item.{0}.Link}"
+                                    AutomationProperties.Name="Open reference in browser"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </c:AutomationPane>
+</UserControl>

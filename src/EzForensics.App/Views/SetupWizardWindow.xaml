@@ -1,0 +1,471 @@
+<Window x:Class="EzForensics.App.Views.SetupWizardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
+        xmlns:c="clr-namespace:EzForensics.App.Controls"
+        Title="EZ Forensics setup" Width="980" Height="720" MinWidth="760" MinHeight="560"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
+        Icon="pack://application:,,,/Assets/EzForensics.png"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}"
+        TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}" UseLayoutRounding="True"
+        AutomationProperties.AutomationId="Setup.Window" AutomationProperties.Name="EZ Forensics setup">
+    <!-- Text rule: one short line per thing; every explanation sits behind a "?" (c:HelpTip, hover / focus / click). -->
+    <Window.Resources>
+        <Style x:Key="StepLabel" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,6"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+        </Style>
+        <Style x:Key="PageHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,12,0,4"/>
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid LayoutTransform="{DynamicResource Ui.Scale}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="230"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- left: brand + steps -->
+        <Border Background="{DynamicResource Brush.Nav}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,0" Padding="20,22">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,26">
+                    <Image Source="pack://application:,,,/Assets/EzForensics.png" Width="96" Height="96" HorizontalAlignment="Left"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <TextBlock Text="EZ Forensics" FontSize="18" FontWeight="SemiBold" Margin="0,10,0,0"/>
+                    <TextBlock Style="{StaticResource Caption}">
+                        <Run Text="Setup · version"/> <Run Text="{Binding Version, Mode=OneWay}"/>
+                    </TextBlock>
+                </StackPanel>
+                <ItemsControl AutomationProperties.AutomationId="Setup.StepList" Focusable="False">
+                    <ItemsControl.Resources>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource StepLabel}"/>
+                    </ItemsControl.Resources>
+                    <TextBlock Text="1  Welcome"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource StepLabel}"><Style.Triggers><DataTrigger Binding="{Binding PageNumber}" Value="1"><Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/><Setter Property="FontWeight" Value="SemiBold"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                    <TextBlock Text="2  System check"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource StepLabel}"><Style.Triggers><DataTrigger Binding="{Binding PageNumber}" Value="2"><Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/><Setter Property="FontWeight" Value="SemiBold"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                    <TextBlock Text="3  Choose what to install"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource StepLabel}"><Style.Triggers><DataTrigger Binding="{Binding PageNumber}" Value="3"><Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/><Setter Property="FontWeight" Value="SemiBold"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                    <TextBlock Text="4  Summary"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource StepLabel}"><Style.Triggers><DataTrigger Binding="{Binding PageNumber}" Value="4"><Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/><Setter Property="FontWeight" Value="SemiBold"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                    <TextBlock Text="5  Install"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource StepLabel}"><Style.Triggers><DataTrigger Binding="{Binding PageNumber}" Value="5"><Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/><Setter Property="FontWeight" Value="SemiBold"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                    <TextBlock Text="6  Done"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource StepLabel}"><Style.Triggers><DataTrigger Binding="{Binding PageNumber}" Value="6"><Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/><Setter Property="FontWeight" Value="SemiBold"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                </ItemsControl>
+            </DockPanel>
+        </Border>
+
+        <!-- right: page + footer -->
+        <DockPanel Grid.Column="1" Margin="28,22,24,16">
+            <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" LastChildFill="False">
+                <Button DockPanel.Dock="Right" Content="{Binding NextText}" Style="{StaticResource AccentButton}" MinWidth="110" Margin="8,0,0,0"
+                        Command="{Binding NextCommand}" Visibility="{Binding ShowNext, Converter={StaticResource BoolToVis}}" IsDefault="True"
+                        AutomationProperties.AutomationId="Setup.Next"/>
+                <!-- Done page: replaces the footer Cancel (AutomationId kept from the former "Open evidence…" button) -->
+                <Button DockPanel.Dock="Right" Content="Open EZ Forensics" Style="{StaticResource AccentButton}" MinWidth="150" Margin="8,0,0,0"
+                        Command="{Binding OpenAppCommand}" Visibility="{Binding ShowOpenApp, Converter={StaticResource BoolToVis}}" IsDefault="True"
+                        AutomationProperties.AutomationId="Setup.Done.OpenEvidence" AutomationProperties.Name="Open EZ Forensics"/>
+                <Button DockPanel.Dock="Right" Content="Back" MinWidth="80" Margin="8,0,0,0" Command="{Binding BackCommand}"
+                        Visibility="{Binding ShowBack, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Setup.Back"/>
+                <Button DockPanel.Dock="Right" Content="Cancel" MinWidth="80" Command="{Binding CancelSetupCommand}"
+                        Visibility="{Binding ShowCancel, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Setup.Cancel"/>
+            </DockPanel>
+
+            <c:AutomationPane AutomationProperties.AutomationId="Setup.Page" AutomationProperties.ItemStatus="{Binding PageName}">
+            <Grid>
+
+                <!-- 1 Welcome -->
+                <ScrollViewer Visibility="{Binding Page, Converter={StaticResource EqVis}, ConverterParameter=Welcome}" VerticalScrollBarVisibility="Auto"
+                              AutomationProperties.AutomationId="Setup.Welcome">
+                    <StackPanel MaxWidth="680" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource PageHeader}" Text="Welcome to EZ Forensics"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                            <TextBlock FontSize="14" Text="Sets up the forensic tools for you. Nothing is installed until you click Install."/>
+                            <c:HelpTip AutomationProperties.AutomationId="Setup.Welcome.Help"
+                                       Text="Point EZ Forensics at a KAPE collection, a mounted image, a folder or a packet capture: it plans and runs the right tools and shows the results in one place. This setup checks your computer, lets you choose what to install (Everything is preselected) and installs it in one go, including what the tools need (a private Python for plaso, the right .NET builds). No administrator rights are needed for the Minimal set."/>
+                        </StackPanel>
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="• Eric Zimmerman's tools (event logs, registry, $MFT, prefetch, LNK…)"/>
+                                <TextBlock Text="• Super timelines with log2timeline / plaso"/>
+                                <TextBlock Text="• Persistence: built-in collector"/>
+                                <TextBlock Text="• Network: Zeek and RITA · Memory: Volatility 3"/>
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <TextBlock Style="{StaticResource Caption}" VerticalAlignment="Center">
+                                <Run Text="Data folder:"/> <Run Text="{Binding DataRoot, Mode=OneWay}" FontFamily="{DynamicResource Font.Mono}"/>
+                            </TextBlock>
+                            <c:HelpTip Text="{Binding DataRootHelp}" AutomationProperties.AutomationId="Setup.Welcome.DataRoot.Help"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- 2 System check -->
+                <DockPanel Visibility="{Binding Page, Converter={StaticResource EqVis}, ConverterParameter=SystemCheck}" AutomationProperties.AutomationId="Setup.SystemCheck">
+                    <DockPanel DockPanel.Dock="Top">
+                        <Button DockPanel.Dock="Right" Content="Check again" Command="{Binding RunSystemCheckCommand}" VerticalAlignment="Top"
+                                AutomationProperties.AutomationId="Setup.Check.Again"/>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource PageHeader}" Text="System check"/>
+                            <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,12" Text="What this computer already has. Nothing here needs fixing."/>
+                        </StackPanel>
+                    </DockPanel>
+                    <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="3" Margin="0,0,0,8"
+                                 Visibility="{Binding IsChecking, Converter={StaticResource BoolToVis}}"/>
+                    <ItemsControl ItemsSource="{Binding Checks}" AutomationProperties.AutomationId="Setup.Checks">
+                        <ItemsControl.Template>
+                            <ControlTemplate TargetType="ItemsControl">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
+                            </ControlTemplate>
+                        </ItemsControl.Template>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:CheckRow}">
+                                <c:AutomationPane BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1" Padding="0,7"
+                                        AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Check.{0}}"
+                                        AutomationProperties.Name="{Binding Label}" AutomationProperties.ItemStatus="{Binding Value}"
+                                        AutomationProperties.HelpText="{Binding Level}">
+                                    <DockPanel>
+                                        <!-- status icon: a fixed 22x22 slot that only ever holds one glyph (CheckRow.Glyph maps every level);
+                                             clipped, no wrapping, so text can never show here -->
+                                        <Border DockPanel.Dock="Left" Width="22" Height="22" ClipToBounds="True" VerticalAlignment="Center"
+                                                AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Check.{0}.Icon}">
+                                            <TextBlock Text="{Binding Glyph, Mode=OneTime}" FontFamily="{StaticResource Font.Icon}" FontSize="14"
+                                                       TextWrapping="NoWrap" TextTrimming="None" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Brush.Info}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Level}" Value="Ok"><Setter Property="Foreground" Value="{DynamicResource Brush.Success}"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Level}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+                                        <TextBlock DockPanel.Dock="Left" Width="170" Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Value}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <c:HelpTip Text="{Binding Help}" AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Check.{0}.Help}"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </c:AutomationPane>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+
+                <!-- 3 Bundles -->
+                <DockPanel Visibility="{Binding Page, Converter={StaticResource EqVis}, ConverterParameter=Bundles}" AutomationProperties.AutomationId="Setup.Bundles">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                        <TextBlock Style="{StaticResource PageHeader}" Text="Choose what to install"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <RadioButton GroupName="profile" Content="Everything" IsChecked="{Binding IsEverything}" AutomationProperties.AutomationId="Setup.Profile.Everything"/>
+                            <c:HelpTip Margin="2,0,18,0" Text="Also Network (Zeek, RITA in EZ Forensics' own WSL Linux environment) and Memory (Volatility 3). Enabling WSL may need one administrator prompt and one restart."/>
+                            <RadioButton GroupName="profile" Content="Minimal" IsChecked="{Binding IsMinimal}"
+                                         AutomationProperties.AutomationId="Setup.Profile.Minimal"/>
+                            <c:HelpTip Margin="2,0,18,0" Text="Windows artifacts (Eric Zimmerman's tools, the viewers) and the super timeline (plaso). No administrator rights needed."/>
+                        </StackPanel>
+                    </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
+                        <ItemsControl ItemsSource="{Binding Bundles}" AutomationProperties.AutomationId="Setup.BundleList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:SetupBundleViewModel}">
+                                    <c:AutomationPane Style="{StaticResource Card}" Margin="0,0,0,8" Padding="10,8"
+                                            AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.BundleCard.{0}}" AutomationProperties.Name="{Binding Title}">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <ToggleButton DockPanel.Dock="Left" Style="{StaticResource ExpanderHeaderToggle}" IsChecked="{Binding IsExpanded}" Margin="0,0,2,0"
+                                                              ToolTip="Show or hide the individual tools" AutomationProperties.Name="Show tools"
+                                                              AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Bundle.{0}.Expand}"/>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                           AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Bundle.{0}.Size}"/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding IsEnabled}" VerticalAlignment="Center"
+                                                              AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Bundle.{0}}" AutomationProperties.Name="{Binding Title}">
+                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14"/>
+                                                    </CheckBox>
+                                                    <c:HelpTip Text="{Binding Description}" AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Bundle.{0}.Help}"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                            <!-- collapsed: which items are ticked, in one line -->
+                                            <TextBlock Text="{Binding ChildSummary}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" Margin="50,2,0,0"
+                                                       ToolTip="{Binding ChildSummary}" Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisInv}}"
+                                                       AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Bundle.{0}.Selected}"/>
+                                            <!-- expanded: one compact line per item -->
+                                            <ItemsControl ItemsSource="{Binding Items}" Margin="50,4,0,0" Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:SetupItemViewModel}">
+                                                        <DockPanel Margin="0,2">
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" Style="{StaticResource Caption}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding IsEnabled}" Content="{Binding Title}" VerticalAlignment="Center"
+                                                                          AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Item.{0}}" AutomationProperties.Name="{Binding Title}"
+                                                                          AutomationProperties.HelpText="{Binding SizeText}"/>
+                                                                <c:HelpTip Text="{Binding Help}" AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Item.{0}.Help}"/>
+                                                                <TextBlock Text="{Binding Note}" Margin="10,0,0,0" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Info}"
+                                                                           Visibility="{Binding HasNote, Converter={StaticResource BoolToVis}}"
+                                                                           AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Item.{0}.Note}"/>
+                                                            </StackPanel>
+                                                        </DockPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </c:AutomationPane>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+
+                <!-- 4 Summary (with the one third-party licence acceptance) -->
+                <DockPanel Visibility="{Binding Page, Converter={StaticResource EqVis}, ConverterParameter=Summary}" AutomationProperties.AutomationId="Setup.Summary">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <TextBlock Style="{StaticResource PageHeader}" Text="Summary"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding TotalText}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="Setup.Summary.Total"/>
+                            <c:HelpTip Text="{Binding NotesHelp}" AutomationProperties.AutomationId="Setup.Summary.Notes"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasAdminText, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding AdminText}" Foreground="{DynamicResource Brush.Warning}" VerticalAlignment="Center"
+                                       AutomationProperties.AutomationId="Setup.Summary.Admin"/>
+                            <c:HelpTip Text="{Binding AdminHelp}" AutomationProperties.AutomationId="Setup.Summary.Admin.Help"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasDiskWarning, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding DiskWarning}" Foreground="{DynamicResource Brush.Warning}" VerticalAlignment="Center"
+                                       AutomationProperties.AutomationId="Setup.Summary.Disk"/>
+                            <c:HelpTip Text="{Binding DiskHelp}"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <!-- licences: Install stays disabled until this is ticked -->
+                    <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Padding="10,8" Margin="0,8,0,0" AutomationProperties.AutomationId="Setup.Licenses">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding LicensesAccepted}" VerticalAlignment="Center" AutomationProperties.AutomationId="Setup.Licenses.Accept"
+                                          Content="I accept the license terms of the third-party tools this setup installs"/>
+                                <c:HelpTip Text="{Binding LicensesHelp}" AutomationProperties.AutomationId="Setup.Licenses.Help"/>
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12">
+                                    <Hyperlink Command="{Binding ToggleLicenseListCommand}" AutomationProperties.AutomationId="Setup.Licenses.View">View licences</Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Licenses}" Margin="26,6,0,0" Visibility="{Binding ShowLicenseList, Converter={StaticResource BoolToVis}}"
+                                          AutomationProperties.AutomationId="Setup.Licenses.List">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock FontSize="12" Margin="0,1">
+                                            <Run Text="{Binding Component, Mode=OneWay}"/><Run Text=": " Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            <Hyperlink Command="{Binding DataContext.OpenLicenseCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                       CommandParameter="{Binding}" ToolTip="{Binding Url}"><Run Text="{Binding License, Mode=OneWay}"/></Hyperlink>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock FontSize="12" Margin="26,4,0,0" Style="{StaticResource Caption}" Visibility="{Binding ShowLicenseList, Converter={StaticResource BoolToVis}}"
+                                       Text="EZ Forensics itself: MIT License, Copyright (c) 2026 jlab1201. It bundles none of the tools above."
+                                       AutomationProperties.AutomationId="Setup.Licenses.Own"/>
+                        </StackPanel>
+                    </Border>
+                    <ListBox ItemsSource="{Binding Steps}" AutomationProperties.AutomationId="Setup.Summary.Steps" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Title}"/>
+                                <Setter Property="AutomationProperties.ItemStatus" Value="{Binding StateLabel}"/>
+                                <Setter Property="AutomationProperties.HelpText" Value="{Binding Detail}"/>
+                                <Setter Property="Focusable" Value="False"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1" Padding="0,6">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Caption}" Margin="12,0,0,0" Text="{Binding SizeText}" VerticalAlignment="Center"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <c:HelpTip Text="{Binding Detail}"/>
+                                            <TextBlock Text="{Binding Message}" Margin="8,0,0,0" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
+                <!-- 5 Install -->
+                <DockPanel Visibility="{Binding Page, Converter={StaticResource EqVis}, ConverterParameter=Install}" AutomationProperties.AutomationId="Setup.Install">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                <Button Content="Retry" Command="{Binding RetryCommand}" Margin="0,0,6,0" Visibility="{Binding CanRetry, Converter={StaticResource BoolToVis}}"
+                                        AutomationProperties.AutomationId="Setup.Install.Retry"/>
+                                <Button Content="Cancel" Command="{Binding CancelInstallCommand}" Visibility="{Binding ShowStopInstall, Converter={StaticResource BoolToVis}}"
+                                        AutomationProperties.AutomationId="Setup.Install.Cancel"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Style="{StaticResource PageHeader}" Text="Installing" Margin="0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding ElapsedText}" FontFamily="{DynamicResource Font.Mono}" FontSize="16" Margin="14,1,0,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Brush.TextSecondary}" ToolTip="Elapsed time"
+                                           AutomationProperties.AutomationId="Setup.Install.Elapsed" AutomationProperties.Name="Elapsed time" AutomationProperties.ItemStatus="{Binding ElapsedText}"/>
+                            </StackPanel>
+                        </DockPanel>
+                        <ProgressBar Height="8" Maximum="1" Value="{Binding OverallProgress, Mode=OneWay}" Margin="0,4,0,4"
+                                     AutomationProperties.AutomationId="Setup.Install.Progress" AutomationProperties.ItemStatus="{Binding OverallProgress}"/>
+                        <TextBlock Text="{Binding CurrentText}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="Setup.Install.Current"/>
+                        <Border Background="{DynamicResource Brush.ErrorBg}" BorderBrush="{DynamicResource Brush.Error}" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,8,0,0"
+                                Visibility="{Binding HasFailure, Converter={StaticResource BoolToVis}}">
+                            <TextBox Text="{Binding FailureText, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" MaxHeight="120"
+                                     VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="Setup.Install.Failure"/>
+                        </Border>
+                    </StackPanel>
+                    <Expander DockPanel.Dock="Bottom" Header="Log" IsExpanded="{Binding LogExpanded}" Margin="0,8,0,0" AutomationProperties.AutomationId="Setup.Install.LogExpander">
+                        <TextBox Text="{Binding LogText, Mode=OneWay}" Style="{StaticResource LogBox}" Height="170" IsReadOnly="True" TextChanged="Log_TextChanged"
+                                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AutomationProperties.AutomationId="Setup.Install.Log"/>
+                    </Expander>
+                    <!-- the running step is kept in the middle of this list (SetupWizardWindow.xaml.cs); pixel scrolling (CanContentScroll=False) so the
+                         offsets computed there are in pixels, not item indices -->
+                    <ListBox x:Name="InstallSteps" ItemsSource="{Binding Steps}" AutomationProperties.AutomationId="Setup.Install.Steps" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.CanContentScroll="False"
+                             Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="AutomationProperties.AutomationId" Value="{Binding Id, StringFormat=Setup.Step.{0}}"/>
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Title}"/>
+                                <Setter Property="AutomationProperties.ItemStatus" Value="{Binding StateLabel}"/>
+                                <Setter Property="AutomationProperties.HelpText" Value="{Binding Message}"/>
+                                <Setter Property="Focusable" Value="False"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1" Padding="0,6">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Right" Padding="8,1" Margin="12,0,0,0" VerticalAlignment="Top">
+                                            <Border.Style>
+                                                <Style TargetType="Border" BasedOn="{StaticResource Chip}">
+                                                    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding State}" Value="Running"><Setter Property="Background" Value="{DynamicResource Brush.InfoBg}"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding State}" Value="Done"><Setter Property="Background" Value="{DynamicResource Brush.SuccessBg}"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding State}" Value="AlreadyInstalled"><Setter Property="Background" Value="{DynamicResource Brush.SuccessBg}"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding State}" Value="Failed"><Setter Property="Background" Value="{DynamicResource Brush.ErrorBg}"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding State}" Value="ActionNeeded"><Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding State}" Value="WaitingForRestart"><Setter Property="Background" Value="{DynamicResource Brush.WarningBg}"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding StateLabel}" FontSize="12" FontWeight="SemiBold"/>
+                                        </Border>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                            <ProgressBar Height="3" Maximum="1" Value="{Binding Progress, Mode=OneWay, TargetNullValue=0}" Margin="0,3,0,2">
+                                                <ProgressBar.Style>
+                                                    <Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="Running"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding State}" Value="Running"/>
+                                                                    <Condition Binding="{Binding Progress}" Value="{x:Null}"/>
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="IsIndeterminate" Value="True"/>
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ProgressBar.Style>
+                                            </ProgressBar>
+                                            <TextBlock Text="{Binding Message}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
+                <!-- 6 Done: what is installed, what finishes after the restart, what failed; Restart now / Open EZ Forensics -->
+                <ScrollViewer Visibility="{Binding Page, Converter={StaticResource EqVis}, ConverterParameter=Done}" VerticalScrollBarVisibility="Auto"
+                              AutomationProperties.AutomationId="Setup.Done">
+                    <StackPanel MaxWidth="680" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource PageHeader}" Text="{Binding DoneHeadline}" AutomationProperties.AutomationId="Setup.Done.Headline"/>
+                        <TextBlock Text="{Binding TotalTimeText}" Style="{StaticResource Caption}" AutomationProperties.AutomationId="Setup.Done.Duration"/>
+
+                        <StackPanel Visibility="{Binding DoneInstalled.Count, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="Installed"/>
+                            <ItemsControl ItemsSource="{Binding DoneInstalled}" AutomationProperties.AutomationId="Setup.Done.Installed">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,1">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="12" Foreground="{DynamicResource Brush.Success}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding DoneAfterRestart.Count, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource SectionHeader}" Text="Will finish after restart"/>
+                                <c:HelpTip Margin="6,8,0,0" Text="WSL was enabled and Windows needs one restart. After you sign in again, setup opens by itself and finishes these here (no further prompt)."/>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding DoneAfterRestart}" AutomationProperties.AutomationId="Setup.Done.AfterRestart">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,1">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE72C;" FontSize="12" Foreground="{DynamicResource Brush.Warning}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding DoneFailed.Count, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="Not installed"/>
+                            <ItemsControl ItemsSource="{Binding DoneFailed}" AutomationProperties.AutomationId="Setup.Done.Failed">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,1">
+                                            <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE711;" FontSize="12" Foreground="{DynamicResource Brush.Error}" Margin="0,2,8,0" VerticalAlignment="Top"/>
+                                            <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                            <Button Content="Restart now" Style="{StaticResource AccentButton}" MinWidth="130" Margin="0,0,8,0" Command="{Binding RestartNowCommand}"
+                                    Visibility="{Binding ShowRestart, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Setup.Done.Restart"
+                                    ToolTip="Restarts Windows in 10 seconds. EZ Forensics opens after you sign in and finishes the setup."/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+            </c:AutomationPane>
+        </DockPanel>
+    </Grid>
+</Window>

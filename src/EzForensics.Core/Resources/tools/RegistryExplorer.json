@@ -1,0 +1,12 @@
+{
+  "id": "RegistryExplorer",
+  "displayName": "Registry Explorer",
+  "category": "Registry",
+  "description": "Registry viewer with searching, bookmarks, plugins and deleted key/value recovery.",
+  "usage": "Graphical registry viewer with search, bookmarks, plugins and recovery of deleted keys and values. Use it to explore offline hives interactively and investigate details found by automated tools.",
+  "kind": "gui",
+  "exe": "RegistryExplorer.exe",
+  "zip": "RegistryExplorer.zip",
+  "builds": ["net9"],
+  "requiresAdmin": false
+}

@@ -1,0 +1,12 @@
+{
+  "id": "JumpListExplorer",
+  "displayName": "JumpList Explorer",
+  "category": "FileFolderAccess",
+  "description": "GUI for viewing Jump List files.",
+  "usage": "Graphical viewer for Jump List files. Use it to browse one user's recent items per application interactively before exporting with JLECmd for bulk work.",
+  "kind": "gui",
+  "exe": "JumpListExplorer.exe",
+  "zip": "JumpListExplorer.zip",
+  "builds": ["net9"],
+  "requiresAdmin": false
+}

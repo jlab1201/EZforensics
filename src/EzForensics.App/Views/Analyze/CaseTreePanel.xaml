@@ -1,0 +1,286 @@
+﻿<UserControl x:Class="EzForensics.App.Views.Analyze.CaseTreePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
+             xmlns:c="clr-namespace:EzForensics.App.Controls"
+             xmlns:local="clr-namespace:EzForensics.App"
+             xmlns:svc="clr-namespace:EzForensics.App.Services"
+             xmlns:an="clr-namespace:EzForensics.App.Views.Analyze">
+    <UserControl.Resources>
+        <local:TreeNameWidthConverter x:Key="TreeNameWidth"/>
+
+        <!-- case tree columns: header buttons (click = sort), resize grips, and the value cells of each row -->
+        <Style x:Key="TreeHeaderButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="Transparent" Padding="{TemplateBinding Padding}" CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{DynamicResource Brush.Control}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="TreeColumnSizer" TargetType="Thumb">
+            <Setter Property="Width" Value="7"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Margin" Value="0,0,-3,0"/>
+            <Setter Property="Cursor" Value="SizeWE"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="Transparent">
+                            <Rectangle Width="1" Margin="0,4" HorizontalAlignment="Center" Fill="{DynamicResource Brush.Border}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="TreeStatCell" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+            <Setter Property="Padding" Value="8,0,6,0"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+        </Style>
+        <Style x:Key="TreeStatNumber" TargetType="TextBlock" BasedOn="{StaticResource TreeStatCell}">
+            <Setter Property="TextAlignment" Value="Right"/>
+        </Style>
+        <Style x:Key="TreeSortGlyph" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="8"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- case tree: the shared guide-line tree item (Themes/TreeStyles.xaml) plus the case-specific automation and filter visibility -->
+        <Style x:Key="CaseTreeItem" TargetType="TreeViewItem" BasedOn="{StaticResource GuideTreeItem}">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
+            <Setter Property="AutomationProperties.HelpText" Value="{Binding FullPath}"/>
+            <Setter Property="AutomationProperties.ItemStatus" Value="{Binding StatsStatus}"/>
+            <Setter Property="Visibility" Value="{Binding IsFilteredOut, Converter={StaticResource BoolToVisInv}}"/>
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                <DockPanel>
+                    <Button AutomationProperties.AutomationId="Results.Refresh" AutomationProperties.Name="Refresh" DockPanel.Dock="Right" Content="&#xE72C;" FontFamily="{StaticResource Font.Icon}" ToolTip="Refresh"
+                            Command="{Binding RefreshTreeCommand}" Margin="4,0,0,0"/>
+                    <Button DockPanel.Dock="Right" Content="&#xE8DA;" FontFamily="{StaticResource Font.Icon}" ToolTip="Choose case folder"
+                            Command="{Binding BrowseCaseCommand}" Margin="4,0,0,0"/>
+                    <TextBox AutomationProperties.AutomationId="Results.CaseFolder" Text="{Binding CaseFolder, UpdateSourceTrigger=LostFocus}" Tag="Case folder" ToolTip="{Binding CaseFolder}"/>
+                </DockPanel>
+                <an:ComputerDetailsPanel Margin="0,8,0,0"/>
+                <DockPanel Margin="0,8,0,0">
+                    <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Width="40" Height="3" Margin="0,0,8,0" VerticalAlignment="Center"
+                                 Visibility="{Binding IsComputingStats, Converter={StaticResource BoolToVis}}"
+                                 ToolTip="Computing timestamps and event counts…" AutomationProperties.AutomationId="Results.Tree.StatsProgress"/>
+                    <TextBlock Text="Case files" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                </DockPanel>
+                <ProgressBar IsIndeterminate="True" Margin="0,6,0,0" Visibility="{Binding IsLoadingTree, Converter={StaticResource BoolToVis}}"/>
+                <!-- search: file names at once, contents after a pause (Ctrl+F in the tree, Esc clears) -->
+                <Grid Margin="0,6,0,0">
+                    <TextBox x:Name="TreeSearchBox" Text="{Binding TreeSearchText, UpdateSourceTrigger=PropertyChanged}" Tag="Search files and contents…"
+                             Padding="6,4,26,4" PreviewKeyDown="TreeSearchBox_PreviewKeyDown"
+                             ToolTip="Filter the tree by file name; from 2 characters also by file contents (Ctrl+F in the tree, Esc clears)"
+                             AutomationProperties.AutomationId="Results.Tree.Search" AutomationProperties.Name="Search files and contents"/>
+                    <Button HorizontalAlignment="Right" Style="{StaticResource SubtleButton}" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}" FontSize="9"
+                            MinHeight="0" Padding="5,3" Margin="0,0,3,0" VerticalAlignment="Center" ToolTip="Clear search (Esc)" Click="TreeSearchClear_Click"
+                            Visibility="{Binding IsTreeFiltered, Converter={StaticResource BoolToVis}}"
+                            AutomationProperties.AutomationId="Results.Tree.Search.Clear" AutomationProperties.Name="Clear search"/>
+                </Grid>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Button Style="{StaticResource SubtleButton}" Content="Expand all" MinHeight="0" Padding="6,2" ToolTip="Expand all folders" Command="{Binding ExpandAllCommand}"
+                            AutomationProperties.AutomationId="Results.Tree.ExpandAll" AutomationProperties.Name="Expand all"/>
+                    <TextBlock Text="&#183;" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}" Margin="2,0"/>
+                    <Button Style="{StaticResource SubtleButton}" Content="Collapse all" MinHeight="0" Padding="6,2" ToolTip="Collapse all folders" Command="{Binding CollapseAllCommand}"
+                            AutomationProperties.AutomationId="Results.Tree.CollapseAll" AutomationProperties.Name="Collapse all"/>
+                    <TextBlock Text="&#183;" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}" Margin="2,0"/>
+                    <Button x:Name="ColumnsButton" Style="{StaticResource SubtleButton}" Content="Columns&#8230;" MinHeight="0" Padding="6,2" Click="TreeColumns_Click"
+                            ToolTip="Show or hide the Tool, Earliest, Latest, Events and Size columns"
+                            AutomationProperties.AutomationId="Results.Tree.Columns" AutomationProperties.Name="Columns"/>
+                </StackPanel>
+                <DockPanel Margin="0,3,0,0" Visibility="{Binding IsTreeFiltered, Converter={StaticResource BoolToVis}}">
+                    <ProgressBar DockPanel.Dock="Right" Width="60" Height="3" Margin="6,0,0,0" VerticalAlignment="Center" Maximum="1" Value="{Binding TreeSearchProgress}"
+                                 Visibility="{Binding IsTreeSearching, Converter={StaticResource BoolToVis}}"
+                                 AutomationProperties.AutomationId="Results.Tree.SearchProgress" AutomationProperties.Name="Search progress"/>
+                    <TextBlock Text="{Binding TreeSearchStatus}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
+                               AutomationProperties.AutomationId="Results.Tree.SearchStatus"/>
+                </DockPanel>
+                <StackPanel Margin="0,4,0,0" Orientation="Horizontal" Visibility="{Binding ShowLegacyLayoutNote, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Style="{StaticResource Caption}" Text="Also has old-layout outputs" AutomationProperties.AutomationId="Results.Tree.LegacyNote"/>
+                    <c:HelpTip Margin="6,0,0,0"
+                               Text="This case also contains outputs from the old layout (Category\Tool folders) next to the per-host folders."/>
+                </StackPanel>
+                <!-- multi-selection bar (Ctrl/Shift+click, Ctrl+A) -->
+                <Border Margin="0,6,0,0" Padding="6,4" CornerRadius="4" Background="{DynamicResource Brush.Control}"
+                        Visibility="{Binding SelectionText, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Results.Tree.SelectionBar">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" MinHeight="0" Padding="6,2" Content="Merge…" Margin="4,0,0,0"
+                                ToolTip="Merge the selected CSV files into a new file in the case" Click="MergeSelection_Click"
+                                AutomationProperties.AutomationId="Results.Tree.Merge" AutomationProperties.Name="Merge into new file"/>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" MinHeight="0" Padding="6,2" Content="Open combined"
+                                ToolTip="Open the selected files (same columns) as one read-only combined view" Click="OpenCombined_Click"
+                                AutomationProperties.AutomationId="Results.Tree.OpenCombined" AutomationProperties.Name="Open combined view"/>
+                        <TextBlock Text="{Binding SelectionText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.AutomationId="Results.Tree.SelectionText"/>
+                    </DockPanel>
+                </Border>
+                <DockPanel Margin="0,4,0,0" Visibility="{Binding IsCombining, Converter={StaticResource BoolToVis}}">
+                    <ProgressBar DockPanel.Dock="Right" Width="80" Height="3" Margin="6,0,0,0" VerticalAlignment="Center" Maximum="1" Value="{Binding CombineProgress}"
+                                 AutomationProperties.AutomationId="Results.Tree.CombineProgress"/>
+                    <TextBlock Text="{Binding CombineStatus}" Style="{StaticResource Caption}"/>
+                </DockPanel>
+                <Border Margin="0,6,0,0" Padding="6,4" CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource Brush.Border}"
+                        Visibility="{Binding CombinedViewInfo, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <c:HelpTip DockPanel.Dock="Right" Margin="6,0,0,0"
+                                   Text="A read-only copy of the selected files with SourceFile and Host columns. Flags set here are not saved to the source files."/>
+                        <TextBlock Text="{Binding CombinedViewInfo}" TextTrimming="CharacterEllipsis" Style="{StaticResource Caption}" ToolTip="{Binding CombinedViewInfo}"
+                                   AutomationProperties.AutomationId="Results.Tree.CombinedInfo"/>
+                    </DockPanel>
+                </Border>
+            </StackPanel>
+            <!-- column headers: scroll horizontally with the tree (synced in code), stay at the top -->
+            <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1" Margin="0,0,0,2">
+                <ScrollViewer x:Name="TreeHeaderScroll" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                              Focusable="False" ContextMenuOpening="TreeHeader_ContextMenuOpening"
+                              AutomationProperties.AutomationId="Results.Tree.Header" AutomationProperties.Name="Case tree columns">
+                    <ScrollViewer.ContextMenu>
+                        <ContextMenu AutomationProperties.AutomationId="Results.Tree.ColumnsMenu"/>
+                    </ScrollViewer.ContextMenu>
+                    <StackPanel x:Name="TreeHeaderPanel" Orientation="Horizontal" Background="Transparent">
+                        <Grid Width="{Binding Columns.NameWidth}">
+                            <Button Style="{StaticResource TreeHeaderButton}" Tag="Name" Click="TreeHeader_Click" Padding="6,3,6,3"
+                                    AutomationProperties.AutomationId="Results.Tree.Header.Name" AutomationProperties.Name="Name" ToolTip="Sort by name (default order)">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Name"/>
+                                    <TextBlock Text="{Binding Columns.NameSort}" Style="{StaticResource TreeSortGlyph}"/>
+                                </StackPanel>
+                            </Button>
+                            <Thumb Style="{StaticResource TreeColumnSizer}" Tag="Name" DragDelta="TreeColumnSizer_DragDelta" DragCompleted="TreeColumnSizer_DragCompleted"/>
+                        </Grid>
+                        <Grid Width="{Binding Columns.ToolWidth}" Visibility="{Binding Columns.ShowTool, Converter={StaticResource BoolToVis}}">
+                            <Button Style="{StaticResource TreeHeaderButton}" Tag="Tool" Click="TreeHeader_Click" Padding="8,3,6,3"
+                                    AutomationProperties.AutomationId="Results.Tree.Header.Tool" AutomationProperties.Name="Tool" ToolTip="Tool that produced the file (run manifest, else the file name / folder). Click to sort.">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Tool"/>
+                                    <TextBlock Text="{Binding Columns.ToolSort}" Style="{StaticResource TreeSortGlyph}"/>
+                                </StackPanel>
+                            </Button>
+                            <Thumb Style="{StaticResource TreeColumnSizer}" Tag="Tool" DragDelta="TreeColumnSizer_DragDelta" DragCompleted="TreeColumnSizer_DragCompleted"/>
+                        </Grid>
+                        <Grid Width="{Binding Columns.EarliestWidth}" Visibility="{Binding Columns.ShowEarliest, Converter={StaticResource BoolToVis}}">
+                            <Button Style="{StaticResource TreeHeaderButton}" Tag="Earliest" Click="TreeHeader_Click" Padding="8,3,6,3"
+                                    AutomationProperties.AutomationId="Results.Tree.Header.Earliest" AutomationProperties.Name="Earliest" ToolTip="Earliest timestamp (UTC). Click to sort.">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Earliest"/>
+                                    <TextBlock Text="{Binding Columns.EarliestSort}" Style="{StaticResource TreeSortGlyph}"/>
+                                </StackPanel>
+                            </Button>
+                            <Thumb Style="{StaticResource TreeColumnSizer}" Tag="Earliest" DragDelta="TreeColumnSizer_DragDelta" DragCompleted="TreeColumnSizer_DragCompleted"/>
+                        </Grid>
+                        <Grid Width="{Binding Columns.LatestWidth}" Visibility="{Binding Columns.ShowLatest, Converter={StaticResource BoolToVis}}">
+                            <Button Style="{StaticResource TreeHeaderButton}" Tag="Latest" Click="TreeHeader_Click" Padding="8,3,6,3"
+                                    AutomationProperties.AutomationId="Results.Tree.Header.Latest" AutomationProperties.Name="Latest" ToolTip="Latest timestamp (UTC). Click to sort.">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Latest"/>
+                                    <TextBlock Text="{Binding Columns.LatestSort}" Style="{StaticResource TreeSortGlyph}"/>
+                                </StackPanel>
+                            </Button>
+                            <Thumb Style="{StaticResource TreeColumnSizer}" Tag="Latest" DragDelta="TreeColumnSizer_DragDelta" DragCompleted="TreeColumnSizer_DragCompleted"/>
+                        </Grid>
+                        <Grid Width="{Binding Columns.EventsWidth}" Visibility="{Binding Columns.ShowEvents, Converter={StaticResource BoolToVis}}">
+                            <Button Style="{StaticResource TreeHeaderButton}" Tag="Events" Click="TreeHeader_Click" Padding="8,3,6,3" HorizontalContentAlignment="Right"
+                                    AutomationProperties.AutomationId="Results.Tree.Header.Events" AutomationProperties.Name="Events" ToolTip="Data rows. Click to sort.">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Columns.EventsSort}" Style="{StaticResource TreeSortGlyph}" Margin="0,0,4,0"/>
+                                    <TextBlock Text="Events"/>
+                                </StackPanel>
+                            </Button>
+                            <Thumb Style="{StaticResource TreeColumnSizer}" Tag="Events" DragDelta="TreeColumnSizer_DragDelta" DragCompleted="TreeColumnSizer_DragCompleted"/>
+                        </Grid>
+                        <Grid Width="{Binding Columns.SizeWidth}" Visibility="{Binding Columns.ShowSize, Converter={StaticResource BoolToVis}}">
+                            <Button Style="{StaticResource TreeHeaderButton}" Tag="Size" Click="TreeHeader_Click" Padding="8,3,6,3" HorizontalContentAlignment="Right"
+                                    AutomationProperties.AutomationId="Results.Tree.Header.Size" AutomationProperties.Name="Size" ToolTip="File size. Click to sort.">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Columns.SizeSort}" Style="{StaticResource TreeSortGlyph}" Margin="0,0,4,0"/>
+                                    <TextBlock Text="Size"/>
+                                </StackPanel>
+                            </Button>
+                            <Thumb Style="{StaticResource TreeColumnSizer}" Tag="Size" DragDelta="TreeColumnSizer_DragDelta" DragCompleted="TreeColumnSizer_DragCompleted"/>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+            <TreeView x:Name="Tree" AutomationProperties.AutomationId="Results.Tree" ItemsSource="{Binding Tree}" SelectedItemChanged="Tree_SelectedItemChanged"
+                      an:MultiSelectTreeBehavior.IsEnabled="True" PreviewKeyDown="Tree_PreviewKeyDown" ContextMenuOpening="Tree_ContextMenuOpening"
+                      ItemContainerStyle="{StaticResource CaseTreeItem}" UseLayoutRounding="True" SnapsToDevicePixels="True"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                <TreeView.ContextMenu>
+                    <ContextMenu AutomationProperties.AutomationId="Results.Tree.Menu"/>
+                </TreeView.ContextMenu>
+                <TreeView.ItemTemplate>
+                    <HierarchicalDataTemplate DataType="{x:Type vm:FileNode}" ItemsSource="{Binding Children}">
+                        <!-- Name cell shrinks by the indentation so the value columns line up at every depth -->
+                        <StackPanel Orientation="Horizontal">
+                            <DockPanel ToolTip="{Binding RowTip}">
+                                <DockPanel.Width>
+                                    <MultiBinding Converter="{StaticResource TreeNameWidth}">
+                                        <Binding Path="DataContext.Columns.NameWidth" RelativeSource="{RelativeSource AncestorType=TreeView}"/>
+                                        <Binding Path="Depth"/>
+                                    </MultiBinding>
+                                </DockPanel.Width>
+                                <TextBlock Text="{Binding Glyph}" FontSize="12">
+                                    <!-- same theme tones as the menu icons (MenuIconInfo / Warn / Error / Success) -->
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                            <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IconTone}" Value="Info"><Setter Property="Foreground" Value="{DynamicResource Brush.Info}"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding IconTone}" Value="Warn"><Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding IconTone}" Value="Error"><Setter Property="Foreground" Value="{DynamicResource Brush.Error}"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding IconTone}" Value="Success"><Setter Property="Foreground" Value="{DynamicResource Brush.Success}"/></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <Border DockPanel.Dock="Right" CornerRadius="7" Padding="4,0" Margin="2,0,2,0" VerticalAlignment="Center"
+                                        Background="{DynamicResource Brush.Control}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                                        Visibility="{Binding HitText, Converter={StaticResource BoolToVis}}" ToolTip="{Binding HitTip}">
+                                    <TextBlock Text="{Binding HitText}" FontSize="10" FontWeight="Normal" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                </Border>
+                                <TextBlock Text="{Binding DisplayName}" Margin="6,0,4,0" TextTrimming="CharacterEllipsis"/>
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource TreeStatCell}" Text="{Binding ToolText}" ToolTip="{Binding ToolText}"
+                                       Width="{Binding DataContext.Columns.ToolWidth, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                                       Visibility="{Binding DataContext.Columns.ShowTool, RelativeSource={RelativeSource AncestorType=TreeView}, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Style="{StaticResource TreeStatCell}" Text="{Binding EarliestText}" ToolTip="{Binding EarliestTip}"
+                                       Width="{Binding DataContext.Columns.EarliestWidth, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                                       Visibility="{Binding DataContext.Columns.ShowEarliest, RelativeSource={RelativeSource AncestorType=TreeView}, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Style="{StaticResource TreeStatCell}" Text="{Binding LatestText}" ToolTip="{Binding LatestTip}"
+                                       Width="{Binding DataContext.Columns.LatestWidth, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                                       Visibility="{Binding DataContext.Columns.ShowLatest, RelativeSource={RelativeSource AncestorType=TreeView}, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Style="{StaticResource TreeStatNumber}" Text="{Binding EventsText}"
+                                       Width="{Binding DataContext.Columns.EventsWidth, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                                       Visibility="{Binding DataContext.Columns.ShowEvents, RelativeSource={RelativeSource AncestorType=TreeView}, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Style="{StaticResource TreeStatNumber}" Text="{Binding SizeText}"
+                                       Width="{Binding DataContext.Columns.SizeWidth, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                                       Visibility="{Binding DataContext.Columns.ShowSize, RelativeSource={RelativeSource AncestorType=TreeView}, Converter={StaticResource BoolToVis}}"/>
+                        </StackPanel>
+                    </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,21 @@
+{
+  "id": "SumECmd",
+  "displayName": "SumECmd",
+  "category": "SUMDatabase",
+  "description": "Parses User Access Logging (SUM) databases on Windows Server (SystemIdentity.mdb, Current.mdb, ...).",
+  "usage": "Parses User Access Logging (SUM) databases on Windows Server. Use it to see which client IPs and users accessed server roles and services over time.",
+  "limitation": "User Access Logging exists only on Windows Server 2012 and later and keeps per-day counts, not full event detail.",
+  "kind": "cli",
+  "exe": "SumECmd.exe",
+  "zip": "SumECmd.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Windows\\System32\\LogFiles\\Sum\\*.mdb"],
+  "parameters": [
+    { "id": "d", "flag": "-d", "type": "folder", "label": "SUM directory", "description": "Directory to process, looking for SystemIdentity.mdb, Current.mdb, etc.", "required": true, "placeholder": "C:\\Windows\\System32\\LogFiles\\Sum" },
+    { "use": "csv", "required": true },
+    { "id": "wd", "flag": "--wd", "type": "bool", "label": "Day-level details", "description": "Generate CSV with day level details.", "default": "true", "advanced": true },
+    { "use": "dt" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ]
+}

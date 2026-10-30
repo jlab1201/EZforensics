@@ -1,0 +1,24 @@
+{
+  "id": "AppCompatCacheParser",
+  "displayName": "AppCompatCacheParser",
+  "category": "ProgramExecution",
+  "description": "Parses the AppCompatCache (ShimCache) from a SYSTEM hive, or from the live registry when no hive is given.",
+  "usage": "Extracts the ShimCache (AppCompatCache) from a SYSTEM hive or the live registry, listing executables the system has seen with their last-modified times. Use it to show a file was present, bearing in mind that it does not always prove execution.",
+  "limitation": "ShimCache shows the system saw a file, not that it ran. Its timestamp is the file's last-modified time, and Windows 10 and later no longer record execution flags.",
+  "kind": "cli",
+  "exe": "AppCompatCacheParser.exe",
+  "zip": "AppCompatCacheParser.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Windows\\System32\\config\\SYSTEM"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "SYSTEM hive", "description": "Full path to SYSTEM hive to process. If not specified, the live Registry is used (requires Administrator).", "filter": "SYSTEM hive|SYSTEM|All files|*.*" },
+    { "use": "csv", "required": true },
+    { "use": "csvf" },
+    { "id": "c", "flag": "-c", "type": "int", "label": "ControlSet", "description": "The ControlSet to parse. Default (-1) extracts all control sets.", "default": "-1", "advanced": true },
+    { "id": "t", "flag": "-t", "type": "bool", "label": "Sort descending", "description": "Sorts last modified timestamps in descending order.", "default": "false", "advanced": true },
+    { "use": "dt" },
+    { "use": "nl" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ]
+}

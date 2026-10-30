@@ -1,0 +1,12 @@
+{
+  "id": "MFTExplorer",
+  "displayName": "MFT Explorer",
+  "category": "FileSystem",
+  "description": "Graphical $MFT file and file system viewer.",
+  "usage": "Graphical viewer for a $MFT file, showing the file system tree with timestamps and attributes. Use it to browse and inspect individual records interactively.",
+  "kind": "gui",
+  "exe": "MFTExplorer.exe",
+  "zip": "MFTExplorer.zip",
+  "builds": ["net9"],
+  "requiresAdmin": false
+}

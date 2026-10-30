@@ -1,0 +1,31 @@
+{
+  "id": "SQLECmd",
+  "displayName": "SQLECmd",
+  "category": "SQLDatabases",
+  "description": "Finds SQLite databases (browser history, Windows timeline, etc.) and extracts data using SQL maps.",
+  "usage": "Finds SQLite databases (browser history, Windows Timeline and others) and extracts their data with SQL maps into CSV. Use it to pull browsing, download and application activity from many databases at once.",
+  "limitation": "Parses only databases that match a map; unknown databases are skipped and deleted records are not recovered.",
+  "kind": "cli",
+  "exe": "SQLECmd.exe",
+  "zip": "SQLECmd.zip",
+  "builds": ["net9"],
+  "consumes": ["*.sqlite", "*.db", "History", "places.sqlite"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "Database file", "description": "File to process. Either this or -d is required.", "filter": "SQLite databases|*.db;*.sqlite;*.sqlite3|All files|*.*" },
+    { "id": "d", "flag": "-d", "type": "folder", "label": "Directory", "description": "Directory to recursively process. Either this or -f is required." },
+    { "use": "csv" },
+    { "use": "json" },
+    { "id": "hunt", "flag": "--hunt", "type": "bool", "label": "Hunt", "description": "Look at all files regardless of name and use the file header to identify SQLite files; otherwise filenames in maps are used to find databases.", "default": "false" },
+    { "id": "blobdir", "flag": "--blobdir", "type": "outputDir", "label": "Blob output folder", "description": "Directory to save blob data to.", "advanced": true },
+    { "id": "noblob", "flag": "--noblob", "type": "bool", "label": "Disable blob extraction", "description": "Disables blob extraction from query results.", "default": "false", "advanced": true },
+    { "use": "dedupe", "description": "Deduplicate -f or -d files based on SHA-1. First file found wins." },
+    { "id": "maps", "flag": "--maps", "type": "folder", "label": "Maps folder", "description": "The path where SQL maps are located. Defaults to the 'Maps' folder next to SQLECmd.exe.", "advanced": true },
+    { "use": "sync", "description": "Download the latest maps from https://github.com/EricZimmerman/SQLECmd and update local maps." },
+    { "use": "debug" },
+    { "use": "trace" }
+  ],
+  "groups": [
+    { "mode": "exactlyOne", "params": ["f", "d"] },
+    { "mode": "atLeastOne", "params": ["csv", "json"] }
+  ]
+}

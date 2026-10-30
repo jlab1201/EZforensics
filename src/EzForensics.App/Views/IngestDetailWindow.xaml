@@ -1,0 +1,43 @@
+<Window x:Class="EzForensics.App.Views.IngestDetailWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Details" Width="560" SizeToContent="Height" MaxHeight="620" MinHeight="160" ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}" TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}"
+        AutomationProperties.AutomationId="Ingest.Detail.Window">
+    <DockPanel Margin="18" LayoutTransform="{DynamicResource Ui.Scale}">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Close" MinWidth="90" IsDefault="True" IsCancel="True" Click="Close_Click" AutomationProperties.AutomationId="Ingest.Detail.Close"/>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock x:Name="IconText" Style="{StaticResource Icon}" FontSize="20" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
+            <TextBlock x:Name="HeadingText" FontSize="16" FontWeight="SemiBold" Margin="10,0,0,0" VerticalAlignment="Center"/>
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="Boxes" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <!-- one box per system / artifact; the key column is shared so the values line up -->
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12,8" AutomationProperties.AutomationId="{Binding AutomationId}">
+                            <ItemsControl ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="Key"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Key, StringFormat={}{0}:}" FontWeight="Bold" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" VerticalAlignment="Top"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

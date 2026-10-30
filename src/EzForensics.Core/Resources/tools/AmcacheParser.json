@@ -1,0 +1,26 @@
+{
+  "id": "AmcacheParser",
+  "displayName": "AmcacheParser",
+  "category": "ProgramExecution",
+  "description": "Parses Amcache.hve (program execution / installed program evidence).",
+  "usage": "Reads Amcache.hve to show which programs were installed or executed, with file paths, SHA-1 hashes and first-run times. Use it to prove a binary existed on the system, even after it was deleted.",
+  "limitation": "Amcache shows a file was present and often when it first ran, but an entry alone does not prove execution; entries can be missing or stale.",
+  "kind": "cli",
+  "exe": "AmcacheParser.exe",
+  "zip": "AmcacheParser.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Windows\\AppCompat\\Programs\\Amcache.hve"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "Amcache.hve", "description": "Amcache.hve file to parse.", "required": true, "filter": "Amcache hive|Amcache.hve|All files|*.*" },
+    { "use": "csv", "required": true },
+    { "use": "csvf" },
+    { "id": "i", "flag": "-i", "type": "bool", "label": "Include file entries", "description": "Include file entries for Programs entries.", "default": "false" },
+    { "id": "w", "flag": "-w", "type": "file", "label": "Exclude SHA-1 list", "description": "Path to file containing SHA-1 hashes to *exclude* from the results. Blacklisting overrides whitelisting.", "advanced": true, "filter": "Text files|*.txt|All files|*.*" },
+    { "id": "b", "flag": "-b", "type": "file", "label": "Include SHA-1 list", "description": "Path to file containing SHA-1 hashes to *include* in the results. Blacklisting overrides whitelisting.", "advanced": true, "filter": "Text files|*.txt|All files|*.*" },
+    { "use": "dt" },
+    { "use": "mp" },
+    { "use": "nl" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ]
+}

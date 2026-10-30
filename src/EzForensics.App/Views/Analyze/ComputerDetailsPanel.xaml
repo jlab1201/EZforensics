@@ -1,0 +1,147 @@
+<UserControl x:Class="EzForensics.App.Views.Analyze.ComputerDetailsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
+             xmlns:c="clr-namespace:EzForensics.App.Controls"
+             xmlns:an="clr-namespace:EzForensics.App.Views.Analyze">
+    <!-- computer details: the evidence's identity (offline registry), first thing to check, always visible above the tree.
+         DataContext of the pane = ResultsViewModel.Details. -->
+    <c:AutomationPane x:Name="DetailsPane" DataContext="{Binding Details}" Padding="8,6" CornerRadius="4" BorderThickness="1"
+                      Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.Border}"
+                      AutomationProperties.AutomationId="Results.ComputerDetails" AutomationProperties.Name="Computer details">
+        <StackPanel>
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="&#xE72C;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
+                        MinHeight="0" Padding="6,4" Margin="2,0,0,0" Command="{Binding RefreshCommand}"
+                        ToolTip="Recompute from the evidence source's registry hives (read-only; logged as a job)"
+                        AutomationProperties.AutomationId="Results.ComputerDetails.Refresh" AutomationProperties.Name="Refresh computer details"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="&#xE8A5;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
+                        MinHeight="0" Padding="6,4" Margin="2,0,0,0" Command="{Binding OpenReportCommand}"
+                        ToolTip="Open the full report (SystemInfo\ComputerDetails.csv: Category, Field, Value, Source) in the grid"
+                        AutomationProperties.AutomationId="Results.ComputerDetails.OpenReport" AutomationProperties.Name="Open full report"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="&#xE8C8;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
+                        MinHeight="0" Padding="6,4" Margin="2,0,0,0" Command="{Binding CopyAllCommand}" ToolTip="Copy all details"
+                        AutomationProperties.AutomationId="Results.ComputerDetails.CopyAll" AutomationProperties.Name="Copy all computer details"/>
+                <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Width="36" Height="3" Margin="0,0,6,0" VerticalAlignment="Center"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                <Button DockPanel.Dock="Right" Command="{Binding ToggleDetailsCommand}" Style="{StaticResource SubtleButton}" MinHeight="0" Padding="6,3" Margin="2,0,0,0"
+                              AutomationProperties.AutomationId="Results.ComputerDetails.Toggle" AutomationProperties.Name="Show details"
+                              ToolTip="Show or hide the detailed computer details"
+                        Content="{Binding DetailsButtonText}"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE7F8;" FontFamily="{StaticResource Font.Icon}" FontSize="13" Margin="0,0,6,0"
+                               VerticalAlignment="Center" Foreground="{DynamicResource Brush.Accent}"/>
+                    <TextBlock Text="Computer details" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text}"/>
+                </StackPanel>
+            </DockPanel>
+            <TextBlock Text="{Binding SummaryText}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding SummaryText}"
+                       Foreground="{DynamicResource Brush.TextSecondary}" Visibility="{Binding ShowSummary, Converter={StaticResource BoolToVis}}"
+                       AutomationProperties.AutomationId="Results.ComputerDetails.Summary" AutomationProperties.Name="{Binding SummaryText}"/>
+            <!-- compact box: only the forensically key facts (missing ones omitted) -->
+            <ItemsControl ItemsSource="{Binding Systems}" Margin="0,4,0,0" AutomationProperties.AutomationId="Results.ComputerDetails.KeyFacts">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:SystemDetailsItem}">
+                        <StackPanel Margin="0,0,0,4" Grid.IsSharedSizeScope="True">
+                            <TextBlock Text="{Binding SystemRoot}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" ToolTip="{Binding SystemRoot}"
+                                       Visibility="{Binding DataContext.HasSeveralSystems, ElementName=DetailsPane, Converter={StaticResource BoolToVis}}"/>
+                            <ItemsControl ItemsSource="{Binding KeyFacts}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:KeyFact}">
+                                        <Grid Margin="0,1" AutomationProperties.AutomationId="Results.ComputerDetails.KeyFact" AutomationProperties.Name="{Binding Label}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="KeyFactLabel"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Label}" Margin="0,0,10,0" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                                     MinHeight="0" Padding="0" TextWrapping="Wrap" AutomationProperties.Name="{Binding Label}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{Binding StatusText}" Margin="0,3,0,0" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusText}"
+                       Visibility="{Binding StatusText, Converter={StaticResource BoolToVis}}"
+                       AutomationProperties.AutomationId="Results.ComputerDetails.Status"/>
+            <ScrollViewer MaxHeight="420" Margin="0,6,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}"
+                          AutomationProperties.AutomationId="Results.ComputerDetails.Body">
+                <ItemsControl ItemsSource="{Binding Systems}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:SystemDetailsItem}">
+                            <StackPanel Margin="0,0,0,8">
+                                <TextBlock FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SystemRoot}">
+                                    <Run Text="{Binding Title, Mode=OneWay}"/>
+                                    <Run Text="{Binding SystemRoot, Mode=OneWay, StringFormat=  ·  {0}}" FontWeight="Normal" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                </TextBlock>
+                                <!-- one bordered card per category; 1 column when narrow, 2+ when wide -->
+                                <ItemsControl ItemsSource="{Binding Groups}" Margin="0,6,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <an:AdaptiveCardPanel MinColumnWidth="290" Spacing="8"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:DetailGroup}">
+                                            <Border Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="1" CornerRadius="4" SnapsToDevicePixels="True">
+                                                <StackPanel>
+                                                    <Border Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,0,1" CornerRadius="3,3,0,0" Padding="8,4">
+                                                        <TextBlock Text="{Binding Category}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{DynamicResource Brush.Text}"/>
+                                                    </Border>
+                                                    <ItemsControl ItemsSource="{Binding Fields}" Margin="0,4,0,6" Grid.IsSharedSizeScope="True">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <c:AutomationPane Padding="0,2" Background="Transparent"
+                                                                                  Tag="{Binding DataContext, ElementName=DetailsPane}"
+                                                                                  AutomationProperties.AutomationId="Results.ComputerDetails.Row"
+                                                                                  AutomationProperties.Name="{Binding Field}"
+                                                                                  AutomationProperties.HelpText="{Binding Source}"
+                                                                                  AutomationProperties.ItemStatus="{Binding Value}">
+                                                                    <c:AutomationPane.ContextMenu>
+                                                                        <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                                                            <MenuItem Header="Copy value" Command="{Binding CopyValueCommand}"
+                                                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                                      AutomationProperties.AutomationId="Results.ComputerDetails.Menu.CopyValue"/>
+                                                                            <MenuItem Header="Copy field, value and source" Command="{Binding CopyRowCommand}"
+                                                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                                      AutomationProperties.AutomationId="Results.ComputerDetails.Menu.CopyRow"/>
+                                                                            <MenuItem Header="Copy all" Command="{Binding CopyAllCommand}"
+                                                                                      AutomationProperties.AutomationId="Results.ComputerDetails.Menu.CopyAll"/>
+                                                                        </ContextMenu>
+                                                                    </c:AutomationPane.ContextMenu>
+                                                                    <Grid ToolTip="{Binding Source, StringFormat=Source: {0}}">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="Auto" MinWidth="90" MaxWidth="150" SharedSizeGroup="DetailFieldLabel"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Text="{Binding Field}" Margin="8,0,6,0" TextWrapping="Wrap" ToolTip="{Binding Field}"
+                                                                                   Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Top"/>
+                                                                        <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" IsReadOnly="True" BorderThickness="0"
+                                                                                 Background="Transparent" MinHeight="0" Padding="0" Margin="0,0,8,0" TextWrapping="Wrap"
+                                                                                 AutomationProperties.Name="{Binding Field}"
+                                                                                 AutomationProperties.HelpText="{Binding Source}"
+                                                                                 ToolTip="{Binding Source, StringFormat=Source: {0}}"/>
+                                                                    </Grid>
+                                                                </c:AutomationPane>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </StackPanel>
+    </c:AutomationPane>
+</UserControl>

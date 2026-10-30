@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\EzForensics.Core\EzForensics.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- Installer / updater runtime (https://docs.velopack.io). VelopackApp.Build().Run() is the first call in Program.Main. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>EzForensics.App</RootNamespace>
+    <AssemblyName>EzForensics</AssemblyName>
+    <StartupObject>EzForensics.App.Program</StartupObject>
+    <ApplicationIcon>Assets\EzForensics.ico</ApplicationIcon>
+    <AssemblyTitle>EZ Forensics</AssemblyTitle>
+    <Product>EZ Forensics</Product>
+    <Company>EZ Forensics</Company>
+    <Authors>EZ Forensics</Authors>
+    <Description>EZ Forensics: one place to set up and run Windows forensic tools (Eric Zimmerman's tools, plaso, Zeek).</Description>
+    <Copyright>Copyright (c) 2026 jlab1201</Copyright>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EzForensics.App.Tests" />
+    <Resource Include="Assets\EzForensics.png" />
+    <!-- User guide shipped next to the exe (opened from the setup wizard, Tool Manager and Settings). -->
+    <Content Include="..\..\docs\SETUP.md" Link="SETUP.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

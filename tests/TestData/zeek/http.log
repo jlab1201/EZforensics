@@ -1,0 +1,11 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	http
+#open	2026-10-08-10-00-00
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	trans_depth	method	host	uri	user_agent	status_code	status_msg	tags	username
+#types	time	string	addr	port	addr	port	count	string	string	string	string	count	string	set[enum]	string
+1258535653.200000	CHhAvVGS1DHFjwGM9	192.168.1.103	49203	192.150.187.43	80	1	GET	bro.org	/download/index.html	Mozilla/5.0\x09(X11)	200	OK	(empty)	\x2d
+1258535653.300000	CHhAvVGS1DHFjwGM9	192.168.1.103	49203	192.150.187.43	80	2	POST	bro.org	/a,"quoted"\x01	-	404	Not Found	HTTP::URI_SQLI,HTTP::POST_BODY	-
+#close	2026-10-08-10-00-01

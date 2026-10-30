@@ -1,0 +1,73 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="Brush.Window" Color="#1E2128"/>
+    <SolidColorBrush x:Key="Brush.Nav" Color="#12141A"/>
+    <SolidColorBrush x:Key="Brush.Surface" Color="#272B34"/>
+    <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="#313642"/>
+    <SolidColorBrush x:Key="Brush.Border" Color="#3E4452"/>
+    <SolidColorBrush x:Key="Brush.BorderStrong" Color="#5A6172"/>
+    <SolidColorBrush x:Key="Brush.ProcessTree.Trail" Color="#F59E0B"/>
+    <SolidColorBrush x:Key="Brush.Text" Color="#E6E8EE"/>
+    <SolidColorBrush x:Key="Brush.TextSecondary" Color="#9AA1B0"/>
+    <SolidColorBrush x:Key="Brush.TextDisabled" Color="#5E6472"/>
+    <SolidColorBrush x:Key="Brush.Accent" Color="#3B82F6"/>
+    <SolidColorBrush x:Key="Brush.AccentHover" Color="#5B9BFF"/>
+    <SolidColorBrush x:Key="Brush.AccentText" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Brush.Control" Color="#333845"/>
+    <SolidColorBrush x:Key="Brush.ControlHover" Color="#40465A"/>
+    <SolidColorBrush x:Key="Brush.ControlPressed" Color="#4C5368"/>
+    <SolidColorBrush x:Key="Brush.Input" Color="#1A1D24"/>
+    <SolidColorBrush x:Key="Brush.Selection" Color="#2C4A7A"/>
+    <SolidColorBrush x:Key="Brush.RowAlt" Color="#2B2F39"/>
+    <SolidColorBrush x:Key="Brush.Code" Color="#111318"/>
+    <SolidColorBrush x:Key="Brush.ScrollThumb" Color="#5A6172"/>
+    <SolidColorBrush x:Key="Brush.Error" Color="#F87171"/>
+    <SolidColorBrush x:Key="Brush.Warning" Color="#FBBF24"/>
+    <SolidColorBrush x:Key="Brush.Success" Color="#34D399"/>
+    <SolidColorBrush x:Key="Brush.Info" Color="#3B82F6"/>
+    <SolidColorBrush x:Key="Brush.ErrorBg" Color="#3A1F24"/>
+    <SolidColorBrush x:Key="Brush.WarningBg" Color="#3A3220"/>
+    <SolidColorBrush x:Key="Brush.SuccessBg" Color="#1C3A2F"/>
+    <SolidColorBrush x:Key="Brush.InfoBg" Color="#1E2C45"/>
+    <SolidColorBrush x:Key="Brush.Neutral" Color="#6B7280"/>
+    <!-- process tree: Hidden marker -->
+    <SolidColorBrush x:Key="Brush.Orange" Color="#FB923C"/>
+    <!-- process tree: diamond fill per role (roles.json; ProcessNodeViewModel.RoleKey), also the Navigator Roles swatches -->
+    <SolidColorBrush x:Key="Brush.Role.System" Color="#7083AD"/>
+    <SolidColorBrush x:Key="Brush.Role.Session" Color="#6366F1"/>
+    <SolidColorBrush x:Key="Brush.Role.Services" Color="#14B8A6"/>
+    <SolidColorBrush x:Key="Brush.Role.Security" Color="#22C55E"/>
+    <SolidColorBrush x:Key="Brush.Role.Desktop" Color="#0EA5E9"/>
+    <SolidColorBrush x:Key="Brush.Role.Shells" Color="#F97316"/>
+    <SolidColorBrush x:Key="Brush.Role.Admin" Color="#D946EF"/>
+    <SolidColorBrush x:Key="Brush.Role.Remote" Color="#EF4444"/>
+    <SolidColorBrush x:Key="Brush.Role.Office" Color="#3B82F6"/>
+    <SolidColorBrush x:Key="Brush.Role.Browsers" Color="#8B5CF6"/>
+    <SolidColorBrush x:Key="Brush.Role.Other" Color="#6B7280"/>
+    <!-- Filter expression syntax colours (Timeline Explorer / DevExpress style) -->
+    <SolidColorBrush x:Key="Filter.Column" Color="#6CB4FF"/>
+    <SolidColorBrush x:Key="Filter.Function" Color="#C792EA"/>
+    <SolidColorBrush x:Key="Filter.Operator" Color="#A9AFBC"/>
+    <SolidColorBrush x:Key="Filter.String" Color="#FF8F85"/>
+    <SolidColorBrush x:Key="Filter.Number" Color="#4DD0C8"/>
+    <SolidColorBrush x:Key="Filter.Logical" Color="#FFA94D"/>
+    <SolidColorBrush x:Key="Filter.Not" Color="#FF7B7B"/>
+    <SolidColorBrush x:Key="Filter.Paren" Color="#A9AFBC"/>
+    <!-- Tool category badges -->
+    <SolidColorBrush x:Key="Brush.Cat1Bg" Color="#1E2C45"/>
+    <SolidColorBrush x:Key="Brush.Cat1Fg" Color="#7DB2FF"/>
+    <SolidColorBrush x:Key="Brush.Cat2Bg" Color="#2E2445"/>
+    <SolidColorBrush x:Key="Brush.Cat2Fg" Color="#C4A1F5"/>
+    <SolidColorBrush x:Key="Brush.Cat3Bg" Color="#1C3A2F"/>
+    <SolidColorBrush x:Key="Brush.Cat3Fg" Color="#5EDCAE"/>
+    <SolidColorBrush x:Key="Brush.Cat4Bg" Color="#3A3220"/>
+    <SolidColorBrush x:Key="Brush.Cat4Fg" Color="#FBBF24"/>
+    <SolidColorBrush x:Key="Brush.Cat5Bg" Color="#432636"/>
+    <SolidColorBrush x:Key="Brush.Cat5Fg" Color="#F58DB8"/>
+    <SolidColorBrush x:Key="Brush.Cat6Bg" Color="#1B3A40"/>
+    <SolidColorBrush x:Key="Brush.Cat6Fg" Color="#5CD3E6"/>
+    <SolidColorBrush x:Key="Brush.Cat7Bg" Color="#26284A"/>
+    <SolidColorBrush x:Key="Brush.Cat7Fg" Color="#A5A8F5"/>
+    <SolidColorBrush x:Key="Brush.Cat8Bg" Color="#2F333D"/>
+    <SolidColorBrush x:Key="Brush.Cat8Fg" Color="#B0B6C2"/>
+</ResourceDictionary>

@@ -1,0 +1,68 @@
+<UserControl x:Class="EzForensics.App.Views.Analyze.FilterPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
+             xmlns:c="clr-namespace:EzForensics.App.Controls"
+             xmlns:local="clr-namespace:EzForensics.App"
+             xmlns:svc="clr-namespace:EzForensics.App.Services"
+             xmlns:an="clr-namespace:EzForensics.App.Views.Analyze"
+             xmlns:hl="clr-namespace:EzForensics.App.Views.Controls">
+        <c:AutomationPane AutomationProperties.AutomationId="Results.FilterPanel" AutomationProperties.Name="Filter panel"
+                          Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1,0,1,1"
+                          CornerRadius="0,0,4,4" Padding="8,4" Visibility="{Binding HasAnyFilter, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Left" Style="{StaticResource SubtleButton}" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}" FontSize="10"
+                        MinHeight="0" Padding="6,4" ToolTip="Clear all filters" Command="{Binding ClearFiltersCommand}"
+                        AutomationProperties.AutomationId="Results.FilterPanel.Clear" AutomationProperties.Name="Clear all filters"/>
+                <CheckBox DockPanel.Dock="Left" IsChecked="{Binding FiltersEnabled}" Margin="4,0,8,0" ToolTip="Enable or disable all filters (they are kept)"
+                          AutomationProperties.AutomationId="Results.FilterPanel.Enabled" AutomationProperties.Name="Filters enabled"/>
+                <Button x:Name="ActionsButton" DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" MinHeight="0" Padding="8,3"
+                        Click="ActionsButton_Click" Foreground="{DynamicResource Brush.Accent}" ToolTip="Edit, save and apply saved filters"
+                        AutomationProperties.AutomationId="Results.FilterPanel.Actions" AutomationProperties.Name="Filter actions">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Filter actions"/>
+                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Font.Icon}" FontSize="9" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button.ContextMenu>
+                        <ContextMenu x:Name="ActionsMenu" Placement="Bottom" AutomationProperties.AutomationId="Results.FilterPanel.Actions.Menu"/>
+                    </Button.ContextMenu>
+                </Button>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding ActiveSavedFilter, StringFormat=· {0}}" VerticalAlignment="Center" Margin="8,0,4,0"
+                           Foreground="{DynamicResource Brush.TextSecondary}" FontSize="11.5"
+                           AutomationProperties.AutomationId="Results.FilterPanel.SavedName" AutomationProperties.Name="Saved filter name"
+                           ToolTip="Saved filter this view started from">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ActiveSavedFilter}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock AutomationProperties.AutomationId="Results.FilterPanel.Text" AutomationProperties.Name="Filter"
+                           x:Name="FilterText" hl:FilterHighlighter.Text="{Binding FilterDisplayText}" Focusable="True" TextWrapping="Wrap"
+                           VerticalAlignment="Center" FontFamily="{DynamicResource Font.Mono}" FontSize="11.5"
+                           ToolTip="{Binding FilterDisplayText}" KeyDown="FilterText_KeyDown">
+                    <TextBlock.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Copy filter text" Click="CopyFilter_Click"/>
+                        </ContextMenu>
+                    </TextBlock.ContextMenu>
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding FiltersEnabled}" Value="False">
+                                    <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                    <Setter Property="Opacity" Value="0.5"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </DockPanel>
+        </c:AutomationPane>
+</UserControl>

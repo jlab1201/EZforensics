@@ -1,0 +1,26 @@
+{
+  "id": "RBCmd",
+  "displayName": "RBCmd",
+  "category": "FileDeletion",
+  "description": "Parses Recycle Bin $I files and INFO2 files.",
+  "usage": "Parses Recycle Bin $I files and INFO2 files to show what was deleted, from where, when and its original size. Use it to recover evidence of deleted files.",
+  "limitation": "Lists only items still in the Recycle Bin. Emptied items and files deleted with Shift+Delete leave no record here.",
+  "kind": "cli",
+  "exe": "RBCmd.exe",
+  "zip": "RBCmd.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["$Recycle.Bin\\*\\$I*", "RECYCLER\\*\\INFO2"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "$I / INFO2 file", "description": "File to process. Either this or -d is required.", "filter": "All files|*.*" },
+    { "id": "d", "flag": "-d", "type": "folder", "label": "Recycle Bin directory", "description": "Directory to recursively process. Either this or -f is required.", "placeholder": "C:\\$Recycle.Bin" },
+    { "use": "csv" },
+    { "use": "csvf" },
+    { "use": "q", "description": "Only show the filename being processed vs all output. Useful to speed up exporting to CSV." },
+    { "use": "dt" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ],
+  "groups": [
+    { "mode": "exactlyOne", "params": ["f", "d"] }
+  ]
+}

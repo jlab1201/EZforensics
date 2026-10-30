@@ -1,0 +1,2 @@
+{"ts": 1258535653.5, "fuid": "FMnxxt3xjVcWNS2141", "uid": "CHhAvVGS1DHFjwGM9", "source": "HTTP", "analyzers": ["MD5", "SHA1"], "mime_type": "text/html", "seen_bytes": 4096, "md5": "d41d8cd98f00b204e9800998ecf8427e"}
+{"ts": 1258535653.6, "fuid": "F2", "source": "HTTP", "filename": "a,b.exe", "seen_bytes": 10, "is_orig": false}

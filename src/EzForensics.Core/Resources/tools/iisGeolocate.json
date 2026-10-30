@@ -1,0 +1,19 @@
+{
+  "id": "iisGeolocate",
+  "displayName": "iisGeolocate",
+  "category": "WebServers",
+  "description": "Geolocates client IP addresses found in IIS logs (uses the bundled MaxMind GeoLite database).",
+  "usage": "Looks up the country and city of client IP addresses in IIS logs using the bundled GeoLite database. Use it to map where web requests came from during an IIS investigation.",
+  "limitation": "Locations are approximate and come from a GeoLite snapshot. Proxies, VPNs and CDNs hide the real client location.",
+  "kind": "cli",
+  "exe": "iisGeolocate.exe",
+  "zip": "iisGeolocate.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["inetpub\\logs\\LogFiles\\*\\*.log"],
+  "parameters": [
+    { "id": "d", "flag": "-d", "type": "folder", "label": "IIS log directory", "description": "Directory to recursively process for IIS logs. This will be searched for *.log files.", "required": true, "placeholder": "C:\\inetpub\\logs\\LogFiles" },
+    { "use": "csv", "required": true },
+    { "id": "sbl", "flag": "--sbl", "type": "bool", "label": "Hide bad lines", "description": "Do NOT show bad lines to console (they are still logged to a file).", "default": "false", "advanced": true },
+    { "id": "nul", "flag": "--nul", "type": "bool", "label": "No updated CSVs", "description": "Do NOT create updated CSV files in the --csv directory.", "default": "false", "advanced": true }
+  ]
+}

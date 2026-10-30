@@ -1,0 +1,29 @@
+{
+  "id": "SBECmd",
+  "displayName": "SBECmd",
+  "category": "FileFolderAccess",
+  "description": "ShellBags Explorer command line: parses ShellBags from NTUSER.DAT / UsrClass.dat hives or the live registry.",
+  "usage": "Parses ShellBags from NTUSER.DAT and UsrClass.dat hives or the live registry. Use it to show which folders a user browsed, including on removable, network or since-deleted locations.",
+  "limitation": "Shellbags show folders browsed in Explorer, not that files inside were opened. Entries can be missing if keys were cleaned.",
+  "kind": "cli",
+  "exe": "SBECmd.exe",
+  "zip": "SBECmd.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Users\\*\\NTUSER.DAT", "Users\\*\\AppData\\Local\\Microsoft\\Windows\\UsrClass.dat"],
+  "parameters": [
+    { "id": "d", "flag": "-d", "type": "folder", "label": "Hive directory", "description": "Directory to look for registry hives. This or -l is required." },
+    { "id": "l", "flag": "-l", "type": "bool", "label": "Live registry", "description": "Process live registry (requires Administrator rights). This or -d is required.", "default": "false" },
+    { "use": "csv" },
+    { "use": "csvf" },
+    { "use": "json" },
+    { "use": "jsonf" },
+    { "use": "dedupe", "default": "false", "description": "Process all hives in -d <directory> and remove duplicates. See manual for details." },
+    { "use": "dt" },
+    { "use": "nl" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ],
+  "groups": [
+    { "mode": "exactlyOne", "params": ["d", "l"] }
+  ]
+}

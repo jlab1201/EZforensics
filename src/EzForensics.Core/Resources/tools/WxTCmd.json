@@ -1,0 +1,20 @@
+{
+  "id": "WxTCmd",
+  "displayName": "WxTCmd",
+  "category": "FileFolderAccess",
+  "description": "Parses the Windows 10 Timeline database (ActivitiesCache.db).",
+  "usage": "Parses the Windows 10 Timeline database (ActivitiesCache.db) of application and document activity. Use it to reconstruct what a user did and in which app.",
+  "limitation": "Needs Activity History to have been enabled, and recent Windows versions record much less than Windows 10 did.",
+  "kind": "cli",
+  "exe": "WxTCmd.exe",
+  "zip": "WxTCmd.zip",
+  "builds": ["net9"],
+  "consumes": ["Users\\*\\AppData\\Local\\ConnectedDevicesPlatform\\*\\ActivitiesCache.db"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "ActivitiesCache.db", "description": "File to process.", "required": true, "filter": "Timeline database|ActivitiesCache.db|All files|*.*" },
+    { "use": "csv", "required": true },
+    { "use": "dt" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ]
+}

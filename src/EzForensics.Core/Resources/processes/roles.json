@@ -1,0 +1,84 @@
+{
+  // Known Windows images: role, where the file normally lives, who normally starts it (see ProcessRoles / ProcessIndicators / SuspiciousParentRules).
+  // Facts only: a role is given from the image name (and its stated path when that is one of dirs); nothing is guessed. Names are lower case.
+  // dirs: expected directories, in the comparison form of ProcessLogText.PathKey (lower case, no drive letter, trailing backslash). No dirs = the location is not checked
+  // (System has no file; Office, browsers and pwsh install in many places) and the role is NameOnly.
+  // parents: image names that normally start it (a different parent is the SuspiciousParent indicator). singleton: only one instance per boot. session0: runs in session 0.
+  // smss is not a singleton (one copy per session is spawned) and svchost is not session0-only (user-session copies exist).
+  "version": 1,
+  "images": {
+    "system":             { "role": "System foundation" },
+    "registry":           { "role": "System foundation" },
+    "memory compression": { "role": "System foundation" },
+    "smss.exe":           { "role": "System foundation", "dirs": ["\\windows\\system32\\"], "session0": true },
+    "csrss.exe":          { "role": "System foundation", "dirs": ["\\windows\\system32\\"] },
+    "wininit.exe":        { "role": "System foundation", "dirs": ["\\windows\\system32\\"], "singleton": true, "session0": true },
+
+    "winlogon.exe":       { "role": "Session & logon", "dirs": ["\\windows\\system32\\"] },
+    "logonui.exe":        { "role": "Session & logon", "dirs": ["\\windows\\system32\\"] },
+    "userinit.exe":       { "role": "Session & logon", "dirs": ["\\windows\\system32\\"] },
+    "dwm.exe":            { "role": "Session & logon", "dirs": ["\\windows\\system32\\"] },
+    "fontdrvhost.exe":    { "role": "Session & logon", "dirs": ["\\windows\\system32\\"] },
+
+    "services.exe":       { "role": "Services", "dirs": ["\\windows\\system32\\"], "parents": ["wininit.exe"], "singleton": true, "session0": true },
+    "svchost.exe":        { "role": "Services", "dirs": ["\\windows\\system32\\"], "parents": ["services.exe"] },
+
+    "lsass.exe":          { "role": "Security", "dirs": ["\\windows\\system32\\"], "parents": ["wininit.exe"], "singleton": true, "session0": true },
+    "lsaiso.exe":         { "role": "Security", "dirs": ["\\windows\\system32\\"], "singleton": true },
+
+    "explorer.exe":       { "role": "Desktop", "dirs": ["\\windows\\"] },
+    "sihost.exe":         { "role": "Desktop", "dirs": ["\\windows\\system32\\"] },
+    "taskhostw.exe":      { "role": "Desktop", "dirs": ["\\windows\\system32\\"] },
+    "runtimebroker.exe":  { "role": "Desktop", "dirs": ["\\windows\\system32\\"] },
+
+    "cmd.exe":            { "role": "Shells & scripts", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "powershell.exe":     { "role": "Shells & scripts", "dirs": ["\\windows\\system32\\windowspowershell\\v1.0\\", "\\windows\\syswow64\\windowspowershell\\v1.0\\"] },
+    "pwsh.exe":           { "role": "Shells & scripts" },
+    "wscript.exe":        { "role": "Shells & scripts", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "cscript.exe":        { "role": "Shells & scripts", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "mshta.exe":          { "role": "Shells & scripts", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "conhost.exe":        { "role": "Shells & scripts", "dirs": ["\\windows\\system32\\"] },
+
+    // built-in admin tools and binaries often used to run or fetch code (LOLBins); the .NET Framework tools live in per-version folders (and MSBuild also
+    // in Visual Studio), so their location is not checked. None has parents / singleton / session0: running them is a fact, not an indicator.
+    "rundll32.exe":       { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "regsvr32.exe":       { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "certutil.exe":       { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "bitsadmin.exe":      { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "schtasks.exe":       { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "at.exe":             { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "wmic.exe":           { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\wbem\\", "\\windows\\syswow64\\wbem\\"] },
+    "sc.exe":             { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "reg.exe":            { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "net.exe":            { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "net1.exe":           { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "msiexec.exe":        { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "cmstp.exe":          { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "forfiles.exe":       { "role": "Admin tools & LOLBins", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "installutil.exe":    { "role": "Admin tools & LOLBins" },
+    "regasm.exe":         { "role": "Admin tools & LOLBins" },
+    "regsvcs.exe":        { "role": "Admin tools & LOLBins" },
+    "msbuild.exe":        { "role": "Admin tools & LOLBins" },
+
+    // remote access: Windows remoting (RDP, WinRM, PsExec's service) and third-party remote tools (installed anywhere, and PSEXESVC is copied where PsExec
+    // puts it: location not checked)
+    "psexesvc.exe":       { "role": "Remote access" },
+    "mstsc.exe":          { "role": "Remote access", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "rdpclip.exe":        { "role": "Remote access", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "wsmprovhost.exe":    { "role": "Remote access", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "winrshost.exe":      { "role": "Remote access", "dirs": ["\\windows\\system32\\", "\\windows\\syswow64\\"] },
+    "anydesk.exe":        { "role": "Remote access" },
+    "teamviewer.exe":     { "role": "Remote access" },
+    "screenconnect.clientservice.exe": { "role": "Remote access" },
+
+    "winword.exe":        { "role": "Office" },
+    "excel.exe":          { "role": "Office" },
+    "powerpnt.exe":       { "role": "Office" },
+    "outlook.exe":        { "role": "Office" },
+
+    "chrome.exe":         { "role": "Browsers" },
+    "msedge.exe":         { "role": "Browsers" },
+    "firefox.exe":        { "role": "Browsers" },
+    "iexplore.exe":       { "role": "Browsers" }
+  }
+}

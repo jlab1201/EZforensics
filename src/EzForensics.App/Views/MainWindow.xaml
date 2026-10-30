@@ -1,0 +1,308 @@
+<Window x:Class="EzForensics.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
+        xmlns:v="clr-namespace:EzForensics.App.Views"
+        xmlns:c="clr-namespace:EzForensics.App.Controls"
+        Title="{Binding WindowTitle}" Icon="pack://application:,,,/Assets/EzForensics.png" Height="860" Width="1400" MinWidth="980" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}"
+        TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}" UseLayoutRounding="True">
+    <Window.Resources>
+        <DataTemplate DataType="{x:Type vm:TriageViewModel}"><v:TriageView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ToolsViewModel}"><v:ToolsView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:JobsViewModel}"><v:JobsView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ResultsViewModel}"><v:ResultsView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><v:SettingsView/></DataTemplate>
+        <!-- footer buttons of the nav (theme toggle, gear): same geometry as the nav list items so the icons line up in rail and drawer -->
+        <Style x:Key="NavFooterButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Margin" Value="6,2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"
+                                    BorderThickness="1" BorderBrush="Transparent">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+                            </Border>
+                            <Border x:Name="pill" Width="3" Height="16" CornerRadius="2" HorizontalAlignment="Left"
+                                    Background="{DynamicResource Brush.Accent}" Visibility="Collapsed"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{DynamicResource Brush.Control}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{DynamicResource Brush.Control}"/>
+                                <Setter TargetName="pill" Property="Visibility" Value="Visible"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding NavPinned}" Value="False">
+                    <Setter Property="Margin" Value="4,2"/>
+                    <Setter Property="Padding" Value="9,9"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="StatusMiniButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="5,1"/>
+            <Setter Property="FontFamily" Value="{StaticResource Font.Icon}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <!-- UI zoom: one LayoutTransform on the whole content (Ctrl+= / Ctrl+- / Ctrl+0, Ctrl+wheel, status bar) -->
+    <Grid x:Name="RootGrid" LayoutTransform="{DynamicResource Ui.Scale}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="{Binding NavColumnWidth}"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- page (declared first; the unpinned nav expands over it without reflowing it) -->
+        <DockPanel Grid.Column="1">
+            <ContentControl x:Name="PageHost" AutomationProperties.AutomationId="Page" Focusable="False" Margin="24,20,24,12"/>
+        </DockPanel>
+
+        <!-- navigation: pinned = full width in layout; unpinned = 48px icon rail that widens as an overlay on hover / hamburger.
+             The content is always laid out at the full width and only clipped, so the icons never move; code-behind animates Width. -->
+        <c:AutomationPane x:Name="NavPanel" Grid.ColumnSpan="2" HorizontalAlignment="Left" Panel.ZIndex="10"
+                          AutomationProperties.AutomationId="Shell.Nav.Rail" AutomationProperties.Name="Navigation"
+                          AutomationProperties.HelpText="{Binding NavWidth}"
+                          Background="{DynamicResource Brush.Nav}"
+                          MouseEnter="Nav_MouseEnter" MouseLeave="Nav_MouseLeave"
+                          GotKeyboardFocus="Nav_GotKeyboardFocus" IsKeyboardFocusWithinChanged="Nav_FocusWithinChanged">
+            <c:AutomationPane.Style>
+                <Style TargetType="c:AutomationPane">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsNavOverlay}" Value="True">
+                            <Setter Property="Effect">
+                                <Setter.Value>
+                                    <DropShadowEffect BlurRadius="18" ShadowDepth="2" Direction="0" Opacity="0.45" Color="Black"/>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </c:AutomationPane.Style>
+            <Grid>
+                <Border ClipToBounds="True">
+                    <DockPanel Width="{x:Static vm:ShellViewModel.NavFullWidth}" HorizontalAlignment="Left">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,14,0,14" LastChildFill="False" Height="36">
+                            <Button DockPanel.Dock="Left" AutomationProperties.AutomationId="Shell.Nav.Toggle" AutomationProperties.Name="Expand navigation"
+                                    Style="{StaticResource SubtleButton}" Content="&#xE700;" FontFamily="{StaticResource Font.Icon}" FontSize="15"
+                                    Width="36" Height="36" MinHeight="0" Padding="0" Margin="6,0,0,0" ToolTip="Show navigation"
+                                    FocusVisualStyle="{x:Null}" Command="{Binding ToggleNavExpandedCommand}"
+                                    Visibility="{Binding NavPinned, Converter={StaticResource BoolToVisInv}}"/>
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="12,0,0,0">
+                                <!-- unpinned: the hamburger takes the badge's place so the pin button still fits in the expanded drawer -->
+                                <Border Width="30" Height="30" CornerRadius="7" Margin="0,0,10,0" ClipToBounds="True"
+                                        Visibility="{Binding NavPinned, Converter={StaticResource BoolToVis}}">
+                                    <Image Source="pack://application:,,,/Assets/EzForensics.png" RenderOptions.BitmapScalingMode="HighQuality"
+                                           AutomationProperties.AutomationId="Shell.Brand.Logo"/>
+                                </Border>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="EZ Forensics" FontSize="16" FontWeight="SemiBold" AutomationProperties.AutomationId="Shell.Brand"/>
+                                    <TextBlock Text="Forensic toolkit" Style="{StaticResource Caption}" FontSize="10.5"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <ToggleButton DockPanel.Dock="Right" AutomationProperties.AutomationId="Shell.Nav.Pin" AutomationProperties.Name="Pin navigation"
+                                          IsChecked="{Binding NavPinned}" Width="28" Height="28" Padding="0" Margin="0,0,8,0" VerticalAlignment="Center"
+                                          Background="Transparent" BorderBrush="Transparent" Focusable="True" IsTabStop="True">
+                                <ToggleButton.Style>
+                                    <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+                                        <Setter Property="ToolTip" Value="Pin the navigation open"/>
+                                        <Setter Property="Content" Value="&#xE718;"/>
+                                        <Setter Property="FontFamily" Value="{StaticResource Font.Icon}"/>
+                                        <Setter Property="FontSize" Value="13"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter Property="ToolTip" Value="Unpin: collapse the navigation to an icon rail"/>
+                                                <Setter Property="Content" Value="&#xE77A;"/>
+                                            </Trigger>
+                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ToggleButton.Style>
+                            </ToggleButton>
+                        </DockPanel>
+                        <!-- footer: theme toggle + Settings entry (flyout with Tools and Options) -->
+                        <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,8">
+                            <Rectangle Height="1" Margin="12,0,12,6" Fill="{DynamicResource Brush.Border}"/>
+                            <StackPanel x:Name="FooterRows">
+                            <Button Style="{StaticResource NavFooterButton}" Command="{Binding ToggleThemeCommand}" ToolTip="{Binding ThemeTip}"
+                                    AutomationProperties.AutomationId="Shell.Nav.Theme" AutomationProperties.Name="Toggle light or dark theme">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="{Binding ThemeGlyph}" FontSize="16" Width="22"/>
+                                    <TextBlock Text="{Binding ThemeTip}" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="GearButton" Style="{StaticResource NavFooterButton}" Tag="{Binding IsSettingsParentActive}" Click="Gear_Click"
+                                    HorizontalContentAlignment="Stretch"
+                                    ToolTip="Settings: Tools and Options" AutomationProperties.AutomationId="Shell.Nav.Gear"
+                                    AutomationProperties.Name="Settings">
+                                <DockPanel LastChildFill="True">
+                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="11" Margin="0,0,6,0"
+                                               VerticalAlignment="Center" AutomationProperties.AutomationId="Shell.Nav.Gear.Chevron"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE713;" FontSize="16" Width="22"/>
+                                        <TextBlock Text="Settings" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Button>
+                            </StackPanel>
+                            <!-- flyout with Tools and Options: a continuation of the drawer. Placed Right of FooterRows (theme + Settings rows), so its top edge is the
+                                 theme row top; the Border has a 1px top border, so VerticalOffset -1 puts the Tools row level with the Switch theme row and the
+                                 Options row level with the Settings row (same NavFooterButton style: same height, margins and text baseline). -->
+                            <Popup x:Name="SettingsFlyout" PlacementTarget="{Binding ElementName=FooterRows}" Placement="Right"
+                                   HorizontalOffset="0" VerticalOffset="-1" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+                                   IsOpen="{Binding IsSettingsExpanded, Mode=TwoWay}" Closed="SettingsFlyout_Closed" Opened="SettingsFlyout_Opened"
+                                   AutomationProperties.AutomationId="Shell.Gear.Flyout">
+                                <Border Margin="0" Padding="0" CornerRadius="0,8,8,0" MinWidth="170"
+                                        Background="{DynamicResource Brush.Nav}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,1,1"
+                                        PreviewKeyDown="SettingsFlyout_PreviewKeyDown" KeyboardNavigation.DirectionalNavigation="Cycle" KeyboardNavigation.TabNavigation="Cycle">
+                                    <StackPanel>
+                                        <Button x:Name="FlyoutToolsButton" Style="{StaticResource NavFooterButton}" Tag="{Binding IsToolsActive}" Command="{Binding OpenFooterPageCommand}" CommandParameter="{Binding ToolsItem}"
+                                                ToolTip="Tools" AutomationProperties.AutomationId="Shell.Gear.Tools" AutomationProperties.Name="Tools">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE90F;" FontSize="16" Width="22"/>
+                                                <TextBlock Text="Tools" Margin="14,0,24,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Style="{StaticResource NavFooterButton}" Tag="{Binding IsOptionsActive}" Command="{Binding OpenFooterPageCommand}" CommandParameter="{Binding OptionsItem}"
+                                                ToolTip="Options" AutomationProperties.AutomationId="Shell.Gear.Options" AutomationProperties.Name="Options">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE9E9;" FontSize="16" Width="22"/>
+                                                <TextBlock Text="Options" Margin="14,0,24,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
+                        </StackPanel>
+                        <ListBox ItemsSource="{Binding MainItems}" SelectedItem="{Binding SelectedMain}" AutomationProperties.AutomationId="Nav"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem" BasedOn="{StaticResource NavItem}">
+                                    <Setter Property="AutomationProperties.AutomationId" Value="{Binding Title, StringFormat=Nav.{0}}"/>
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Title}"/>
+                                    <Setter Property="ToolTip" Value="{Binding Tip}"/>
+                                    <Style.Triggers>
+                                        <!-- unpinned: one layout for rail and expanded drawer (icon column centred in the 48px rail) -->
+                                        <DataTrigger Binding="{Binding DataContext.NavPinned, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="False">
+                                            <Setter Property="Margin" Value="4,2"/>
+                                            <Setter Property="Padding" Value="9,9"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Grid Width="22" Height="22">
+                                            <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="16" Width="22"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <!-- Analyze: red dot while new results are waiting -->
+                                            <Ellipse Width="9" Height="9" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-4,0"
+                                                     Fill="{DynamicResource Brush.Error}" Stroke="{DynamicResource Brush.Nav}" StrokeThickness="1.5"
+                                                     AutomationProperties.AutomationId="Nav.Badge.Attention"
+                                                     Visibility="{Binding HasAttention, Converter={StaticResource BoolToVis}}"/>
+                                            <!-- Jobs: spinning arc while jobs run -->
+                                            <Grid x:Name="Spinner" Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-4,-6,0"
+                                                  Visibility="Collapsed" RenderTransformOrigin="0.5,0.5" AutomationProperties.AutomationId="Nav.Badge.Running">
+                                                <Grid.RenderTransform><RotateTransform x:Name="SpinRotate" Angle="0"/></Grid.RenderTransform>
+                                                <Ellipse Stroke="{DynamicResource Brush.Nav}" StrokeThickness="3.5" Margin="0"/>
+                                                <Path Data="M 5.5,1.2 A 4.3,4.3 0 1 1 1.2,5.5" Stroke="{DynamicResource Brush.Accent}" StrokeThickness="1.8"
+                                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                            </Grid>
+                                        </Grid>
+                                        <TextBlock Text="{Binding Title}" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                            <Setter TargetName="Spinner" Property="Visibility" Value="Visible"/>
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard x:Name="SpinStory">
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="SpinRotate" Storyboard.TargetProperty="Angle"
+                                                                         From="0" To="360" Duration="0:0:0.9" RepeatBehavior="Forever"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                            <DataTrigger.ExitActions>
+                                                <StopStoryboard BeginStoryboardName="SpinStory"/>
+                                            </DataTrigger.ExitActions>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+                <!-- right edge line (drawn over the clipped content) -->
+                <Rectangle Width="1" HorizontalAlignment="Right" Fill="{DynamicResource Brush.Border}" SnapsToDevicePixels="True"/>
+            </Grid>
+        </c:AutomationPane>
+
+        <!-- status bar -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource Brush.Nav}" BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="0,1,0,0" Padding="14,5">
+            <DockPanel TextElement.FontSize="11.5" TextElement.Foreground="{DynamicResource Brush.TextSecondary}">
+                <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{DynamicResource Brush.WarningBg}"
+                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" Margin="12,0,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE7EF;" FontSize="11" Foreground="{DynamicResource Brush.Warning}"/>
+                        <TextBlock Text="Administrator" Margin="5,0,0,0" Foreground="{DynamicResource Brush.Warning}"/>
+                    </StackPanel>
+                </Border>
+                <!-- zoom -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <Button Style="{StaticResource StatusMiniButton}" Content="&#xE738;" Command="{Binding ZoomOutCommand}"
+                            ToolTip="Zoom out (Ctrl+-)" AutomationProperties.AutomationId="StatusBar.ZoomOut" AutomationProperties.Name="Zoom out"/>
+                    <TextBlock Text="{Binding ZoomText}" MinWidth="38" TextAlignment="Center" VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="StatusBar.Zoom" ToolTip="UI zoom (Ctrl+wheel)"/>
+                    <Button Style="{StaticResource StatusMiniButton}" Content="&#xE710;" Command="{Binding ZoomInCommand}"
+                            ToolTip="Zoom in (Ctrl+=)" AutomationProperties.AutomationId="StatusBar.ZoomIn" AutomationProperties.Name="Zoom in"/>
+                    <Button Style="{StaticResource StatusMiniButton}" Content="&#xE72C;" Command="{Binding ZoomResetCommand}" Margin="2,0,0,0"
+                            ToolTip="Reset zoom to 100% (Ctrl+0)" AutomationProperties.AutomationId="StatusBar.ZoomReset" AutomationProperties.Name="Reset zoom"/>
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Net9Text}" ToolTip="{Binding Net9Tip}" Margin="16,0,0,0" VerticalAlignment="Center"
+                           AutomationProperties.AutomationId="StatusBar.Net9" AutomationProperties.HelpText="{Binding Net9Tip}"/>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding ToolCountText}" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="11"/>
+                    <TextBlock Margin="6,0,0,0">
+                        <Run Text="{Binding RunningJobs, Mode=OneWay}"/><Run Text=" running"/>
+                        <Run Text="·"/>
+                        <Run Text="{Binding QueuedJobs, Mode=OneWay}"/><Run Text=" queued"/>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" FontSize="11" Margin="18,0,0,0"/>
+                    <TextBlock Margin="6,0,0,0" Text="{Binding ToolsRoot}" TextTrimming="CharacterEllipsis" MaxWidth="520"
+                               ToolTip="{Binding ToolsRoot}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

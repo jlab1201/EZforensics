@@ -1,0 +1,12 @@
+{
+  "id": "ShellBagsExplorer",
+  "displayName": "ShellBags Explorer",
+  "category": "FileFolderAccess",
+  "description": "GUI for browsing ShellBags data from NTUSER.DAT / UsrClass.dat or the live registry.",
+  "usage": "Graphical viewer for ShellBags data from NTUSER.DAT and UsrClass.dat hives or the live registry. Use it to browse folder access history interactively.",
+  "kind": "gui",
+  "exe": "ShellBagsExplorer.exe",
+  "zip": "ShellBagsExplorer.zip",
+  "builds": ["net9"],
+  "requiresAdmin": false
+}

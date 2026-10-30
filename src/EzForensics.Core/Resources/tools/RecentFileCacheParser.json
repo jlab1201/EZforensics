@@ -1,0 +1,21 @@
+{
+  "id": "RecentFileCacheParser",
+  "displayName": "RecentFileCacheParser",
+  "category": "ProgramExecution",
+  "description": "Parses RecentFileCache.bcf (Windows 7 / 2008 R2 program execution evidence).",
+  "usage": "Parses RecentFileCache.bcf, which lists programs executed on Windows 7 and Server 2008 R2. Use it on those older systems as execution evidence.",
+  "limitation": "RecentFileCache.bcf exists only on older Windows (7 and Server 2008 R2); newer systems use Amcache instead.",
+  "kind": "cli",
+  "exe": "RecentFileCacheParser.exe",
+  "zip": "RecentFileCacheParser.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Windows\\AppCompat\\Programs\\RecentFileCache.bcf"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "RecentFileCache.bcf", "description": "File to process.", "required": true, "filter": "RecentFileCache|RecentFileCache.bcf|All files|*.*" },
+    { "use": "csv" },
+    { "use": "csvf" },
+    { "use": "json", "description": "Directory to save json representation to." },
+    { "use": "pretty" },
+    { "use": "q", "description": "Only show the filename being processed vs all output. Useful to speed up exporting to JSON and/or CSV." }
+  ]
+}

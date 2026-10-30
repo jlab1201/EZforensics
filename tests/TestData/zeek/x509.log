@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	x509
+#open	2026-10-08-10-00-00
+#fields	ts	fingerprint	certificate.subject	certificate.issuer	certificate.not_valid_before	certificate.not_valid_after	san.dns
+#types	time	string	string	string	time	time	vector[string]
+1258535653.400000	abc123	CN=www.bro.org	CN=Example CA	1230768000.000000	1293839999.000000	www.bro.org,bro.org
+#close	2026-10-08-10-00-01

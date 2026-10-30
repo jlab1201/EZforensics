@@ -1,0 +1,63 @@
+<Window x:Class="EzForensics.App.Views.Analyze.SavedItemPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
+        Title="{Binding Title}" Width="520" Height="520" MinWidth="380" MinHeight="320"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}" TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}"
+        AutomationProperties.AutomationId="SavedPicker">
+    <DockPanel Margin="16" LayoutTransform="{DynamicResource Ui.Scale}">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="{Binding OkText}" Style="{StaticResource AccentButton}" IsDefault="True" MinWidth="80" Margin="0,0,6,0"
+                    IsEnabled="{Binding CanOk}" Click="Ok_Click" AutomationProperties.AutomationId="SavedPicker.Ok"/>
+            <Button Content="Cancel" IsCancel="True" MinWidth="80" AutomationProperties.AutomationId="SavedPicker.Cancel"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0"
+                    Visibility="{Binding AskConflict, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="If a name already exists:" Style="{StaticResource Caption}" Margin="0,0,0,4"/>
+            <StackPanel Orientation="Horizontal" AutomationProperties.AutomationId="SavedPicker.Conflict">
+                <RadioButton Content="Replace" Margin="0,0,16,0" GroupName="conflict" IsChecked="{Binding ConflictReplace}"
+                             AutomationProperties.AutomationId="SavedPicker.Conflict.Replace"/>
+                <RadioButton Content="Keep both" Margin="0,0,16,0" GroupName="conflict" IsChecked="{Binding ConflictKeepBoth}"
+                             AutomationProperties.AutomationId="SavedPicker.Conflict.KeepBoth"/>
+                <RadioButton Content="Skip" GroupName="conflict" IsChecked="{Binding ConflictSkip}"
+                             AutomationProperties.AutomationId="SavedPicker.Conflict.Skip"/>
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Caption}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Style="{StaticResource Caption}" VerticalAlignment="Center"
+                       AutomationProperties.AutomationId="SavedPicker.Count"/>
+            <CheckBox Content="Select all" IsThreeState="True" IsChecked="{Binding SelectAll, Mode=TwoWay}" FontWeight="SemiBold"
+                      AutomationProperties.AutomationId="SavedPicker.SelectAll"/>
+        </DockPanel>
+
+        <Border Style="{StaticResource Card}" Padding="8">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Groups}" Focusable="False" AutomationProperties.AutomationId="SavedPicker.List">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:PickerGroupViewModel}">
+                            <StackPanel Margin="0,0,0,8">
+                                <CheckBox IsThreeState="True" IsChecked="{Binding IsChecked, Mode=TwoWay}" Content="{Binding Header}" FontWeight="SemiBold"
+                                          AutomationProperties.AutomationId="SavedPicker.Category" AutomationProperties.Name="{Binding Name}"/>
+                                <ItemsControl ItemsSource="{Binding Items}" Margin="22,3,0,0" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:PickerItemViewModel}">
+                                            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2" ToolTip="{Binding Detail}"
+                                                      AutomationProperties.AutomationId="SavedPicker.Item" AutomationProperties.Name="{Binding Name}">
+                                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                            </CheckBox>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</Window>

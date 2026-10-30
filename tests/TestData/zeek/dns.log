@@ -1,0 +1,12 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	dns
+#open	2026-10-08-10-00-00
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	trans_id	query	qtype_name	rcode_name	answers	TTLs	rejected
+#types	time	string	addr	port	addr	port	enum	count	string	string	string	vector[string]	vector[interval]	bool
+1258535654.500000	C4J4Th3PJpwUYZZ6gc	192.168.1.103	53111	192.168.1.1	53	udp	4711	www.bro.org	A	NOERROR	192.150.187.43,10.0.0.1	300.000000,300.000000	F
+1258535654.600000	Cq1	192.168.1.103	53112	192.168.1.1	53	udp	4712	m\xc3\xbcnchen.example	AAAA	NXDOMAIN	(empty)	-	F
+1258535654.700000	Cq2	192.168.1.103	53113	192.168.1.1	53	udp	4713	a\x2cb.example	TXT	NOERROR	v\x2c1,-	60.000000,-	F
+#close	2026-10-08-10-00-01

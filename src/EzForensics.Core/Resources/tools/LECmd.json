@@ -1,0 +1,36 @@
+{
+  "id": "LECmd",
+  "displayName": "LECmd",
+  "category": "FileFolderAccess",
+  "description": "Parses Windows shortcut (.lnk) files.",
+  "usage": "Parses Windows shortcut (.lnk) files, showing the target path, timestamps, volume and machine details. Use it to find which files and devices a user opened or accessed.",
+  "limitation": "A shortcut records the target as it was when opened. Shortcuts can be deleted, and the target may have changed or gone since.",
+  "kind": "cli",
+  "exe": "LECmd.exe",
+  "zip": "LECmd.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Users\\*\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\*.lnk", "Users\\*\\AppData\\Roaming\\Microsoft\\Office\\Recent\\*.lnk", "Users\\*\\Desktop\\*.lnk"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "LNK file", "description": "File to process. Either this or -d is required.", "filter": "Shortcuts|*.lnk|All files|*.*" },
+    { "id": "d", "flag": "-d", "type": "folder", "label": "Directory", "description": "Directory to recursively process. Either this or -f is required." },
+    { "id": "r", "flag": "-r", "type": "bool", "label": "Removable drives only", "description": "Only process lnk files pointing to removable drives.", "default": "false", "advanced": true },
+    { "id": "all", "flag": "--all", "type": "bool", "label": "All files", "description": "Process all files in directory vs. only files matching *.lnk.", "default": "false", "advanced": true, "visibleWhen": "d" },
+    { "use": "csv" },
+    { "use": "csvf" },
+    { "use": "json" },
+    { "use": "xml" },
+    { "use": "html" },
+    { "use": "pretty" },
+    { "use": "q" },
+    { "id": "nid", "flag": "--nid", "type": "bool", "label": "Suppress Target ID list", "description": "Suppress Target ID list details from being displayed.", "default": "false", "advanced": true },
+    { "id": "neb", "flag": "--neb", "type": "bool", "label": "Suppress extra blocks", "description": "Suppress Extra blocks information from being displayed.", "default": "false", "advanced": true },
+    { "use": "dt" },
+    { "use": "mp" },
+    { "use": "cp" },
+    { "use": "debug" },
+    { "use": "trace" }
+  ],
+  "groups": [
+    { "mode": "exactlyOne", "params": ["f", "d"] }
+  ]
+}

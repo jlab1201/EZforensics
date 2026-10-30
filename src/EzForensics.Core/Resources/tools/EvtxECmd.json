@@ -1,0 +1,40 @@
+{
+  "id": "EvtxECmd",
+  "displayName": "EvtxECmd",
+  "category": "EventLogs",
+  "description": "Parses Windows event logs (.evtx) into CSV/JSON/XML using event maps.",
+  "usage": "Converts Windows event logs (.evtx) into normalised CSV, JSON or XML, using maps that pull the useful fields out of each event. Use it to triage logons, services, PowerShell and other activity across many logs at once.",
+  "limitation": "Covers only events still in the log: logs are overwritten when full and can be cleared. Events without a map keep their raw payload.",
+  "kind": "cli",
+  "exe": "EvtxECmd.exe",
+  "zip": "EvtxECmd.zip",
+  "builds": ["net9", "net4"],
+  "consumes": ["Windows\\System32\\winevt\\Logs\\*.evtx"],
+  "parameters": [
+    { "id": "f", "flag": "-f", "type": "file", "label": "Event log file", "description": "File to process. Either this or -d is required.", "filter": "Event logs|*.evtx|All files|*.*" },
+    { "id": "d", "flag": "-d", "type": "folder", "label": "Event log directory", "description": "Directory to recursively process. Either this or -f is required." },
+    { "use": "csv" },
+    { "use": "csvf" },
+    { "use": "json" },
+    { "use": "jsonf" },
+    { "use": "xml" },
+    { "use": "xmlf" },
+    { "id": "fj", "flag": "--fj", "type": "bool", "label": "Full JSON", "description": "Export all available data when using --json.", "default": "false", "advanced": true, "visibleWhen": "json" },
+    { "id": "inc", "flag": "--inc", "type": "string", "label": "Include event IDs", "description": "List of Event IDs to process. All others are ignored. Overrides --exc.", "placeholder": "4624,4625,5410,5500-5600" },
+    { "id": "exc", "flag": "--exc", "type": "string", "label": "Exclude event IDs", "description": "List of Event IDs to IGNORE. All others are included.", "advanced": true, "placeholder": "4624,4625,5410,5500-5600" },
+    { "id": "sd", "flag": "--sd", "type": "string", "label": "Start date (UTC)", "description": "Start date for including events (UTC). Anything OLDER than this is dropped. Format should match --dt.", "advanced": true, "placeholder": "yyyy-MM-dd HH:mm:ss.fffffff" },
+    { "id": "ed", "flag": "--ed", "type": "string", "label": "End date (UTC)", "description": "End date for including events (UTC). Anything NEWER than this is dropped. Format should match --dt.", "advanced": true, "placeholder": "yyyy-MM-dd HH:mm:ss.fffffff" },
+    { "use": "dt", "default": "yyyy-MM-dd HH:mm:ss.fffffff" },
+    { "id": "tdt", "flag": "--tdt", "type": "int", "label": "Time discrepancy (s)", "description": "The number of seconds to use for time discrepancy detection.", "default": "1", "advanced": true },
+    { "id": "met", "flag": "--met", "type": "bool", "label": "Show metrics", "description": "Show metrics about processed event log.", "default": "true", "advanced": true },
+    { "id": "maps", "flag": "--maps", "type": "folder", "label": "Maps folder", "description": "The path where event maps are located. Defaults to the 'Maps' folder next to EvtxECmd.exe.", "advanced": true },
+    { "use": "vss" },
+    { "use": "dedupe" },
+    { "use": "sync", "description": "Download the latest maps from https://github.com/EricZimmerman/evtx and update local maps." },
+    { "use": "debug" },
+    { "use": "trace" }
+  ],
+  "groups": [
+    { "mode": "exactlyOne", "params": ["f", "d"] }
+  ]
+}

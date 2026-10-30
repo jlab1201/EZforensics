@@ -1,0 +1,12 @@
+{
+  "id": "SDBExplorer",
+  "displayName": "SDB Explorer",
+  "category": "ProgramExecution",
+  "description": "Viewer for Application Compatibility shim databases (.sdb).",
+  "usage": "Graphical viewer for Application Compatibility shim databases (.sdb). Use it to inspect custom shims, which attackers can abuse for persistence.",
+  "kind": "gui",
+  "exe": "SDBExplorer.exe",
+  "zip": "SDBExplorer.zip",
+  "builds": ["net9"],
+  "requiresAdmin": false
+}

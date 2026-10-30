@@ -1,0 +1,46 @@
+<UserControl x:Class="EzForensics.App.Views.ResultsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
+             xmlns:c="clr-namespace:EzForensics.App.Controls"
+             xmlns:local="clr-namespace:EzForensics.App"
+             xmlns:svc="clr-namespace:EzForensics.App.Services"
+             xmlns:an="clr-namespace:EzForensics.App.Views.Analyze">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top">
+            <c:PageHeader Title="{x:Static svc:PageNames.Analyze}"/>
+            <ContentControl Content="{Binding Banner}" ContentTemplate="{StaticResource InfoBarTemplate}"
+                            Visibility="{Binding Banner, Converter={StaticResource BoolToVis}}" Margin="0,6,0,0"/>
+        </StackPanel>
+
+
+        <Grid Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="LeftColumn" Width="860" MinWidth="180"/>
+                <ColumnDefinition x:Name="SplitterColumn" Width="12"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- left card: case folder, computer details, case files tree. Collapse LeftCard + PaneSplitter (and zero LeftColumn/SplitterColumn) for a focus mode. -->
+            <Border x:Name="LeftCard" Style="{StaticResource Card}" Padding="8">
+                <an:CaseTreePanel x:Name="CaseTree"/>
+            </Border>
+            <GridSplitter x:Name="PaneSplitter" Grid.Column="1" Width="12" Background="Transparent" HorizontalAlignment="Center"/>
+
+            <!-- right pane: process tree of a host on top (ResultsViewModel.ProcessTree, Close x releases it), events grid below; the top row and the splitter collapse while no tree is open -->
+            <Grid x:Name="RightPane" Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition x:Name="TreeRow" Height="0"/>
+                    <RowDefinition x:Name="TreeSplitterRow" Height="0"/>
+                    <RowDefinition x:Name="EventsRow" Height="*"/>
+                </Grid.RowDefinitions>
+                <an:ProcessTreePane x:Name="ProcessTreeView" Grid.Row="0" DataContext="{Binding ProcessTree}"
+                                    Visibility="{Binding DataContext.IsProcessTreeOpen, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}"/>
+                <GridSplitter x:Name="TreeSplitter" Grid.Row="1" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="Transparent"
+                              ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" Visibility="Collapsed"
+                              AutomationProperties.AutomationId="Results.ProcessTree.Splitter" AutomationProperties.Name="Resize the process tree"/>
+                <an:EventsPane x:Name="Events" Grid.Row="2"/>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>
