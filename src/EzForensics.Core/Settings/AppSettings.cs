@@ -96,9 +96,16 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// <summary>Analyze hints (reliability banner and column markers). False hides them for good (Options > Display).</summary>
     public bool ShowAnalyzeHints { get => _showAnalyzeHints; set => Set(ref _showAnalyzeHints, value); }
 
+    /// <summary>Hints the examiner dismissed (case folder + hint text); a hint with other text shows again.</summary>
+    public List<string> DismissedHints { get; set; } = new();
+
     private ResultsTreeColumns _resultsTreeColumns = new();
     /// <summary>Results case tree: visible optional columns and column widths.</summary>
     public ResultsTreeColumns ResultsTreeColumns { get => _resultsTreeColumns; set => Set(ref _resultsTreeColumns, value ?? new ResultsTreeColumns()); }
+
+    private IngestJobColumns _ingestColumns = new();
+    /// <summary>Ingest page: visible optional columns of the Jobs list.</summary>
+    public IngestJobColumns IngestColumns { get => _ingestColumns; set => Set(ref _ingestColumns, value ?? new IngestJobColumns()); }
 
     private string _plasoParsers = "";
     private Plaso.PlasoOutputFormat _plasoFormat = Plaso.PlasoOutputFormat.Dynamic;
@@ -228,6 +235,61 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// <summary>Ingest "Custom selection" sets (Preferences > Ingest selections). Always starts with the built-in Default (seeded when missing).</summary>
     public List<Triage.IngestSelection> IngestSelections { get => _ingestSelections; set => Set(ref _ingestSelections, Triage.IngestSelections.Normalize(value)); }
 
+    private string _examinerName = "";
+    /// <summary>Name recorded with edits and approvals on the Review page; empty = the Windows user name.</summary>
+    public string ExaminerName { get => _examinerName; set => Set(ref _examinerName, value?.Trim() ?? ""); }
+
+    private string _aiProvider = "ollama";
+    private string _aiModel = "";
+    private string _aiBaseUrl = "";
+    /// <summary>Assistant model provider: "ollama" (local, default), "anthropic", "openai" or "openrouter". The API key is not here (see ApiKeyStore).</summary>
+    public string AiProvider { get => _aiProvider; set => Set(ref _aiProvider, string.IsNullOrWhiteSpace(value) ? "ollama" : value.Trim().ToLowerInvariant()); }
+    /// <summary>Selected model id; empty = not chosen yet.</summary>
+    public string AiModel { get => _aiModel; set => Set(ref _aiModel, value?.Trim() ?? ""); }
+    private Dictionary<string, string> _aiModelByProvider = new();
+    /// <summary>Last model chosen per provider, so switching providers back restores it (the current provider's lives in <see cref="AiModel"/>).</summary>
+    public Dictionary<string, string> AiModelByProvider { get => _aiModelByProvider; set => Set(ref _aiModelByProvider, value ?? new()); }
+    /// <summary>Base URL override; empty = the provider default.</summary>
+    public string AiBaseUrl { get => _aiBaseUrl; set => Set(ref _aiBaseUrl, value?.Trim() ?? ""); }
+
+    // Old files may still carry assistantOpenAnalyze / assistantOpenExplore; they are ignored (Spectre is one app-wide chat now).
+    private string _assistantMode = "";
+    private bool _assistantExpanded;
+    private double _assistantPopupWidth = 380, _assistantPopupHeight = 560;
+    /// <summary>Where Spectre shows when open: "popup" (default), "docked" or "window". A file without the setting follows the old
+    /// <see cref="AssistantFloating"/> flag (false = docked).</summary>
+    public string AssistantMode
+    {
+        get => _assistantMode is "popup" or "docked" or "window" ? _assistantMode : _assistantFloating ? "popup" : "docked";
+        set => Set(ref _assistantMode, value is "popup" or "docked" or "window" ? value : "popup");
+    }
+    /// <summary>Spectre is open (true) or collapsed to the launcher icon (false).</summary>
+    public bool AssistantExpanded { get => _assistantExpanded; set => Set(ref _assistantExpanded, value); }
+    public double AssistantPopupWidth { get => _assistantPopupWidth; set => Set(ref _assistantPopupWidth, Math.Max(300, value)); }
+    public double AssistantPopupHeight { get => _assistantPopupHeight; set => Set(ref _assistantPopupHeight, Math.Max(300, value)); }
+
+    private bool _assistantAutoMode;
+    private bool _assistantFloating = true;
+    private double _assistantDockWidth = 380, _assistantWindowLeft, _assistantWindowTop, _assistantWindowWidth, _assistantWindowHeight;
+    /// <summary>Legacy: false = docked. Superseded by <see cref="AssistantMode"/>.</summary>
+    public bool AssistantFloating { get => _assistantFloating; set => Set(ref _assistantFloating, value); }
+    /// <summary>Width of the docked Spectre panel (dragged with the splitter); at least 300.</summary>
+    public double AssistantDockWidth { get => _assistantDockWidth; set => Set(ref _assistantDockWidth, Math.Max(300, value)); }
+    /// <summary>Width of the docked Findings evidence panel (dragged with the splitter); 0 = never set (45% of the page).</summary>
+    public double EvidencePanelWidth { get => _evidencePanelWidth; set => Set(ref _evidencePanelWidth, value <= 0 ? 0 : Math.Max(360, value)); }
+    private double _evidencePanelWidth;
+    /// <summary>Floating Spectre window position and size; width 0 = never placed (the app picks a default).</summary>
+    public double AssistantWindowLeft { get => _assistantWindowLeft; set => Set(ref _assistantWindowLeft, value); }
+    public double AssistantWindowTop { get => _assistantWindowTop; set => Set(ref _assistantWindowTop, value); }
+    public double AssistantWindowWidth { get => _assistantWindowWidth; set => Set(ref _assistantWindowWidth, value); }
+    public double AssistantWindowHeight { get => _assistantWindowHeight; set => Set(ref _assistantWindowHeight, value); }
+    /// <summary>Auto-mode: Spectre applies its filter, flag and open-file proposals itself (with Undo) instead of waiting for Apply. Off by default.</summary>
+    public bool AssistantAutoMode { get => _assistantAutoMode; set => Set(ref _assistantAutoMode, value); }
+
+    private bool _runSpectreAfterIngest = true;
+    /// <summary>Queue a "Spectre analysis" job (hand-off + phases 1-5) when an Ingest run finishes (not after Stop). On by default.</summary>
+    public bool RunSpectreAfterIngest { get => _runSpectreAfterIngest; set => Set(ref _runSpectreAfterIngest, value); }
+
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {
         if (EqualityComparer<T>.Default.Equals(field, value)) return;
@@ -258,7 +320,14 @@ public sealed class JsonSettingsStore
         try
         {
             if (File.Exists(Path))
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(Path), Options) ?? new AppSettings();
+            {
+                var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(Path), Options) ?? new AppSettings();
+                if (EzForensics.Core.Results.FlagCatalog.RemoveRetiredSpectreEvidence(loaded))
+                {
+                    try { Save(loaded); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                }
+                return loaded;
+            }
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { }
         return new AppSettings();

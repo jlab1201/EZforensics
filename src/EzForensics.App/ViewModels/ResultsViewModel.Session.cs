@@ -143,10 +143,10 @@ public sealed partial class ResultsViewModel
     }
 
     /// <summary>Writes the session now (file switch, app exit, Windows logoff / shutdown, crash). No-op until the Analyze page was opened once.</summary>
-    public void SaveSessionNow()
+    public bool SaveSessionNow()
     {
         var s = _session;
-        if (s == null) return;
+        if (s == null) return true;
         _sessionTimer?.Stop();
         try
         {
@@ -155,8 +155,9 @@ public sealed partial class ResultsViewModel
             if (CurrentFile != null) s.SelectedFile = CurrentFile;
             s.FocusMode = S.IsFocusMode;
             AnalyzeSessionStore.Save(s);
+            return true;
         }
-        catch (Exception ex) { AppLog.Error("Could not save the Analyze session", ex); }
+        catch (Exception ex) { AppLog.Error("Could not save the Analyze session", ex); return false; }
     }
 
     /// <summary>Sets the filters, search, flag filter and sort of a reopened file (no filtering is started here).</summary>

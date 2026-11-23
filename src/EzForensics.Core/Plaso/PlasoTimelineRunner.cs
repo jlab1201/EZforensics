@@ -42,7 +42,7 @@ public static class PlasoTimelineRunner
 
     /// <summary>
     /// A super timeline that could not start (plaso not installed, no / missing source, an error before the first job) is still listed on
-    /// the Jobs page, as a Failed job holding the reason.
+    /// the Ingest job list, as a Failed job holding the reason.
     /// </summary>
     public static Job EnqueueNotStarted(JobQueue queue, string caseDir, string outputDir, string host, string reason) =>
         queue.EnqueueRejected(new JobSpec(ToolIdLog2Timeline, "log2timeline", Array.Empty<string>(), outputDir, $"log2timeline {host}", Category), caseDir, reason);

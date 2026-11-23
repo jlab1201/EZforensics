@@ -322,7 +322,9 @@ public sealed class PlasoSetupTests : IDisposable
         var loc = new PlasoLocator(new FakePlasoProbe(), venv);
         var (py, args) = loc.UpdateCommand();
         py.Should().Be(venv + @"\Scripts\python.exe");
-        args.Should().Equal("-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "plaso");
+        args.Should().Equal("-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "plaso==" + PlasoSetup.PinnedVersion);
+        loc.UpdateCommand("20260928").PipUpgrade[^1].Should().Be("plaso==20260928");
+        loc.UpdateCommand("1 --index-url http://x").PipUpgrade[^1].Should().Be("plaso==" + PlasoSetup.PinnedVersion);
         loc.UninstallTargets().Should().Equal(venv, @"C:\Users\u\AppData\Local\EzHub\plaso\python");
         PlasoSetup.Estimate(true).Should().Be((49, 142));
         PlasoSetup.Estimate(false).DownloadMB.Should().Be(PlasoSetup.PackagesDownloadMB);
@@ -373,7 +375,7 @@ public sealed class PlasoSetupTests : IDisposable
         job.Spec.ToolId.Should().Be(PlasoSetup.ToolIdPip);
         job.Spec.Category.Should().Be("Maintenance");
         job.ExePath.Should().Be(FakeToolPaths.Exe);
-        job.Spec.Args.Should().ContainInOrder("install", "--upgrade", "plaso");
+        job.Spec.Args.Should().ContainInOrder("install", "--upgrade", "plaso==" + PlasoSetup.PinnedVersion);
         job.Spec.Label.Should().Contain("update");
     }
 

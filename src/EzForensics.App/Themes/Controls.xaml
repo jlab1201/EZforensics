@@ -3,12 +3,35 @@
                     xmlns:sys="clr-namespace:System;assembly=mscorlib"
                     xmlns:c="clr-namespace:EzForensics.App.Controls">
 
+    <!-- keyboard-only focus rings: WPF draws FocusVisualStyle for keyboard focus only (not after a mouse click). Set it per style on buttons/toggles. -->
+    <Style x:Key="FocusRing">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border CornerRadius="4" BorderThickness="1.5" BorderBrush="{DynamicResource Brush.Accent}" SnapsToDevicePixels="True" IsHitTestVisible="False"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="FocusRingEllipse">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Ellipse Stroke="{DynamicResource Brush.Accent}" StrokeThickness="1.5" Fill="Transparent" IsHitTestVisible="False"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
     <FontFamily x:Key="Font.Icon">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
     <FontFamily x:Key="Font.UI">Segoe UI Variable Text, Segoe UI</FontFamily>
     <sys:Double x:Key="FontSize.Body">13</sys:Double>
     <!-- overridden at runtime from settings by Services/Appearance (zoom, UI and monospace fonts) -->
     <sys:Double x:Key="FontSize.Mono">12</sys:Double>
+    <sys:Double x:Key="FontSize.Caption">11.5</sys:Double>
+    <sys:Double x:Key="FontSize.Small">11</sys:Double>
+    <sys:Double x:Key="FontSize.Label">12</sys:Double>
     <sys:Double x:Key="Grid.RowHeight">24</sys:Double>
     <ScaleTransform x:Key="Ui.Scale" ScaleX="1" ScaleY="1"/>
     <TextFormattingMode x:Key="Ui.TextFormatting">Display</TextFormattingMode>
@@ -27,7 +50,7 @@
         <Setter Property="Margin" Value="0,0,0,6"/>
     </Style>
     <Style x:Key="Caption" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Caption}"/>
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
@@ -66,7 +89,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
-                    <TextBlock Text="{TemplateBinding Header}" Margin="10,6,10,2" FontSize="10.5" FontWeight="SemiBold"
+                    <TextBlock Text="{TemplateBinding Header}" Margin="10,6,10,2" FontSize="11" FontWeight="SemiBold"
                                Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </ControlTemplate>
             </Setter.Value>
@@ -94,7 +117,7 @@
     <!-- flat tabs: no borders, the selected tab has an accent underline -->
     <Style x:Key="FlatTabItem" TargetType="TabItem">
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
@@ -145,7 +168,7 @@
         <Setter Property="Padding" Value="12,5"/>
         <Setter Property="MinHeight" Value="30"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Template">
@@ -163,9 +186,6 @@
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="b" Property="Background" Value="{DynamicResource Brush.ControlPressed}"/>
-                        </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
@@ -212,6 +232,7 @@
     </Style>
 
     <Style x:Key="LinkButton" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
         <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
@@ -229,6 +250,7 @@
     </Style>
 
     <Style TargetType="ToggleButton">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
         <Setter Property="Background" Value="{DynamicResource Brush.Control}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
@@ -304,6 +326,47 @@
         </Setter>
     </Style>
 
+    <!-- TextBox with an X clear button inside (shown only when there is text). Use: Style="{DynamicResource ClearableTextBox}" -->
+    <Style x:Key="ClearableTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" SnapsToDevicePixels="True">
+                        <Grid>
+                            <TextBlock x:Name="ph" Text="{TemplateBinding Tag}" Margin="{TemplateBinding Padding}" Padding="2,0,0,0"
+                                       Foreground="{DynamicResource Brush.TextDisabled}" IsHitTestVisible="False"
+                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}" Visibility="Collapsed"
+                                       FontFamily="{TemplateBinding FontFamily}" TextTrimming="CharacterEllipsis"/>
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" Focusable="False"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"/>
+                            <Button x:Name="clr" HorizontalAlignment="Right" VerticalAlignment="Center" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
+                                    MinHeight="0" Padding="5,3" Margin="0,0,3,0" Style="{StaticResource SubtleButton}" ToolTip="Clear"
+                                    Command="{x:Static c:TextBoxClearCommand.Instance}" CommandParameter="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                    AutomationProperties.Name="Clear"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="ph" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="clr" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- read-only multi-line monospace box for logs / command previews -->
     <Style x:Key="MonoBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
         <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}"/>
@@ -358,7 +421,7 @@
     <!-- ===================================================== checkbox -->
     <Style TargetType="CheckBox">
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -372,7 +435,7 @@
                                 BorderBrush="{DynamicResource Brush.BorderStrong}" Background="{DynamicResource Brush.Input}"
                                 VerticalAlignment="Center">
                             <TextBlock x:Name="glyph" Text="&#xE73E;" FontFamily="{StaticResource Font.Icon}" FontSize="12"
-                                       Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                                       Foreground="{DynamicResource Brush.AccentText}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
                         </Border>
                         <ContentPresenter x:Name="cp" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
                     </Grid>
@@ -405,7 +468,7 @@
     <!-- ===================================================== radio button -->
     <Style TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -417,7 +480,7 @@
                         </Grid.ColumnDefinitions>
                         <Border x:Name="ring" Width="18" Height="18" CornerRadius="9" BorderThickness="1"
                                 BorderBrush="{DynamicResource Brush.BorderStrong}" Background="{DynamicResource Brush.Input}" VerticalAlignment="Center">
-                            <Ellipse x:Name="dot" Width="8" Height="8" Fill="White" Visibility="Collapsed"/>
+                            <Ellipse x:Name="dot" Width="8" Height="8" Fill="{DynamicResource Brush.AccentText}" Visibility="Collapsed"/>
                         </Border>
                         <ContentPresenter x:Name="cp" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
                     </Grid>
@@ -450,7 +513,7 @@
                 <ControlTemplate TargetType="ToggleButton">
                     <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="1" CornerRadius="4">
-                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Font.Icon}" FontSize="10" Margin="0,0,10,0"
+                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Font.Icon}" FontSize="11" Margin="0,0,10,0"
                                    HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -827,11 +890,12 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border x:Name="b" Background="Transparent" Padding="4,6" CornerRadius="4" Cursor="Hand">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="chev" Text="&#xE76C;" FontFamily="{StaticResource Font.Icon}" FontSize="10"
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock x:Name="chev" Text="&#xE76C;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
                                        VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                            <ContentPresenter VerticalAlignment="Center" TextElement.FontWeight="SemiBold"/>
-                        </StackPanel>
+                            <ContentPresenter Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Stretch" TextElement.FontWeight="SemiBold"/>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
@@ -874,7 +938,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border Background="Transparent" Width="16" Height="16">
-                        <TextBlock x:Name="g" Text="&#xE76C;" FontFamily="{StaticResource Font.Icon}" FontSize="9"
+                        <TextBlock x:Name="g" Text="&#xE76C;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -958,7 +1022,7 @@
                         <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource Brush.Border}"
                                 BorderThickness="0,0,1,1" Padding="8,6">
                             <DockPanel>
-                                <TextBlock x:Name="arrow" DockPanel.Dock="Right" FontFamily="{StaticResource Font.Icon}" FontSize="9"
+                                <TextBlock x:Name="arrow" DockPanel.Dock="Right" FontFamily="{StaticResource Font.Icon}" FontSize="11"
                                            Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Accent}"/>
                                 <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
                             </DockPanel>
@@ -1014,6 +1078,17 @@
         </Style.Triggers>
     </Style>
 
+    <!-- DataGrid top-left corner (only shown with row headers): a plain header-coloured cell, not a light default button -->
+    <Style x:Key="{ComponentResourceKey ResourceId=SelectAllButtonStyle, TypeInTargetAssembly={x:Type DataGrid}}" TargetType="Button">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,1"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <Style TargetType="DataGrid">
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
@@ -1052,8 +1127,15 @@
                                             <RowDefinition Height="*"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
-                                        <DataGridColumnHeadersPresenter x:Name="PART_ColumnHeadersPresenter"
-                                            Visibility="{Binding HeadersVisibility, ConverterParameter={x:Static DataGridHeadersVisibility.Column}, Converter={x:Static DataGrid.HeadersVisibilityConverter}, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                                        <!-- header row: the top-left corner is as wide as the row headers (CellsPanelHorizontalOffset), so the column headers
+                                             line up with their cells when row headers (e.g. Analyze's row-number gutter) are shown -->
+                                        <DockPanel Visibility="{Binding HeadersVisibility, ConverterParameter={x:Static DataGridHeadersVisibility.Column}, Converter={x:Static DataGrid.HeadersVisibilityConverter}, RelativeSource={RelativeSource AncestorType=DataGrid}}">
+                                            <Button DockPanel.Dock="Left" Focusable="False" Command="{x:Static DataGrid.SelectAllCommand}"
+                                                    Style="{DynamicResource {ComponentResourceKey ResourceId=SelectAllButtonStyle, TypeInTargetAssembly={x:Type DataGrid}}}"
+                                                    Width="{Binding CellsPanelHorizontalOffset, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                    Visibility="{Binding HeadersVisibility, ConverterParameter={x:Static DataGridHeadersVisibility.All}, Converter={x:Static DataGrid.HeadersVisibilityConverter}, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                                            <DataGridColumnHeadersPresenter x:Name="PART_ColumnHeadersPresenter"/>
+                                        </DockPanel>
                                         <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Grid.Row="1"
                                                                 CanContentScroll="{TemplateBinding CanContentScroll}"/>
                                         <Button Grid.Column="1" Grid.Row="0" Style="{StaticResource ScrollEndButton}" Content="&#x2912;" VerticalAlignment="Bottom"
@@ -1167,8 +1249,38 @@
         </Style.Triggers>
     </Style>
 
+    <!-- Toggle switch (pill with a sliding knob) for on/off settings; put the label in Content. -->
+    <Style x:Key="SwitchToggle" TargetType="ToggleButton">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Border x:Name="Track" Width="32" Height="16" CornerRadius="8" BorderThickness="1" Background="{DynamicResource Brush.Input}" BorderBrush="{DynamicResource Brush.Border}" VerticalAlignment="Center">
+                            <Ellipse x:Name="Knob" Width="10" Height="10" HorizontalAlignment="Left" Margin="2,0,0,0" Fill="{DynamicResource Brush.TextSecondary}"/>
+                        </Border>
+                        <ContentPresenter Margin="6,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Track" Property="Background" Value="{DynamicResource Brush.Accent}"/>
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                            <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/>
+                            <Setter TargetName="Knob" Property="Margin" Value="0,0,2,0"/>
+                            <Setter TargetName="Knob" Property="Fill" Value="{DynamicResource Brush.AccentText}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Same circled "?" as c:HelpTip, as a ToggleButton (hover/click opens a popup; wired in code-behind) -->
     <Style x:Key="HelpCircleToggle" TargetType="ToggleButton">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingEllipse}"/>
         <Setter Property="Width" Value="16"/>
         <Setter Property="Height" Value="16"/>
         <Setter Property="Margin" Value="6,0,0,0"/>
@@ -1191,10 +1303,6 @@
                         <Trigger Property="IsChecked" Value="True">
                             <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
                         </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
-                            <Setter TargetName="Ring" Property="StrokeThickness" Value="2"/>
-                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -1203,6 +1311,7 @@
 
     <!-- Circled "X" (clear) button, same circle as HelpCircleToggle -->
     <Style x:Key="ClearCircleButton" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingEllipse}"/>
         <Setter Property="Width" Value="16"/>
         <Setter Property="Height" Value="16"/>
         <Setter Property="Margin" Value="6,0,0,0"/>
@@ -1221,10 +1330,6 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
-                        </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
-                            <Setter TargetName="Ring" Property="StrokeThickness" Value="2"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1288,14 +1393,14 @@
                             </Grid.ColumnDefinitions>
                             <Border x:Name="check" Width="16" Height="16" CornerRadius="3" BorderThickness="1" Margin="0,0,8,0" VerticalAlignment="Center"
                                     BorderBrush="{DynamicResource Brush.BorderStrong}" Background="{DynamicResource Brush.Input}" Visibility="Collapsed">
-                                <TextBlock x:Name="glyph" Text="&#xE73E;" FontFamily="{StaticResource Font.Icon}" FontSize="11" Foreground="White"
+                                <TextBlock x:Name="glyph" Text="&#xE73E;" FontFamily="{StaticResource Font.Icon}" FontSize="11" Foreground="{DynamicResource Brush.AccentText}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
                             </Border>
                             <ContentPresenter x:Name="icon" Grid.Column="1" ContentSource="Icon" Margin="0,0,8,0" VerticalAlignment="Center"/>
                             <ContentPresenter Grid.Column="2" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
                             <TextBlock x:Name="gesture" Grid.Column="3" Text="{TemplateBinding InputGestureText}" Margin="24,0,0,0" VerticalAlignment="Center"
                                        Foreground="{DynamicResource Brush.TextSecondary}"/>
-                            <TextBlock x:Name="arrow" Grid.Column="4" Text="&#xE76C;" FontFamily="{StaticResource Font.Icon}" FontSize="9" Margin="12,0,0,0"
+                            <TextBlock x:Name="arrow" Grid.Column="4" Text="&#xE76C;" FontFamily="{StaticResource Font.Icon}" FontSize="11" Margin="12,0,0,0"
                                        VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}" Visibility="Collapsed"/>
                             <Popup x:Name="PART_Popup" IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}" Placement="Right"
                                    HorizontalOffset="10" VerticalOffset="-7" AllowsTransparency="True" Focusable="False" PopupAnimation="None">
@@ -1380,4 +1485,49 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Background" Value="{DynamicResource Brush.TextDisabled}"/>
         </Style>
+
+    <!-- small buttons of the filter and view builders -->
+    <Style x:Key="Mini" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
+        <Setter Property="MinHeight" Value="26"/>
+        <Setter Property="Padding" Value="8,2"/>
+        <Setter Property="Margin" Value="4,0,0,0"/>
+    </Style>
+    <Style x:Key="IconMini" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Icon}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinHeight" Value="22"/>
+        <Setter Property="MinWidth" Value="22"/>
+        <Setter Property="Padding" Value="4,2"/>
+        <Setter Property="Margin" Value="2,0,0,0"/>
+    </Style>
+    <!-- 28 px round icon buttons of the floating chips (Button and ToggleButton) -->
+    <Style x:Key="GlassIconButton" TargetType="Button">
+    <Setter Property="Width" Value="28"/>
+    <Setter Property="Height" Value="28"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+    <Setter Property="FontFamily" Value="{StaticResource Font.Icon}"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="Button">
+                <Border x:Name="bd" CornerRadius="14" Background="Transparent">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="bd" Property="Background" Value="{DynamicResource Brush.ControlHover}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+                    </Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True">
+                        <Setter TargetName="bd" Property="Background" Value="{DynamicResource Brush.ControlHover}"/>
+                    </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Opacity" Value="0.4"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+    </Style>
 </ResourceDictionary>

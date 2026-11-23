@@ -13,7 +13,7 @@ public static class ComputerDetailsStore
     public const string FolderName = "SystemInfo";
     public const string JsonName = "ComputerDetails.json";
     public const string CsvName = "ComputerDetails.csv";
-    /// <summary>Tool id of the built-in job (Jobs page, run manifest).</summary>
+    /// <summary>Tool id of the built-in job (Ingest job list, run manifest).</summary>
     public const string ToolId = "ezforensics-computer-details";
     /// <summary>The id older run manifests (EZ Hub era) carry; read as <see cref="ToolId"/>.</summary>
     public const string LegacyToolId = "ezhub-computer-details";

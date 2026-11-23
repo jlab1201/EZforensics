@@ -139,8 +139,8 @@ public sealed partial class ViewBuilderViewModel : ObservableObject, IDisposable
     public bool CanApply => HasCsv && Columns.Any(c => c.IsVisible);
     /// <summary>OK / Close: Close (Saved tab) always works; OK needs a CSV and one visible column.</summary>
     public bool CanOk => CanApply || SelectedTabIndex == 1;
-    public string ApplyTip => !HasCsv ? "Open a CSV first" : (CanApply ? "Applies the layout to the grid (window stays open)" : "Show at least one column");
-    public string OkTip => !HasCsv ? "Open a CSV first" : (CanApply ? "Applies the layout to the grid and closes" : "Show at least one column");
+    public string ApplyTip => !HasCsv ? "Open a CSV first" : (CanApply ? "Applies the layout to the table (window stays open)" : "Show at least one column");
+    public string OkTip => !HasCsv ? "Open a CSV first" : (CanApply ? "Applies the layout to the table and closes" : "Show at least one column");
 
     partial void OnSelectedTabIndexChanged(int value) => OnPropertyChanged(nameof(CanOk));
 

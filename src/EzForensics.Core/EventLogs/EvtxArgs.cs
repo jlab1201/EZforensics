@@ -38,5 +38,5 @@ public static class EvtxArgs
     }
 
     /// <summary>"28 of 50 events · 10 groups".</summary>
-    public static string Summary(EvtxSelection s) => $"{s.SelectedCount} of {s.TotalCount} events · {s.GroupCount} groups";
+    public static string Summary(EvtxSelection s) => $"{s.SelectedCount} of {s.TotalCount} {(s.TotalCount == 1 ? "event" : "events")} · {EzForensics.Core.Common.Plural.Of(s.GroupCount, "group")}";
 }

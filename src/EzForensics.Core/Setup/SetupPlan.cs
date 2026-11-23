@@ -23,6 +23,10 @@ public enum SetupStepKind
     InstallVolatility,
     /// <summary>Optional offline Windows symbol pack (windows.zip) extracted into the Volatility symbols folder.</summary>
     InstallVolatilitySymbols,
+    /// <summary>One Explore tool (DIE, ExifTool, CyberChef): pinned zip download, SHA-256 check, extract into the per-user tools folder. No admin.</summary>
+    InstallExploreTool,
+    /// <summary>Local AI for Spectre: Ollama (official per-user installer), its tuning, the recommended model, then the assistant is pointed at it. No admin.</summary>
+    InstallLocalAi,
     /// <summary><c>wsl --install --no-distribution</c>, elevated (UAC); Windows must restart afterwards.</summary>
     EnableWsl,
     /// <summary>EZ Forensics' private WSL distro: pinned rootfs download + SHA-256, <c>wsl --import</c>, first-boot script (no admin).</summary>
@@ -75,6 +79,11 @@ public sealed class SetupSelection
             foreach (var i in b.Items.Where(i => !i.ComingSoon))
             {
                 if (i.Hidden) continue; // hidden items (the WSL distro) come in through Requires
+                if (i.Id == SetupIds.LocalAi) // Everything always ticks it (a weak PC gets the small model); Minimal only when this PC runs a local model well
+                {
+                    if (profile == SetupProfile.Everything || (system != null && Assistant.LocalAiAdvisor.Recommend(system).RecommendLocal)) s.Items.Add(i.Id);
+                    continue;
+                }
                 if (i.OptIn && profile != SetupProfile.Everything) continue; // opt-in extras: only Everything (or the user's tick)
                 if (i.Id == SetupIds.Dotnet9 && net9) continue;
                 bool on = profile == SetupProfile.Everything || i.DefaultOn;
@@ -262,7 +271,7 @@ public static class SetupPlanner
                 if (item.RequiresNet9 && !system.HasNet9 && sel.Items.Add(SetupIds.Dotnet9))
                 {
                     changed = true;
-                    notes.Add($"{item.Title} needs the .NET 9 runtime, which is not installed: the private .NET 9 runtime was added (per user, no admin).");
+                    notes.Add($"{item.Title} needs the .NET 9 and 10 runtimes, which are not installed: private copies were added (per user, no admin).");
                 }
             }
         }
@@ -298,14 +307,14 @@ public static class SetupPlanner
             var item = catalog.Find(SetupIds.Dotnet9)!;
             dotnet = Add(new SetupStep
             {
-                Id = "dotnet9", Kind = SetupStepKind.InstallDotnet, ItemId = item.Id, Title = "Install the .NET 9 Desktop Runtime (private copy)",
-                Detail = "Downloads Microsoft's official dotnet-install.ps1 from https://dot.net/v1/dotnet-install.ps1 and installs the .NET 9 Desktop Runtime into EZ Forensics' data folder (per user, no admin rights, no PATH or system changes).",
+                Id = "dotnet9", Kind = SetupStepKind.InstallDotnet, ItemId = item.Id, Title = "Install the .NET 9 and 10 Desktop Runtimes (private copy)",
+                Detail = "Downloads Microsoft's official dotnet-install.ps1 from https://dot.net/v1/dotnet-install.ps1 and installs the .NET 9 and 10 Desktop Runtimes into EZ Forensics' data folder (per user, no admin rights, no PATH or system changes).",
                 DownloadMB = item.DownloadMB, DiskMB = item.DiskMB, EstimatedSeconds = Secs(item.DownloadMB, 30),
             });
             if (system.HasNet9)
             {
                 dotnet.State = SetupStepState.AlreadyInstalled;
-                dotnet.Message = system.HasSystemNet9 ? "The .NET 9 runtime is already installed on this computer." : "EZ Forensics' private .NET 9 runtime is already installed.";
+                dotnet.Message = system.HasSystemNet9 ? "The .NET 9 and 10 runtimes are already installed on this computer." : "EZ Forensics' private .NET 9 and 10 runtimes are already installed.";
             }
         }
         bool net9 = system.HasNet9 || dotnet != null;
@@ -430,6 +439,35 @@ public static class SetupPlanner
                 DownloadMB = item.DownloadMB, DiskMB = item.DiskMB, EstimatedSeconds = Secs(item.DownloadMB, 60),
             });
             if (system.VolatilitySymbolsInstalled) { sym.State = SetupStepState.AlreadyInstalled; sym.Message = "The Windows symbol pack is already installed."; }
+        }
+
+        foreach (var (itemId, spec) in new[] { (SetupIds.ExploreDie, Explore.ExploreToolReleases.Die), (SetupIds.ExploreExifTool, Explore.ExploreToolReleases.ExifTool),
+                     (SetupIds.ExploreCyberChef, Explore.ExploreToolReleases.CyberChef) })
+        {
+            if (!sel.Has(itemId)) continue;
+            int dl = (int)Math.Max(1, spec.Size / (1024 * 1024));
+            var step = new SetupStep
+            {
+                Id = itemId, Kind = SetupStepKind.InstallExploreTool, ItemId = itemId, Title = $"Install {spec.Name} ({spec.Version})",
+                Detail = $"Downloads {spec.Url} and checks its SHA-256 before extracting it into EZ Forensics' tools folder (Explore page).",
+                DownloadMB = dl, DiskMB = (int)Math.Max(1, spec.Size * 3 / (1024 * 1024)), EstimatedSeconds = Secs(dl, 20),
+            };
+            Add(step);
+            if (system.ExploreCurrent.Contains(spec.Tool.ToString())) { step.State = SetupStepState.AlreadyInstalled; step.Message = $"{spec.Name} {spec.Version} is already installed."; }
+        }
+
+        if (sel.Has(SetupIds.LocalAi))
+        {
+            var (model, gb) = Assistant.LocalAiAdvisor.ModelToInstall(Assistant.LocalAiAdvisor.Recommend(system));
+            int dl = (int)(gb * 1024) + (system.Ollama.Installed ? 0 : 1300);
+            var step = new SetupStep
+            {
+                Id = SetupIds.LocalAi, Kind = SetupStepKind.InstallLocalAi, ItemId = SetupIds.LocalAi, Title = $"Local AI: Ollama + {model}",
+                Detail = $"Installs Ollama from ollama.com (per user, no admin), downloads {model} (≈{gb:0.#} GB) and points Spectre at it. Anything already there is skipped.",
+                DownloadMB = dl, DiskMB = dl * 2, EstimatedSeconds = Secs(dl, 40),
+                Args = new Dictionary<string, string> { ["model"] = model },
+            };
+            Add(step); // never "already installed": the step also points Spectre at the model, and skips what is there
         }
 
         if (sel.Has(SetupIds.Zeek) || sel.Has(SetupIds.EzDistro) || sel.Has(SetupIds.Rita)) PlanNetwork(sel, system, notes, Add);

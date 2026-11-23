@@ -72,7 +72,7 @@ public sealed partial class TriageViewModel
     private static bool MftExists(string path) =>
         File.Exists(path) || Path.GetDirectoryName(path) is not { } dir || string.Equals(dir.TrimEnd('\\', '/'), Path.GetPathRoot(path)?.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Lists a MACB timeline that did not start on the Jobs page (a Failed job holding the reason) and on its row.</summary>
+    /// <summary>Lists a MACB timeline that did not start in the Jobs list on Ingest (a Failed job holding the reason) and on its row.</summary>
     private void ListMacbNotStarted(PlannedJobItem row, string caseDir, string host, string reason)
     {
         try
@@ -80,7 +80,7 @@ public sealed partial class TriageViewModel
             var job = MacbTimelineRunner.EnqueueNotStarted(S.Queue, caseDir, row.Planned.Spec.OutputDir, host, reason);
             AppServices.OnUi(() => { row.AttachJob(job); _timelineJobs.Add(job); });
         }
-        catch (Exception ex) { AppLog.Error("Could not list the MACB timeline that did not start on the Jobs page", ex); }
+        catch (Exception ex) { AppLog.Error("Could not list the MACB timeline that did not start in the Jobs list on Ingest", ex); }
     }
 
     private async Task<MacbTimelineOutcome> BuildMacbTimelineAsync(PlannedJobItem row, string caseDir, CancellationToken ct)
@@ -113,7 +113,7 @@ public sealed partial class TriageViewModel
             j.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(EzForensics.Core.Execution.Job.State)) RefreshRunGate(); };
             if (_stopRequested) j.Cancel();
         }), ct: ct);
-        return r.Succeeded ? new MacbTimelineOutcome(host, MacbTimelineState.Built, r.Rows, r.OutputCsv)
+        return r.Succeeded ? new MacbTimelineOutcome(host, MacbTimelineState.Built, r.Rows, r.OutputCsv, SkippedLines: r.SkippedLines)
             : r.Cancelled ? new MacbTimelineOutcome(host, MacbTimelineState.Cancelled)
             : new MacbTimelineOutcome(host, MacbTimelineState.Failed, Error: r.Error);
     }

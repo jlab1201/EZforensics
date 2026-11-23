@@ -5,7 +5,7 @@ using EzForensics.Core.Runtimes;
 
 namespace EzForensics.Core.Zeek;
 
-/// <summary>One install/update/uninstall step, run as a JobQueue job (logged, on the Jobs page, in the run manifest).</summary>
+/// <summary>One install/update/uninstall step, run as a JobQueue job (logged, in the Jobs list on Ingest, in the run manifest).</summary>
 public sealed record ZeekSetupStep(string ToolId, string Exe, IReadOnlyList<string> Args, string Label, TimeSpan Timeout,
     IReadOnlyDictionary<string, string>? Environment = null)
 {

@@ -30,7 +30,7 @@ public abstract class FilterNode
     internal abstract string Render(bool nested);
 
     /// <summary>Returns a row predicate, or null when the node places no constraint.</summary>
-    internal abstract Func<string[], bool>? Compile(Func<string, int> columnIndex);
+    internal abstract Func<string[], bool>? Compile(Func<string, int> columnIndex, bool monthFirst = false);
 
     internal static string Quote(string s) => "'" + s.Replace("'", "''") + "'";
     /// <summary>Reserved <see cref="FilterCondition.Column"/> meaning "any column" (shown as <c>*</c>).</summary>
@@ -93,9 +93,9 @@ public sealed class FilterGroup : FilterNode
         return nested && parts.Count > 1 ? "(" + body + ")" : body;
     }
 
-    internal override Func<string[], bool>? Compile(Func<string, int> columnIndex)
+    internal override Func<string[], bool>? Compile(Func<string, int> columnIndex, bool monthFirst = false)
     {
-        var preds = Children.Where(c => !c.IsEmpty).Select(c => c.Compile(columnIndex)).Where(p => p != null).Cast<Func<string[], bool>>().ToArray();
+        var preds = Children.Where(c => !c.IsEmpty).Select(c => c.Compile(columnIndex, monthFirst)).Where(p => p != null).Cast<Func<string[], bool>>().ToArray();
         if (preds.Length == 0) return null;
         Func<string[], bool> f;
         if (preds.Length == 1) f = preds[0];
@@ -160,12 +160,12 @@ public sealed class FilterCondition : FilterNode
         };
     }
 
-    internal override Func<string[], bool>? Compile(Func<string, int> columnIndex)
+    internal override Func<string[], bool>? Compile(Func<string, int> columnIndex, bool monthFirst = false)
     {
-        if (Column == AnyColumn) return CompileAny();
+        if (Column == AnyColumn) return CompileAny(monthFirst);
         int col = columnIndex(Column);
-        if (col < 0) return null; // unknown column: ignored
-        var test = CellTest(Op);
+        if (col < 0) return _ => false; // unknown column: matches nothing (the UI warns), so Not(...) of it is not a silent no-op
+        var test = CellTest(Op, monthFirst);
         return test == null ? null : r => test(Cell(r, col));
     }
 
@@ -173,7 +173,7 @@ public sealed class FilterCondition : FilterNode
     /// "Any field": positive operators match when any cell matches; negative operators (Not Contains, &lt;&gt;, IsEmpty) match when no cell
     /// matches the positive counterpart (Contains, =, IsNotEmpty).
     /// </summary>
-    private Func<string[], bool>? CompileAny()
+    private Func<string[], bool>? CompileAny(bool monthFirst)
     {
         var (positive, negated) = Op switch
         {
@@ -182,7 +182,7 @@ public sealed class FilterCondition : FilterNode
             ColumnFilterMode.IsEmpty => (ColumnFilterMode.IsNotEmpty, true),
             _ => (Op, false),
         };
-        var test = CellTest(positive);
+        var test = CellTest(positive, monthFirst);
         if (test == null) return null;
         return r =>
         {
@@ -192,7 +192,7 @@ public sealed class FilterCondition : FilterNode
     }
 
     /// <summary>The test one cell must pass for <paramref name="op"/> with this condition's operands (compiled once); null when the operator is unknown.</summary>
-    private Func<string, bool>? CellTest(ColumnFilterMode op)
+    private Func<string, bool>? CellTest(ColumnFilterMode op, bool monthFirst)
     {
         var value = Value;
         const StringComparison ic = StringComparison.OrdinalIgnoreCase;
@@ -218,18 +218,18 @@ public sealed class FilterCondition : FilterNode
             }
             case ColumnFilterMode.Greater:
             {
-                var cmp = ValueComparer.Create(value);
+                var cmp = ValueComparer.Create(value, monthFirst);
                 return c => cmp.Compare(c) is > 0;
             }
             case ColumnFilterMode.Less:
             {
-                var cmp = ValueComparer.Create(value);
+                var cmp = ValueComparer.Create(value, monthFirst);
                 return c => cmp.Compare(c) is < 0;
             }
             case ColumnFilterMode.Between:
             {
-                var lo = string.IsNullOrEmpty(value) ? null : ValueComparer.Create(value);
-                var hi = string.IsNullOrEmpty(Value2) ? null : ValueComparer.Create(Value2!);
+                var lo = string.IsNullOrEmpty(value) ? null : ValueComparer.Create(value, monthFirst);
+                var hi = string.IsNullOrEmpty(Value2) ? null : ValueComparer.Create(Value2!, monthFirst);
                 return cell =>
                 {
                     if (lo != null && lo.Compare(cell) is not >= 0) return false;
@@ -268,14 +268,15 @@ public sealed class FilterCondition : FilterNode
         private readonly string _s;
         private readonly double _d;
         private readonly DateTime _t;
+        private readonly bool _monthFirst;
 
-        private ValueComparer(int kind, string s, double d, DateTime t) { _kind = kind; _s = s; _d = d; _t = t; }
+        private ValueComparer(int kind, string s, double d, DateTime t, bool monthFirst) { _kind = kind; _s = s; _d = d; _t = t; _monthFirst = monthFirst; }
 
-        public static ValueComparer Create(string operand)
+        public static ValueComparer Create(string operand, bool monthFirst)
         {
-            if (CsvValueParser.TryParseNumber(operand, out var d)) return new ValueComparer(1, operand, d, default);
-            if (CsvValueParser.TryParseDate(operand, out var t)) return new ValueComparer(2, operand, 0, t);
-            return new ValueComparer(0, operand, 0, default);
+            if (CsvValueParser.TryParseNumber(operand, out var d)) return new ValueComparer(1, operand, d, default, monthFirst);
+            if (CsvValueParser.TryParseDate(operand, out var t, monthFirst)) return new ValueComparer(2, operand, 0, t, monthFirst);
+            return new ValueComparer(0, operand, 0, default, monthFirst);
         }
 
         /// <summary>Sign of (cell - operand), or null when the cell is empty or not comparable.</summary>
@@ -285,7 +286,7 @@ public sealed class FilterCondition : FilterNode
             switch (_kind)
             {
                 case 1: return CsvValueParser.TryParseNumber(cell, out var d) ? d.CompareTo(_d) : null;
-                case 2: return CsvValueParser.TryParseDate(cell, out var t) ? t.CompareTo(_t) : null;
+                case 2: return CsvValueParser.TryParseDate(cell, out var t, _monthFirst) ? t.CompareTo(_t) : null;
                 default: return Math.Sign(string.Compare(cell, _s, StringComparison.OrdinalIgnoreCase));
             }
         }
@@ -328,10 +329,10 @@ public sealed class FilterValueSet : FilterNode
         return nested && parts.Count > 1 ? "(" + body + ")" : body;
     }
 
-    internal override Func<string[], bool>? Compile(Func<string, int> columnIndex)
+    internal override Func<string[], bool>? Compile(Func<string, int> columnIndex, bool monthFirst = false)
     {
         int col = columnIndex(Column);
-        if (col < 0) return null;
+        if (col < 0) return _ => false; // unknown column: matches nothing
         var set = new HashSet<string>(Values, StringComparer.OrdinalIgnoreCase);
         bool blanks = IncludeBlanks;
         return r =>
@@ -340,6 +341,40 @@ public sealed class FilterValueSet : FilterNode
             return c.Length == 0 ? blanks : set.Contains(c);
         };
     }
+}
+
+/// <summary>
+/// Row-flag condition: <c>[Flag]</c> (flagged with any flag), <c>[Flag] In ('id', ...)</c> (flagged with one of these flag ids) or <c>Not [Flag]</c> (not flagged).
+/// Flags are not in the CSV cells, so the node compiles to no cell predicate; the grid turns it into its flag filter (top level of the expression only).
+/// </summary>
+public sealed class FilterFlag : FilterNode
+{
+    /// <summary>The reserved field name used in the filter syntax.</summary>
+    public const string FieldName = "Flag";
+
+    public FilterFlag() { }
+    public FilterFlag(bool flagged, IEnumerable<string>? ids = null)
+    {
+        Flagged = flagged;
+        if (flagged && ids != null) Ids = new HashSet<string>(ids.Where(v => v.Length > 0), StringComparer.Ordinal);
+    }
+
+    /// <summary>True = flagged (optionally only with <see cref="Ids"/>), false = not flagged.</summary>
+    public bool Flagged { get; set; } = true;
+    /// <summary>Flag ids (empty = any flag); only used when <see cref="Flagged"/>.</summary>
+    public HashSet<string> Ids { get; set; } = new(StringComparer.Ordinal);
+
+    public override bool IsEmpty => false;
+    public override FilterNode Clone() => new FilterFlag(Flagged, Ids);
+    public override bool References(string column) => false;
+
+    internal override string Render(bool nested)
+    {
+        if (!Flagged) return "Not [Flag]";
+        return Ids.Count == 0 ? "[Flag]" : "[Flag] In (" + string.Join(", ", Ids.OrderBy(c => c, StringComparer.Ordinal).Select(Quote)) + ")";
+    }
+
+    internal override Func<string[], bool>? Compile(Func<string, int> columnIndex, bool monthFirst = false) => null;
 }
 
 /// <summary>Column parses as a timestamp whose (UTC) day is one of <see cref="Days"/>; empty/unparseable cells match when <see cref="IncludeBlanks"/>.</summary>
@@ -389,16 +424,16 @@ public sealed class FilterDateSet : FilterNode
 
     private static string Day(DateOnly d) => "#" + d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "#";
 
-    internal override Func<string[], bool>? Compile(Func<string, int> columnIndex)
+    internal override Func<string[], bool>? Compile(Func<string, int> columnIndex, bool monthFirst = false)
     {
         int col = columnIndex(Column);
-        if (col < 0) return null;
+        if (col < 0) return _ => false; // unknown column: matches nothing
         var days = new HashSet<DateOnly>(Days);
         bool blanks = IncludeBlanks;
         return r =>
         {
             var c = Cell(r, col);
-            return c.Length > 0 && CsvValueParser.TryParseDate(c, out var dt) ? days.Contains(DateOnly.FromDateTime(dt)) : blanks;
+            return c.Length > 0 && CsvValueParser.TryParseDate(c, out var dt, monthFirst) ? days.Contains(DateOnly.FromDateTime(dt)) : blanks;
         };
     }
 }

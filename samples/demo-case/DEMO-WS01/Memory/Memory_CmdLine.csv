@@ -1,0 +1,17 @@
+TreeDepth,PID,Process,Args
+0,4,System,Required memory at 0x20 is not valid (process exited?)
+0,312,smss.exe,C:\Windows\System32\smss.exe
+0,500,wininit.exe,wininit.exe
+0,548,winlogon.exe,winlogon.exe
+0,620,services.exe,C:\Windows\System32\services.exe
+0,636,lsass.exe,C:\Windows\System32\lsass.exe
+0,780,svchost.exe,C:\Windows\System32\svchost.exe -k DcomLaunch -p
+0,856,svchost.exe,C:\Windows\System32\svchost.exe -k RPCSS -p
+0,1012,svchost.exe,C:\Windows\System32\svchost.exe -k netsvcs -p
+0,3012,explorer.exe,C:\Windows\Explorer.EXE
+0,4120,WINWORD.EXE,"""C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"" /n ""C:\Users\demo.user\Downloads\Invoice_2026-03.docm"" /o """""
+0,5232,powershell.exe,powershell.exe -NoProfile -WindowStyle Hidden -enc VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIABkAGUAbQBvAA==
+0,5240,conhost.exe,\??\C:\Windows\system32\conhost.exe 0xffffffff -ForceV1
+0,5480,rundll32.exe,"""C:\Windows\System32\rundll32.exe"" C:\Users\demo.user\AppData\Local\Temp\msupd.dll,DllRegisterServer"
+0,6104,svchost.exe,C:\Windows\System32\svchost.exe -k netsvcs -p
+0,7120,updsvc.exe,"""C:\ProgramData\DemoUpdate\updsvc.exe"" --service"

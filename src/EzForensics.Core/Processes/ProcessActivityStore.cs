@@ -106,12 +106,24 @@ public sealed class ProcessActivityStore : IProcessDetailSource, IDisposable
 
     public Dictionary<ProcessTab, int> Counts(ProcessNode node)
     {
+        var c = new Dictionary<ProcessTab, int>(TabCounts(node));
+        if (EntryOf(ref node) == null) return c;
+        c[ProcessTab.Sources] = Sources(node).Rows.Count(r => r.Cells.Length > 1 && r.Cells[1] == ProcessActivity.FoundStatus);
+        return c;
+    }
+
+    /// <summary>
+    /// Linked rows per data tab as the correlator counted them (the Processes.csv count columns, the same rows the card's tabs list): an in-memory lookup that reads
+    /// no file, so the tree can badge every node at once. Sources and Overview are 0 (see <see cref="Counts"/> for the card's rail).
+    /// </summary>
+    public IReadOnlyDictionary<ProcessTab, int> TabCounts(ProcessNode node)
+    {
         var e = EntryOf(ref node);
         var c = Enum.GetValues<ProcessTab>().ToDictionary(t => t, _ => 0);
         if (e == null) return c;
         foreach (var (t, v) in e.Counts) c[t] = v;
         c[ProcessTab.Overview] = 0;
-        c[ProcessTab.Sources] = Sources(node).Rows.Count(r => r.Cells.Length > 1 && r.Cells[1] == ProcessActivity.FoundStatus);
+        c[ProcessTab.Sources] = 0;
         return c;
     }
 

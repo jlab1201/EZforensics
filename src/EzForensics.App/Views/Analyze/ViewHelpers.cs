@@ -68,8 +68,9 @@ internal static class ViewHelpers
             vm.ShowMessage("Open a CSV first.", InfoSeverity.Warning);
             return;
         }
-        var bvm = new FilterBuilderViewModel(vm.Headers, vm.BuildExpression(), vm.GlobalText, vm.ActiveSavedFilter,
-            vm.CurrentSignature, vm.CurrentCategoryName, vm);
+        var bvm = new FilterBuilderViewModel(vm.Headers, vm.BuildExpressionWithFlag(), vm.GlobalText, vm.ActiveSavedFilter,
+            vm.CurrentSignature, vm.CurrentCategoryName, vm,
+            vm.FlagOptions.Select(o => (o.Id, o.Label)).ToList());
         if (savedTab) bvm.SelectedTabIndex = 1;
         var win = new FilterBuilderWindow { DataContext = bvm, Owner = Window.GetWindow(owner) };
         win.Closed += (_, _) => { if (ReferenceEquals(_filterBuilder, win)) _filterBuilder = null; };

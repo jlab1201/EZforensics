@@ -12,14 +12,17 @@ public sealed record CsvMergeOptions
     public bool AddHostColumn { get; init; } = true;
 }
 
+/// <param name="SourceFileColumnName">Header of the added source-CSV column, or null when none was added. "SourceFile" unless an input has its own column of that name (EvtxECmd does).</param>
 /// <param name="InputSha256">Lower-case hex SHA-256 of each input file's raw bytes, keyed by input path.</param>
 public sealed record CsvMergeResult(long RowsWritten, IReadOnlyList<string> Headers,
-    IReadOnlyDictionary<string, string> InputSha256, string OutputSha256);
+    IReadOnlyDictionary<string, string> InputSha256, string OutputSha256, string? SourceFileColumnName = null);
 
 public static class CsvMerger
 {
     public const string SourceFileColumn = "SourceFile";
     public const string HostColumn = "Host";
+    /// <summary>Name of the added source-CSV column when an input already has its own <see cref="SourceFileColumn"/>.</summary>
+    public const string SourceCsvColumn = "SourceCsv";
 
     /// <summary>True when every file has the identical header sequence (case-insensitive). False for an empty list or an unreadable file.</summary>
     public static bool HaveSameSchema(IEnumerable<string> paths)
@@ -55,9 +58,18 @@ public static class CsvMerger
                 throw new InvalidOperationException("The output file cannot be one of the input files.");
         if (File.Exists(outFull)) throw new IOException($"Output file already exists: {outFull}");
 
-        // Pass 1: union of headers.
+        // Pass 1: union of headers. The inputs' own columns keep their names; the added SourceFile column yields on a clash.
+        var allHeaders = new string[inputs.Count][];
+        for (int f = 0; f < inputs.Count; f++) { ct.ThrowIfCancellationRequested(); allHeaders[f] = ReadHeaders(inputs[f].Path); }
+        string? sourceName = null;
+        if (options.AddSourceFileColumn)
+        {
+            sourceName = SourceFileColumn;
+            for (int k = 1; allHeaders.Any(h => h.Contains(sourceName, StringComparer.OrdinalIgnoreCase)); k++)
+                sourceName = k == 1 ? SourceCsvColumn : $"{SourceCsvColumn} ({k})";
+        }
         var added = new List<string>();
-        if (options.AddSourceFileColumn) added.Add(SourceFileColumn);
+        if (sourceName != null) added.Add(sourceName);
         if (options.AddHostColumn) added.Add(HostColumn);
         var headers = new List<string>(added);
         var index = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -66,7 +78,7 @@ public static class CsvMerger
         for (int f = 0; f < inputs.Count; f++)
         {
             ct.ThrowIfCancellationRequested();
-            var h = ReadHeaders(inputs[f].Path);
+            var h = allHeaders[f];
             var map = new int[h.Length];
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int c = 0; c < h.Length; c++)
@@ -143,7 +155,7 @@ public static class CsvMerger
                 outHash = Convert.ToHexString(await SHA256.HashDataAsync(rs, ct).ConfigureAwait(false)).ToLowerInvariant();
             completed = true;
             progress?.Report(1.0);
-            return new CsvMergeResult(rows, headers, hashes, outHash);
+            return new CsvMergeResult(rows, headers, hashes, outHash, sourceName);
         }
         finally
         {

@@ -43,11 +43,26 @@ public sealed class ProcessGraphCanvas : Border
     /// <summary>Floor grid: one cell is this many layout units (half a row step), at least <see cref="MinGridCellPx"/> high on screen (doubled when zoomed out).</summary>
     public const double GridCell = 93, MinGridCellPx = 18, GridLinePx = 0.7, GridOpacity = 0.4;
 
+    /// <summary>
+    /// Inherited by the node presenters: true while the names are readable (on-screen name ≥ <see cref="NearNamePx"/>), so a node template shows its small extras
+    /// (the data chips above the diamond) only then. Set on the node and boot-chain layers by <see cref="UpdateSemanticZoom"/>.
+    /// </summary>
+    public static readonly DependencyProperty NamesVisibleProperty = DependencyProperty.RegisterAttached("NamesVisible", typeof(bool), typeof(ProcessGraphCanvas),
+        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.Inherits));
+    public static bool GetNamesVisible(DependencyObject d) => (bool)d.GetValue(NamesVisibleProperty);
+    public static void SetNamesVisible(DependencyObject d, bool value) => d.SetValue(NamesVisibleProperty, value);
+
     public static readonly DependencyProperty ShowGridProperty = DependencyProperty.Register(nameof(ShowGrid), typeof(bool), typeof(ProcessGraphCanvas),
         new PropertyMetadata(true, (d, e) => ((ProcessGraphCanvas)d).ApplyShowGrid((bool)e.NewValue)));
 
     /// <summary>Draw the floor grid (View › Show grid); off removes the floor brush.</summary>
     public bool ShowGrid { get => (bool)GetValue(ShowGridProperty); set => SetValue(ShowGridProperty, value); }
+
+    public static readonly DependencyProperty FitToScreenProperty = DependencyProperty.Register(nameof(FitToScreen), typeof(bool), typeof(ProcessGraphCanvas),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
+
+    /// <summary>View › Fit to screen: while set the graph is refitted after each re-layout and on resize; any user zoom / pan (wheel, drag, slider, buttons, region click) or a centring clears it.</summary>
+    public bool FitToScreen { get => (bool)GetValue(FitToScreenProperty); set => SetValue(FitToScreenProperty, value); }
 
     public static readonly DependencyProperty ZoomProperty = DependencyProperty.Register(nameof(Zoom), typeof(double), typeof(ProcessGraphCanvas),
         new FrameworkPropertyMetadata(1.0, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, (d, e) => ((ProcessGraphCanvas)d).OnZoomChanged((double)e.NewValue),
@@ -202,7 +217,7 @@ public sealed class ProcessGraphCanvas : Border
         _host.Children.Add(_canvas);
         Child = _host;
         UpdateFloor();
-        SizeChanged += (_, _) => { if (_fitPending && ActualWidth > 0) Fit(); UpdateSemanticZoom(); };
+        SizeChanged += (_, _) => { if ((_fitPending || FitToScreen) && ActualWidth > 0) Fit(); UpdateSemanticZoom(); };
     }
 
     private void OnZoomChanged(double z)
@@ -210,6 +225,7 @@ public sealed class ProcessGraphCanvas : Border
         if (_settingZoom) return;
         double old = _scale.ScaleX;
         if (Math.Abs(old - z) < 1e-9) return;
+        FitToScreen = false;
         double px = ActualWidth / 2, py = ActualHeight / 2;
         double cx = (px - _translate.X) / old, cy = (py - _translate.Y) / old;
         SetView(z, px - cx * z, py - cy * z);
@@ -251,8 +267,8 @@ public sealed class ProcessGraphCanvas : Border
     {
         bool wasEmpty = _presenters.Count == 0;
         Rebuild(clear: false);
-        // an expand / collapse never moves the view (no fit, no pan): only a new tree or an explicit Fit does
-        if (wasEmpty || _fitPending) Fit();
+        // an expand / collapse never moves the view (no fit, no pan): only a new tree, an explicit Fit or the Fit to screen option does
+        if (wasEmpty || _fitPending || FitToScreen) Fit();
     }
 
     /// <summary>Lays out the expanded part of the graph and syncs the node presenters (reused across layouts).</summary>
@@ -466,6 +482,10 @@ public sealed class ProcessGraphCanvas : Border
         // boot pills never overlap each other: the inverse scale is capped by the tightest pair (down to a still readable name), at least 1 (zoom 1 clears)
         double bootTarget = Lerp(1, BootScreenScale / z, far);
         _bootScale.ScaleX = _bootScale.ScaleY = Math.Max(1, Math.Min(bootTarget, Math.Max(_bootSpacing, MinBootNamePx / (NameFontPx * z))));
+        // node extras (data chips) only while the names are readable; the boot chain is inverse-scaled, so it uses its own on-screen size
+        bool names = NameFontPx * z >= NearNamePx, bootNames = NameFontPx * z * _bootScale.ScaleX >= NearNamePx;
+        if (GetNamesVisible(_nodeLayer) != names) SetNamesVisible(_nodeLayer, names);
+        if (GetNamesVisible(_bootLayer) != bootNames) SetNamesVisible(_bootLayer, bootNames);
 
         bool clickable = far >= 0.3;
         foreach (var r in _regions)
@@ -482,6 +502,7 @@ public sealed class ProcessGraphCanvas : Border
         if (ActualWidth <= 0 || ActualHeight <= 0 || r.IsEmpty) return;
         double h = Math.Max(1, ActualHeight - FitBottomInset);
         double z = Math.Clamp(Math.Min((ActualWidth - 2 * Margin0) / r.Width, (h - 2 * Margin0) / r.Height), MinZoom, 1);
+        FitToScreen = false;
         SetView(z, ActualWidth / 2 - (r.X + r.Width / 2) * z, h / 2 - (r.Y + r.Height / 2) * z);
     }
 
@@ -635,16 +656,30 @@ public sealed class ProcessGraphCanvas : Border
     /// <summary>Height kept free at the bottom by <see cref="Fit"/> (the pane's floating bottom bar sits there).</summary>
     public double FitBottomInset { get; set; }
 
-    /// <summary>Zooms (at most 100 %) so the whole expanded graph fits, centred with a margin above <see cref="FitBottomInset"/> (top-left aligned when it does not fit).</summary>
+    /// <summary>Width covered on the left / right by floating panes (Navigator, Details card): <see cref="Fit"/> fits the graph into what stays visible.</summary>
+    public double FitLeftInset { get; set; }
+    public double FitRightInset { get; set; }
+
+    /// <summary>Largest zoom <see cref="Fit"/> grows a small tree to (names are readable from ~0.62: <see cref="NameFontPx"/> at 10 px).</summary>
+    public const double MaxFitZoom = 1.5;
+
+    /// <summary>
+    /// Zooms (at most <see cref="MaxFitZoom"/>) so the whole expanded graph fits the visible area (the viewport minus the open Navigator / Details panes on the sides and
+    /// <see cref="FitBottomInset"/> at the bottom), centred there with a margin (top-left aligned when it does not fit). The zoom is the largest that fits, so it is
+    /// already at least ~0.62 (names visible) whenever the tree fits at that zoom.
+    /// </summary>
     public void Fit()
     {
         if (ActualWidth <= 0 || ActualHeight <= 0) { _fitPending = true; return; }
         _fitPending = false;
         if (_content.IsEmpty || _content.Width <= 0 || _content.Height <= 0) { SetView(1, Margin0, Margin0); return; }
         double h = Math.Max(1, ActualHeight - FitBottomInset);
-        double z = Math.Min((ActualWidth - 2 * Margin0) / _content.Width, (h - 2 * Margin0) / _content.Height);
-        z = Math.Clamp(z, MinZoom, 1);
-        double x = Math.Max(Margin0, (ActualWidth - _content.Width * z) / 2) - _content.X * z;
+        double left = Math.Max(0, FitLeftInset), right = Math.Max(0, FitRightInset);
+        if (ActualWidth - left - right < 2 * Margin0 + 160) left = right = 0;   // panes cover (nearly) everything: ignore them
+        double w = ActualWidth - left - right;
+        double z = Math.Min((w - 2 * Margin0) / _content.Width, (h - 2 * Margin0) / _content.Height);
+        z = Math.Clamp(z, MinZoom, MaxFitZoom);
+        double x = left + Math.Max(Margin0, (w - _content.Width * z) / 2) - _content.X * z;
         double y = Math.Max(Margin0, (h - _content.Height * z) / 2) - _content.Y * z;
         SetView(z, x, y);
     }
@@ -655,6 +690,7 @@ public sealed class ProcessGraphCanvas : Border
         // the node may have just been revealed: lay out first
         if (!_presenters.ContainsKey(node)) Rebuild(clear: false);
         if (!_presenters.TryGetValue(node, out var cp)) return;
+        FitToScreen = false;   // a centring is a view change of its own
         double z = Math.Max(_scale.ScaleX, 0.6);
         double cx = Canvas.GetLeft(cp) + NodeWidth / 2, cy = Canvas.GetTop(cp) + DiamondCenterY;
         SetView(z, ActualWidth / 2 - cx * z, ActualHeight / 2 - cy * z);
@@ -676,6 +712,7 @@ public sealed class ProcessGraphCanvas : Border
     {
         base.OnMouseWheel(e);
         var p = e.GetPosition(this);
+        FitToScreen = false;
         double old = _scale.ScaleX;
         double z = Math.Clamp(old * (e.Delta > 0 ? 1.15 : 1 / 1.15), MinZoom, MaxZoom);
         // keep the content point under the cursor fixed
@@ -707,6 +744,7 @@ public sealed class ProcessGraphCanvas : Border
         var d = p - _downPos;
         if (!_panned && Math.Abs(d.X) + Math.Abs(d.Y) < 4) return;
         _panned = true;
+        FitToScreen = false;
         Cursor = Cursors.SizeAll;
         _translate.X = _downTranslate.X + d.X;
         _translate.Y = _downTranslate.Y + d.Y;

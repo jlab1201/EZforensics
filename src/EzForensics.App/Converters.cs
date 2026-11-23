@@ -89,15 +89,6 @@ public sealed class SeverityGlyphConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
-/// <summary>UTC DateTime? → local time string.</summary>
-public sealed class LocalTimeConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is DateTime d ? d.ToLocalTime().ToString(parameter as string ?? "HH:mm:ss", culture) : "";
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
-}
-
 /// <summary>value == ConverterParameter (compared as strings) → true / Visible; ConvertBack (bool) → parameter as int.</summary>
 public sealed class EqualsConverter : IValueConverter
 {
@@ -129,6 +120,17 @@ public sealed class TreeNameWidthConverter : IMultiValueConverter
     }
 
     public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>A <see cref="GridLength"/> that depends on a bool (e.g. a details row that fills the page or only takes its content).</summary>
+public sealed class BoolToGridLengthConverter : IValueConverter
+{
+    public GridLength TrueLength { get; set; } = new(1, GridUnitType.Star);
+    public GridLength FalseLength { get; set; } = GridLength.Auto;
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value is true ? TrueLength : FalseLength;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
 /// <summary>A <see cref="GridLength"/> that depends on whether the bound value is null (e.g. a log row that shrinks while nothing is selected).</summary>

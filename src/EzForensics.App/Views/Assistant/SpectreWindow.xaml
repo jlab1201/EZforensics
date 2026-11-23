@@ -1,0 +1,13 @@
+<Window x:Class="EzForensics.App.Views.Assistant.SpectreWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ai="clr-namespace:EzForensics.App.Views.Assistant"
+        Title="Spectre" Width="420" Height="680" MinWidth="340" MinHeight="380"
+        WindowStartupLocation="Manual" ShowInTaskbar="False" ResizeMode="CanResize"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}" TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}"
+        AutomationProperties.AutomationId="SpectreWindow">
+    <Grid Margin="8">
+        <ai:AssistantChatPanel x:Name="Panel"/>
+    </Grid>
+</Window>

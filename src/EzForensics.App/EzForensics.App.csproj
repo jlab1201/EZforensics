@@ -6,6 +6,10 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+    <!-- Markdown to HTML for the Spectre transcript (raw HTML is disabled, see Services/ChatHtml.cs). -->
+    <PackageReference Include="Markdig" Version="0.38.0" />
     <!-- Installer / updater runtime (https://docs.velopack.io). VelopackApp.Build().Run() is the first call in Program.Main. -->
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
@@ -23,12 +27,12 @@
     <AssemblyTitle>EZ Forensics</AssemblyTitle>
     <Product>EZ Forensics</Product>
     <Company>EZ Forensics</Company>
-    <Authors>EZ Forensics</Authors>
+    <Authors>jlab1201</Authors>
     <Description>EZ Forensics: one place to set up and run Windows forensic tools (Eric Zimmerman's tools, plaso, Zeek).</Description>
     <Copyright>Copyright (c) 2026 jlab1201</Copyright>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0</InformationalVersion>
+    <Version>1.4.1</Version>
+    <FileVersion>$(Version).0</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
@@ -36,7 +40,15 @@
     <InternalsVisibleTo Include="EzForensics.App.Tests" />
     <Resource Include="Assets\EzForensics.png" />
     <!-- User guide shipped next to the exe (opened from the setup wizard, Tool Manager and Settings). -->
+    <Content Include="..\EzForensics.Core\Resources\prompts\*.md" Link="prompts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Embedding model for the knowledge engine (build/get-embedding-model.ps1); without it the engine uses text search only. -->
+    <Content Include="..\..\models\**" Link="models\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('..\..\models')" />
     <Content Include="..\..\docs\SETUP.md" Link="SETUP.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Synthetic demo case for "Load demo case" (Ingest, Review): copied to a new case folder by Core's DemoCase. -->
+    <Content Include="..\..\samples\demo-case\**" Link="demo-case\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- The Brain page (Learn): local html/js shown in WebView2 from https://brain.local/, with 3d-force-graph + three.js vendored as ES modules in vendor\ (build\vendor-brain.py). -->
+    <None Remove="Assets\brain\**" />
+    <Content Include="Assets\brain\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

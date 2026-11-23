@@ -112,7 +112,7 @@ public static class ArtifactDetails
     public static DetailBox Memory(MemoryImage image, DateTime? modifiedUtc)
     {
         var rows = new List<KeyValuePair<string, string>> { new("File", image.Path), new("Size", NetworkTriage.FormatSize(image.Size)) };
-        if (modifiedUtc != null) rows.Add(new("Modified", modifiedUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)));
+        if (modifiedUtc != null) rows.Add(new("Modified", modifiedUtc.Value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC"));
         if (image.Os != MemoryOs.Unknown) rows.Add(new("Detected OS", image.Os == MemoryOs.Mac ? "macOS" : image.Os.ToString()));
         return new DetailBox(rows);
     }

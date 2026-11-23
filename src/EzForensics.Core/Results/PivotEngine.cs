@@ -98,7 +98,7 @@ public static class PivotEngine
 
         var all = new int[n];
         for (int i = 0; i < n; i++) all[i] = i;
-        var ctx = new Ctx(rows, keys, groups, ct, progress, n);
+        var ctx = new Ctx(rows, keys, groups, ct, progress, n, idx.MonthFirstSlashDates);
         var roots = Build(ctx, all, 0, "");
         progress?.Report(1);
         return roots;
@@ -106,14 +106,15 @@ public static class PivotEngine
 
     private sealed class Ctx
     {
-        public Ctx(int[] rows, string[][] keys, IReadOnlyList<PivotGroupSpec> groups, CancellationToken ct, IProgress<double>? progress, int total)
-        { Rows = rows; Keys = keys; Groups = groups; Ct = ct; Progress = progress; Total = total; }
+        public Ctx(int[] rows, string[][] keys, IReadOnlyList<PivotGroupSpec> groups, CancellationToken ct, IProgress<double>? progress, int total, bool monthFirst)
+        { MonthFirst = monthFirst; Rows = rows; Keys = keys; Groups = groups; Ct = ct; Progress = progress; Total = total; }
         public readonly int[] Rows;
         public readonly string[][] Keys;
         public readonly IReadOnlyList<PivotGroupSpec> Groups;
         public readonly CancellationToken Ct;
         public readonly IProgress<double>? Progress;
         public readonly int Total;
+        public readonly bool MonthFirst;
         public long Placed;
     }
 
@@ -136,7 +137,7 @@ public static class PivotEngine
             lists[gi].Add(p);
         }
 
-        var order = SortOrder(vals, lists, spec.Sort);
+        var order = SortOrder(vals, lists, spec.Sort, ctx.MonthFirst);
         var result = new List<PivotNode>(vals.Count);
         foreach (int gi in order)
         {
@@ -164,7 +165,7 @@ public static class PivotEngine
         return result;
     }
 
-    private static int[] SortOrder(List<string> vals, List<List<int>> lists, PivotSort sort)
+    private static int[] SortOrder(List<string> vals, List<List<int>> lists, PivotSort sort, bool monthFirst)
     {
         int m = vals.Count;
         var order = new int[m];
@@ -176,7 +177,7 @@ public static class PivotEngine
         {
             if (v.Length == 0) continue;
             if (allNum && !CsvValueParser.TryParseNumber(v, out _)) allNum = false;
-            if (allDate && !CsvValueParser.TryParseDate(v, out _)) allDate = false;
+            if (allDate && !CsvValueParser.TryParseDate(v, out _, monthFirst)) allDate = false;
             if (!allNum && !allDate) break;
         }
         Comparison<int> valueCmp;
@@ -189,7 +190,7 @@ public static class PivotEngine
         else if (allDate)
         {
             var d = new long[m];
-            for (int i = 0; i < m; i++) d[i] = CsvValueParser.TryParseDate(vals[i], out var t) ? t.Ticks : 0;
+            for (int i = 0; i < m; i++) d[i] = CsvValueParser.TryParseDate(vals[i], out var t, monthFirst) ? t.Ticks : 0;
             valueCmp = (a, b) => d[a].CompareTo(d[b]);
         }
         else valueCmp = (a, b) => string.Compare(vals[a], vals[b], StringComparison.OrdinalIgnoreCase);

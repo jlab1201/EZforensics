@@ -95,6 +95,99 @@ public class ProcessGraphBuilderTests : IDisposable
         g.AllNodes.Should().NotContain(child.Parent);
     }
 
+    // ---- ghost parents and PID reuse ----
+
+    private static readonly DateTime Day1 = new(2024, 3, 1, 8, 0, 0, DateTimeKind.Utc);
+
+    private static ProcessNode Orphan(int pid, int ppid, DateTime? create, string parentImage = "") =>
+        new() { Pid = pid, Ppid = ppid, Name = "p" + pid, CreateTime = create, ParentImage = parentImage, Markers = ProcessMarkers.Orphan };
+
+    /// <summary>Runs the builder's ghost step on hand-made nodes (every node starts as a root; <paramref name="others"/> are real, linked processes).</summary>
+    private static ProcessGraph Ghosted(ProcessNode[] orphans, params ProcessNode[] others)
+    {
+        var g = new ProcessGraph();
+        g.AllNodes.AddRange(others.Concat(orphans));
+        g.Roots.AddRange(orphans);
+        typeof(ProcessGraphBuilder).GetMethod("AttachGhosts", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, new object[] { g });
+        return g;
+    }
+
+    [Fact]
+    public void Ghost_SamePpid_DifferentParentImage_GetsTwoGhosts()
+    {
+        var a = Orphan(1001, 500, Day1, @"C:\Windows\System32\cmd.exe");
+        var b = Orphan(1002, 500, Day1.AddMinutes(1), @"C:\Users\x\evil.exe");
+        var g = Ghosted(new[] { a, b });
+        g.Ghosts.Should().HaveCount(2).And.OnlyContain(x => x.Pid == 500 && x.Children.Count == 1);
+        a.Parent!.Name.Should().Be("cmd.exe");
+        b.Parent!.Name.Should().Be("evil.exe");
+        a.Parent.Should().NotBeSameAs(b.Parent);
+        g.Ghosts.Select(x => x.Key).Should().OnlyHaveUniqueItems().And.OnlyContain(k => k.StartsWith("ghost:500/"));
+        g.Roots.Should().BeEquivalentTo(g.Ghosts);
+    }
+
+    [Fact]
+    public void Ghost_SamePpid_InDifferentBoots_GetsTwoGhosts()
+    {
+        // 24 h apart (not over the gap) but a boot (master smss.exe) lies between them
+        var smss1 = new ProcessNode { Pid = 400, Ppid = 4, Name = "smss.exe", CreateTime = Day1.AddMinutes(-30) };
+        var smss2 = new ProcessNode { Pid = 388, Ppid = 4, Name = "smss.exe", CreateTime = Day1.AddHours(12) };
+        var a = Orphan(1001, 500, Day1, @"C:\Windows\System32\svchost.exe");
+        var b = Orphan(1002, 500, Day1.AddHours(24), @"C:\Windows\System32\svchost.exe");
+        var g = Ghosted(new[] { a, b }, smss1, smss2);
+        g.Ghosts.Should().HaveCount(2);
+        a.Parent.Should().NotBeSameAs(b.Parent);
+        a.Parent!.Name.Should().Be("svchost.exe");
+    }
+
+    [Fact]
+    public void Ghost_SamePpid_WidelySeparatedOrAcrossAnotherInstanceOfThePid_GetsSeparateGhosts()
+    {
+        var a = Orphan(1001, 500, Day1);
+        var b = Orphan(1002, 500, Day1.AddDays(3));   // more than GhostGap apart, no boot known
+        Ghosted(new[] { a, b }).Ghosts.Should().HaveCount(2);
+
+        // an hour apart, but another process with PID 500 started and exited in between: the PID was not held by one parent
+        var c = Orphan(1003, 500, Day1);
+        var d = Orphan(1004, 500, Day1.AddHours(1));
+        var other = new ProcessNode { Pid = 500, Ppid = 4, Name = "other.exe", CreateTime = Day1.AddMinutes(10), ExitTime = Day1.AddMinutes(20) };
+        var g = Ghosted(new[] { c, d }, other);
+        g.Ghosts.Should().HaveCount(2);
+        c.Parent.Should().NotBeSameAs(d.Parent);
+    }
+
+    [Fact]
+    public void Ghost_SamePpid_SameParentImage_CloseTimes_ShareOneGhost()
+    {
+        var a = Orphan(1001, 500, Day1, @"C:\Windows\explorer.exe");
+        var b = Orphan(1002, 500, Day1.AddMinutes(5), @"c:\windows\EXPLORER.EXE");
+        var c = Orphan(1003, 500, Day1.AddMinutes(9));   // states no parent image: joins the only stated one
+        var g = Ghosted(new[] { c, b, a });
+        var ghost = g.Ghosts.Should().ContainSingle().Subject;
+        ghost.Key.Should().Be("ghost:500", "the only ghost of its PID keeps the plain key");
+        ghost.Name.Should().Be("explorer.exe");
+        ghost.Children.Should().Equal(a, b, c);
+    }
+
+    [Fact]
+    public async Task Ghost_SeveralGhostsOfOnePid_KeepTheirKeysThroughProcessesCsv()
+    {
+        Write("Memory_PsList.csv", ListHeader +
+            "0,4,0,System,0x1,1,0,,False,2024-01-01T00:00:00+00:00,,Disabled\r\n" +
+            "0,800,9999,a.exe,0x2,1,0,1,False,2024-01-01T01:00:00+00:00,,Disabled\r\n" +
+            "0,810,9999,b.exe,0x3,1,0,1,False,2024-01-05T01:00:00+00:00,,Disabled\r\n");
+        var live = ProcessGraphBuilder.Build(_host);
+        live.Ghosts.Should().HaveCount(2);
+        var keys = live.Ghosts.Select(x => x.Key).ToList();
+        keys.Should().OnlyHaveUniqueItems();
+
+        (await ProcessCorrelator.RunAsync(_host)).State.Should().Be(ProcessCorrelationState.Built);
+        var loaded = ProcessCorrelator.LoadGraph(_host)!;
+        loaded.Ghosts.Select(x => x.Key).Should().BeEquivalentTo(keys);
+        loaded.Ghosts.Should().OnlyContain(x => x.Children.Count == 1);
+        loaded.AllNodes.Single(n => n.Pid == 800).Parent.Should().NotBeSameAs(loaded.AllNodes.Single(n => n.Pid == 810).Parent);
+    }
+
     [Fact]
     public void Orphan_WhenParentMissing_ButNotSystemOrIdle()
     {

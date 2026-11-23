@@ -99,6 +99,12 @@ public sealed class ProcessNode
     /// </summary>
     public bool IsGhost { get; set; }
 
+    /// <summary>
+    /// Tells apart several ghosts of one parent PID (a reused PID: other boots, other parent images): empty for the only ghost of its PID, else "/" plus the
+    /// <see cref="Key"/> of its first child. Part of the ghost's <see cref="Key"/>.
+    /// </summary>
+    public string GhostSuffix { get; set; } = "";
+
     /// <summary>Role from roles.json (see <see cref="ProcessRoles.Classify"/>); empty until <see cref="ProcessIndicators.Annotate"/> ran.</summary>
     public string Role { get; set; } = "";
     public RoleBasis RoleBasis { get; set; }
@@ -109,7 +115,7 @@ public sealed class ProcessNode
     public List<ProcessNode> Children { get; } = new();
 
     /// <summary>Stable identity within a host: PID plus creation time ticks (0 when unknown).</summary>
-    public string Key => IsGhost ? GhostKey(Pid) : Pid.ToString(CultureInfo.InvariantCulture) + ":" + (CreateTime?.Ticks ?? 0).ToString(CultureInfo.InvariantCulture);
+    public string Key => IsGhost ? GhostKey(Pid) + GhostSuffix :Pid.ToString(CultureInfo.InvariantCulture) + ":" + (CreateTime?.Ticks ?? 0).ToString(CultureInfo.InvariantCulture);
 
     public static string GhostKey(int pid) => "ghost:" + pid.ToString(CultureInfo.InvariantCulture);
 

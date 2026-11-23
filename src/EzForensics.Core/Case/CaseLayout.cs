@@ -53,7 +53,11 @@ public static class CaseLayout
             var m = JsonSerializer.Deserialize<CaseMarker>(File.ReadAllText(p), Json);
             return m != null && string.Equals(m.Kind, MarkerKind, StringComparison.OrdinalIgnoreCase) ? m : null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            EzForensics.Core.Diagnostics.CoreLog.Warn("Could not read the case marker in " + caseDir, ex);
+            return null;
+        }
     }
 
     /// <summary>Writes the marker when the case has none (an existing marker is never rewritten). Atomic.</summary>

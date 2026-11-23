@@ -26,8 +26,24 @@ public class CsvKeywordSearchTests : IDisposable
         hits.Should().ContainSingle();
         hits[0].Path.Should().Be(a);
         hits[0].HitCount.Should().Be(2);
-        hits[0].FirstHitRow.Should().Be(3);
+        hits[0].FirstHitRow.Should().Be(2, "row 2 of the data (the header is not a row)");
         hits[0].FileNameMatch.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Header_is_not_searched()
+    {
+        var a = Write("h.csv", "Name,Payload\r\nfoo,x\r\nbar,y\r\n");
+        (await CsvKeywordSearch.SearchToListAsync(new[] { a }, "payload")).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Row_number_counts_records_not_lines_across_quoted_multiline_cells()
+    {
+        var a = Write("m.csv", "A,B\n1,\"l1\nl2\nl3\"\n2,\"l1\nneedle\"\n3,needle\n");
+        var hits = await CsvKeywordSearch.SearchToListAsync(new[] { a }, "needle");
+        hits[0].FirstHitRow.Should().Be(2);
+        hits[0].HitCount.Should().Be(2, "a record spanning two lines is one hit; line-based would give 3 for the last row");
     }
 
     [Fact]

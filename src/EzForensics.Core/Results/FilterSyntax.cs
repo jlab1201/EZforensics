@@ -191,6 +191,8 @@ public static class FilterSyntax
                 _i++;
                 FilterNode child;
                 try { child = ParseUnary(); } finally { _depth--; }
+                if (child is FilterFlag { Flagged: true, Ids.Count: 0 }) return new FilterFlag(false);
+                if (child is FilterFlag { Flagged: false }) return new FilterFlag(true);
                 if (child is FilterCondition { Op: ColumnFilterMode.Contains } c) { c.Op = ColumnFilterMode.NotContains; return c; }
                 if (child is FilterCondition { Op: ColumnFilterMode.IsEmpty } e) { e.Op = ColumnFilterMode.IsNotEmpty; return e; }
                 if (child is FilterGroup { Negate: false } g && g.Children.Count > 1) { g.Negate = true; return g; }
@@ -217,6 +219,14 @@ public static class FilterSyntax
                 }
                 case T.Column:
                     _i++;
+                    if (string.Equals(t.Text, FilterFlag.FieldName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // [Flag] alone = flagged; [Flag] In ('id', ...) = flagged with one of those flags
+                        var more = Cur.Kind == T.Op || IsWord("Like") || IsWord("Between") || IsWord("In") || IsWord("InDays");
+                        if (!more) return new FilterFlag(true);
+                        var node = ParseColumnPredicate(t.Text);
+                        return node switch { FilterValueSet fv => new FilterFlag(true, fv.Values), FilterCondition { Op: ColumnFilterMode.Equals } fc => new FilterFlag(true, new[] { fc.Value }), _ => node };
+                    }
                     return ParseColumnPredicate(t.Text);
                 case T.Word:
                     return ParseFunction();

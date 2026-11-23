@@ -1,0 +1,351 @@
+{
+  "artifacts": [
+    {
+      "key": "prefetch-timeline",
+      "label": "Prefetch timeline"
+    },
+    {
+      "key": "prefetch",
+      "label": "Prefetch",
+      "aliases": [
+        "pf files",
+        ".pf"
+      ]
+    },
+    {
+      "key": "jumplist",
+      "label": "Jump Lists",
+      "aliases": [
+        "jump list",
+        "jumplists",
+        "jumplist"
+      ]
+    },
+    {
+      "key": "lnk",
+      "label": "LNK shortcut files",
+      "aliases": [
+        "lnk files",
+        "lnk file",
+        "shortcut files",
+        "lnk"
+      ]
+    },
+    {
+      "key": "mft",
+      "label": "$MFT",
+      "aliases": [
+        "master file table",
+        "mft"
+      ]
+    },
+    {
+      "key": "usnjournal",
+      "label": "USN journal $J",
+      "aliases": [
+        "usn journal",
+        "usnjrnl",
+        "$usnjrnl"
+      ]
+    },
+    {
+      "key": "i30",
+      "label": "$I30 index",
+      "aliases": [
+        "$i30",
+        "i30"
+      ]
+    },
+    {
+      "key": "eventlog",
+      "label": "Event logs",
+      "aliases": [
+        "event log",
+        "evtx",
+        "windows event logs"
+      ]
+    },
+    {
+      "key": "registry-plugin",
+      "label": "Registry plugin output"
+    },
+    {
+      "key": "registry",
+      "label": "Registry",
+      "aliases": [
+        "registry hives",
+        "ntuser.dat",
+        "amcache.hve"
+      ]
+    },
+    {
+      "key": "shimcache",
+      "label": "ShimCache / AppCompatCache",
+      "aliases": [
+        "shimcache",
+        "appcompatcache",
+        "app compat cache"
+      ]
+    },
+    {
+      "key": "amcache",
+      "label": "Amcache"
+    },
+    {
+      "key": "srum",
+      "label": "SRUM",
+      "aliases": [
+        "system resource usage monitor"
+      ]
+    },
+    {
+      "key": "activitiescache",
+      "label": "Windows Timeline / ActivitiesCache",
+      "aliases": [
+        "activitiescache",
+        "activitiescache.db",
+        "windows timeline"
+      ]
+    },
+    {
+      "key": "recyclebin",
+      "label": "Recycle Bin",
+      "aliases": [
+        "$recycle.bin",
+        "$i files"
+      ]
+    },
+    {
+      "key": "shellbags",
+      "label": "ShellBags",
+      "aliases": [
+        "shellbag"
+      ]
+    },
+    {
+      "key": "recentfilecache",
+      "label": "RecentFileCache.bcf",
+      "aliases": [
+        "recentfilecache"
+      ]
+    },
+    {
+      "key": "ual",
+      "label": "User Access Logging",
+      "aliases": [
+        "ual"
+      ]
+    },
+    {
+      "key": "memory-carved",
+      "label": "Memory scan plugin output",
+      "aliases": [
+        "psscan",
+        "netscan",
+        "filescan"
+      ]
+    },
+    {
+      "key": "memory-process",
+      "label": "Memory process list",
+      "aliases": [
+        "pslist",
+        "pstree"
+      ]
+    },
+    {
+      "key": "memory-network",
+      "label": "Memory network connections"
+    },
+    {
+      "key": "memory-timeliner",
+      "label": "Memory timeline",
+      "aliases": [
+        "timeliner"
+      ]
+    },
+    {
+      "key": "memory-info",
+      "label": "Memory image info"
+    },
+    {
+      "key": "rita",
+      "label": "RITA network findings",
+      "aliases": [
+        "beacons",
+        "dns tunneling"
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "key": "amcacheparser",
+      "label": "AmcacheParser"
+    },
+    {
+      "key": "appcompatcacheparser",
+      "label": "AppCompatCacheParser"
+    },
+    {
+      "key": "evtxecmd",
+      "label": "EvtxECmd"
+    },
+    {
+      "key": "jlecmd",
+      "label": "JLECmd"
+    },
+    {
+      "key": "jumplistexplorer",
+      "label": "JumpList Explorer",
+      "aliases": [
+        "JumpListExplorer"
+      ]
+    },
+    {
+      "key": "lecmd",
+      "label": "LECmd"
+    },
+    {
+      "key": "mftecmd",
+      "label": "MFTECmd"
+    },
+    {
+      "key": "mftexplorer",
+      "label": "MFT Explorer",
+      "aliases": [
+        "MFTExplorer"
+      ]
+    },
+    {
+      "key": "pecmd",
+      "label": "PECmd"
+    },
+    {
+      "key": "rbcmd",
+      "label": "RBCmd"
+    },
+    {
+      "key": "recmd",
+      "label": "RECmd"
+    },
+    {
+      "key": "recentfilecacheparser",
+      "label": "RecentFileCacheParser"
+    },
+    {
+      "key": "registryexplorer",
+      "label": "Registry Explorer",
+      "aliases": [
+        "RegistryExplorer"
+      ]
+    },
+    {
+      "key": "sbecmd",
+      "label": "SBECmd"
+    },
+    {
+      "key": "sdbexplorer",
+      "label": "SDB Explorer",
+      "aliases": [
+        "SDBExplorer"
+      ]
+    },
+    {
+      "key": "sqlecmd",
+      "label": "SQLECmd"
+    },
+    {
+      "key": "shellbagsexplorer",
+      "label": "ShellBags Explorer",
+      "aliases": [
+        "ShellBagsExplorer"
+      ]
+    },
+    {
+      "key": "srumecmd",
+      "label": "SrumECmd"
+    },
+    {
+      "key": "sumecmd",
+      "label": "SumECmd"
+    },
+    {
+      "key": "timelineexplorer",
+      "label": "Timeline Explorer",
+      "aliases": [
+        "TimelineExplorer"
+      ]
+    },
+    {
+      "key": "wxtcmd",
+      "label": "WxTCmd"
+    },
+    {
+      "key": "iisgeolocate",
+      "label": "iisGeolocate"
+    },
+    {
+      "key": "rla",
+      "label": "RLA (Registry Log Applier)",
+      "aliases": [
+        "rla"
+      ]
+    },
+    {
+      "key": "volatility",
+      "label": "Volatility",
+      "aliases": [
+        "volatility3",
+        "vol.py"
+      ]
+    },
+    {
+      "key": "plaso",
+      "label": "Plaso",
+      "aliases": [
+        "log2timeline",
+        "psort"
+      ]
+    },
+    {
+      "key": "zeek",
+      "label": "Zeek"
+    },
+    {
+      "key": "mimikatz",
+      "label": "Mimikatz"
+    },
+    {
+      "key": "sysmon",
+      "label": "Sysmon"
+    },
+    {
+      "key": "velociraptor",
+      "label": "Velociraptor"
+    },
+    {
+      "key": "kape",
+      "label": "KAPE"
+    },
+    {
+      "key": "autopsy",
+      "label": "Autopsy"
+    },
+    {
+      "key": "wireshark",
+      "label": "Wireshark"
+    },
+    {
+      "key": "cyberchef",
+      "label": "CyberChef"
+    },
+    {
+      "key": "yara",
+      "label": "YARA"
+    },
+    {
+      "key": "bulk-extractor",
+      "label": "bulk_extractor"
+    }
+  ]
+}

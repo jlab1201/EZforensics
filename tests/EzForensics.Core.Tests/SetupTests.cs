@@ -13,7 +13,7 @@ public class SetupCatalogTests
     [Fact]
     public void Catalog_has_the_five_bundles_with_the_decided_defaults()
     {
-        Cat.Bundles.Select(b => b.Id).Should().Equal(SetupIds.BundleArtifacts, SetupIds.BundleTimeline, SetupIds.BundleNetwork, SetupIds.BundleMemory);
+        Cat.Bundles.Select(b => b.Id).Should().Equal(SetupIds.BundleArtifacts, SetupIds.BundleTimeline, SetupIds.BundleNetwork, SetupIds.BundleMemory, SetupIds.BundleExplore, SetupIds.BundleAi);
         Cat.Bundles.Single(b => b.Id == SetupIds.BundleArtifacts).DefaultOn.Should().BeTrue();
         Cat.Bundles.Single(b => b.Id == SetupIds.BundleTimeline).DefaultOn.Should().BeTrue();
         Cat.Bundles.Single(b => b.Id == SetupIds.BundleArtifacts).Items.Where(i => i.Selectable && !i.OptIn).Should().OnlyContain(i => i.DefaultOn,
@@ -31,6 +31,19 @@ public class SetupCatalogTests
         Cat.Find(SetupIds.Rita)!.Requires.Should().BeEquivalentTo(new[] { SetupIds.EzDistro, SetupIds.Zeek });
         Cat.Find(SetupIds.Rita)!.Description.Should().Contain("GPL-3.0");
         Cat.Find("autoruns").Should().BeNull("Sysinternals Autoruns was removed; the built-in persistence collector replaces it");
+    }
+
+    [Fact]
+    public void Explore_bundle_has_three_tools_in_minimal_and_everything()
+    {
+        var b = Cat.Bundles.Single(x => x.Id == SetupIds.BundleExplore);
+        b.Items.Select(i => i.Id).Should().Equal(SetupIds.ExploreDie, SetupIds.ExploreExifTool, SetupIds.ExploreCyberChef);
+        foreach (var profile in new[] { SetupProfile.Minimal, SetupProfile.Everything })
+        {
+            var sel = SetupSelection.ForProfile(profile, Cat);
+            foreach (var i in b.Items) sel.Has(i.Id).Should().BeTrue($"{profile} includes {i.Id}");
+            SetupPlanner.Plan(Cat, sel, SetupCatalogTests.Sys()).Steps.Count(s => s.Kind == SetupStepKind.InstallExploreTool).Should().Be(3);
+        }
     }
 
     [Fact]
@@ -706,6 +719,25 @@ public class RuntimeProbePrivateDotnetTests : IDisposable
         RuntimeProbeHas(_dir).Should().BeTrue();
         EzForensics.Core.Tools.RuntimeProbe.HasFramework(_dir, "Microsoft.WindowsDesktop.App", 9).Should().BeFalse();
         EzForensics.Core.Tools.RuntimeProbe.HasFramework(_dir, "Microsoft.NETCore.App", 8).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasPrivateNet9_needs_every_required_major()
+    {
+        var old = EzForensics.Core.Tools.RuntimeProbe.PrivateDotnetRoot;
+        try
+        {
+            EzForensics.Core.Tools.RuntimeProbe.PrivateDotnetRoot = _dir;
+            Directory.CreateDirectory(Path.Combine(_dir, "shared", "Microsoft.NETCore.App", "9.0.1"));
+            EzForensics.Core.Tools.RuntimeProbe.HasPrivateNet9().Should().BeFalse("only .NET 9 is there");
+            Directory.CreateDirectory(Path.Combine(_dir, "shared", "Microsoft.NETCore.App", "10.0.0"));
+            EzForensics.Core.Tools.RuntimeProbe.HasPrivateNet9().Should().BeTrue();
+        }
+        finally
+        {
+            EzForensics.Core.Tools.RuntimeProbe.PrivateDotnetRoot = old;
+            EzForensics.Core.Tools.RuntimeProbe.Reset();
+        }
     }
 
     private static bool RuntimeProbeHas(string dir) => EzForensics.Core.Tools.RuntimeProbe.HasFramework(dir, "Microsoft.NETCore.App", 9);

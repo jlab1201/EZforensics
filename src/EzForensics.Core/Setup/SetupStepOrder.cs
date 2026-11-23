@@ -8,7 +8,7 @@ namespace EzForensics.Core.Setup;
 /// finished ones (Done, Failed, Skipped, Cancelled, AlreadyInstalled, WaitingForRestart, ActionNeeded) in the order they finished,
 /// the newest at the very bottom. Only <see cref="ObservableCollection{T}.Move"/> is used, so the list is never rebuilt.
 /// Call <see cref="Reset"/> after the collection was filled with a new plan and <see cref="Update"/> on the UI thread after a
-/// step's state changed. A thin adapter over the shared <see cref="RunOrder"/> helper (the same live order as Ingest and the Jobs tab).
+/// step's state changed. A thin adapter over the shared <see cref="RunOrder"/> helper (the same live order as Ingest and the Jobs list).
 /// </summary>
 public sealed class SetupStepOrder
 {

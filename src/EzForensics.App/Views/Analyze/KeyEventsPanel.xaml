@@ -1,0 +1,80 @@
+<UserControl x:Class="EzForensics.App.Views.Analyze.KeyEventsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EzForensics.App.ViewModels">
+    <!-- Analyze side list of key events (workspace section of the case analysis file). Click = filter the grid to its rows. -->
+    <UserControl.Resources>
+        <Style x:Key="SeverityStripe" TargetType="Border">
+            <Setter Property="Width" Value="4"/>
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="Margin" Value="0,2,8,2"/>
+            <Setter Property="Background" Value="{DynamicResource Brush.Neutral}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Severity}" Value="Critical"><Setter Property="Background" Value="{DynamicResource Brush.Error}"/></DataTrigger>
+                <DataTrigger Binding="{Binding Severity}" Value="High"><Setter Property="Background" Value="{DynamicResource Brush.Orange}"/></DataTrigger>
+                <DataTrigger Binding="{Binding Severity}" Value="Medium"><Setter Property="Background" Value="{DynamicResource Brush.Warning}"/></DataTrigger>
+                <DataTrigger Binding="{Binding Severity}" Value="Low"><Setter Property="Background" Value="{DynamicResource Brush.Info}"/></DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+    <Expander x:Name="Host" IsExpanded="True" Margin="0,6,0,0" AutomationProperties.AutomationId="Results.KeyEvents" AutomationProperties.Name="Findings">
+        <Expander.Header>
+            <DockPanel>
+                <TextBlock Text="{Binding Findings.Count, StringFormat=Findings ({0})}" Style="{StaticResource Caption}" VerticalAlignment="Center"
+                           AutomationProperties.AutomationId="Results.KeyEvents.Header"/>
+            </DockPanel>
+        </Expander.Header>
+        <StackPanel>
+        <Button Style="{StaticResource SubtleButton}" HorizontalContentAlignment="Left" MinHeight="0" Padding="4,3" Click="Spectre_Click"
+                Visibility="{Binding HasSpectreFlagged, Converter={StaticResource BoolToVis}}" ToolTip="Show only the rows Spectre flagged (click again for all rows)"
+                AutomationProperties.AutomationId="Results.SpectreFlagged" AutomationProperties.Name="Spectre flagged">
+            <TextBlock Text="Spectre flagged"/>
+        </Button>
+        <Grid>
+            <TextBlock Text="None yet" Style="{StaticResource Caption}" Margin="4,4,0,4"
+                       Visibility="{Binding HasFindings, Converter={StaticResource BoolToVisInv}}" AutomationProperties.AutomationId="Results.KeyEvents.Empty"/>
+            <ItemsControl ItemsSource="{Binding Findings}" MaxHeight="220" AutomationProperties.AutomationId="Results.KeyEvents.List"
+                          Visibility="{Binding HasFindings, Converter={StaticResource BoolToVis}}">
+                <ItemsControl.Template>
+                    <ControlTemplate TargetType="ItemsControl">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False"><ItemsPresenter/></ScrollViewer>
+                    </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:FindingListItem}">
+                        <DockPanel Margin="0,1">
+                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="&#xE74D;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
+                                    MinHeight="0" Padding="5,3" ToolTip="Remove finding (its rows stay flagged)" Click="Remove_Click"
+                                    AutomationProperties.AutomationId="Results.KeyEvents.Remove" AutomationProperties.Name="{Binding Title, StringFormat=Remove {0}}"/>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="&#xE70F;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
+                                    MinHeight="0" Padding="5,3" ToolTip="Edit finding" Click="Edit_Click"
+                                    AutomationProperties.AutomationId="Results.KeyEvents.Edit" AutomationProperties.Name="{Binding Title, StringFormat=Edit {0}}"/>
+                            <Button Style="{StaticResource SubtleButton}" HorizontalContentAlignment="Stretch" MinHeight="0" Padding="4,3" Click="Item_Click"
+                                    ToolTip="Show only the rows of this finding (click again for all rows)"
+                                    AutomationProperties.AutomationId="Results.KeyEvents.Item" AutomationProperties.Name="{Binding Title}"
+                                    AutomationProperties.ItemStatus="{Binding CountText}">
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Left" Style="{StaticResource SeverityStripe}"/>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Foreground="{DynamicResource Brush.TextSecondary}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DockPanel>
+                            </Button>
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+        </StackPanel>
+    </Expander>
+</UserControl>

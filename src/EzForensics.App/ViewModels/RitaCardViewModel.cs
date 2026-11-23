@@ -254,7 +254,7 @@ public sealed partial class RitaCardViewModel : ObservableObject
         if (IsBusy) return;
         var d = S.Rita ?? await S.RefreshRitaAsync();
         if (d.Setup == RitaSetupOption.NeedsWsl) { _onMessage(Headline, InfoSeverity.Warning); return; }
-        if (RitaJobsRunning()) { _onMessage("A RITA analysis is still running. Wait for it or cancel it on the Jobs page, then try again.", InfoSeverity.Warning); return; }
+        if (RitaJobsRunning()) { _onMessage("A RITA analysis is still running. Wait for it or cancel it in the Jobs list on Ingest, then try again.", InfoSeverity.Warning); return; }
         Begin(d.Installed ? "> Update RITA" : "> Install RITA");
         var ct = _cts!.Token;
         try
@@ -292,7 +292,7 @@ public sealed partial class RitaCardViewModel : ObservableObject
     private async Task UninstallAsync()
     {
         if (IsBusy) return;
-        if (RitaJobsRunning()) { _onMessage("A RITA analysis is still running. Wait for it or cancel it on the Jobs page, then try again.", InfoSeverity.Warning); return; }
+        if (RitaJobsRunning()) { _onMessage("A RITA analysis is still running. Wait for it or cancel it in the Jobs list on Ingest, then try again.", InfoSeverity.Warning); return; }
         if (!EzForensics.App.Services.Dialogs.Confirm("Uninstall RITA?", "Removes RITA, ClickHouse and every RITA database. Case results are kept.", "Uninstall",
                 details: $"{RitaSetup.Root}\n{RitaSetup.DataDir}", defaultNo: true)) return;
         Begin("> Uninstall RITA");
@@ -312,7 +312,7 @@ public sealed partial class RitaCardViewModel : ObservableObject
     private async Task DeleteDatabasesAsync()
     {
         if (IsBusy) return;
-        if (RitaJobsRunning()) { _onMessage("A RITA analysis is still running. Wait for it or cancel it on the Jobs page, then try again.", InfoSeverity.Warning); return; }
+        if (RitaJobsRunning()) { _onMessage("A RITA analysis is still running. Wait for it or cancel it in the Jobs list on Ingest, then try again.", InfoSeverity.Warning); return; }
         var size = S.Rita?.DataBytes is { } b ? $" ({(b < 1L << 20 ? "under 1 MB" : EzDistro.FormatBytes(b))})" : "";
         if (!EzForensics.App.Services.Dialogs.Confirm("Delete RITA databases?", $"Imported data only{size}. Case results stay; a later analysis re-imports.", "Delete", severity: EzForensics.App.Views.EzDialogSeverity.Warning, defaultNo: true)) return;
         Begin("> Delete RITA databases");

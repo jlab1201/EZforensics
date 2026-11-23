@@ -1,0 +1,93 @@
+<UserControl x:Class="EzForensics.App.Views.Learn.LibraryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:EzForensics.App.Controls"
+             AutomationProperties.AutomationId="Learn.Library">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,8,8">
+            <TextBlock Text="Only accepted notes are listed here." Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <WrapPanel>
+                <Button Content="Add documents…" Style="{StaticResource AccentButton}" Command="{Binding AddFilesCommand}" Margin="0,0,6,6"
+                        ToolTip="New documents go to Intake" AutomationProperties.AutomationId="Learn.Library.AddFiles"/>
+                <Button Content="Add folder…" Command="{Binding AddFolderCommand}" Margin="0,0,6,6" AutomationProperties.AutomationId="Learn.Library.AddFolder"/>
+                <Button Content="Empty rejected" Command="{Binding EmptyRejectedCommand}" Margin="0,0,6,6" Visibility="{Binding HasRejected, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Delete the rejected documents for good" AutomationProperties.AutomationId="Learn.Library.EmptyRejected"/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,6,6" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
+                        AutomationProperties.AutomationId="Learn.Library.Cancel"/>
+            </WrapPanel>
+            <TextBlock Text="{Binding AiHint}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,4"
+                       Visibility="{Binding HasAi, Converter={StaticResource BoolToVisInv}}" AutomationProperties.AutomationId="Learn.Library.AiHint"/>
+            <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Caption}" TextWrapping="Wrap" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
+                       AutomationProperties.AutomationId="Learn.Library.Progress"/>
+            <TextBlock Text="{Binding BackfillText}" Style="{StaticResource Caption}" TextWrapping="Wrap" Visibility="{Binding IsBackfilling, Converter={StaticResource BoolToVis}}"
+                       AutomationProperties.AutomationId="Learn.Library.Backfill"/>
+            <TextBlock Text="{Binding Message}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,8" AutomationProperties.AutomationId="Learn.Library.Message"/>
+
+            <TextBlock Text="Sources" Style="{StaticResource SectionTitle}"/>
+            <ctl:EmptyState Glyph="&#xE8F1;" Title="No documents yet" Message="No documents yet. Add some, or drop files or a folder on this page." Margin="0,8,0,18"
+                       Visibility="{Binding NoSources, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Library.Empty"/>
+            <ItemsControl ItemsSource="{Binding Sources}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource Tile}" Margin="0,0,0,10" AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}}">
+                            <StackPanel>
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="Re-index" Command="{Binding ReindexCommand}" CommandParameter="{Binding}" Margin="8,0,0,0"
+                                                AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}.Reindex}"/>
+                                        <Button Content="Label with AI" Command="{Binding LabelAiCommand}" CommandParameter="{Binding}" Margin="6,0,0,0"
+                                                ToolTip="{Binding DataContext.LabelTip, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}.LabelAi}"/>
+                                        <Button Content="Distill into notes" Command="{Binding DistillCommand}" CommandParameter="{Binding}" Margin="6,0,0,0"
+                                                ToolTip="{Binding DataContext.DistillTip, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}.Distill}"/>
+                                        <Button Content="Export…" Command="{Binding ExportCommand}" CommandParameter="{Binding}" Margin="6,0,0,0"
+                                                ToolTip="Save the accepted documents as a .ezkb pack"
+                                                AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}.Export}"/>
+                                        <Button Content="Remove" Command="{Binding RemoveCommand}" CommandParameter="{Binding}" Margin="6,0,0,0"
+                                                AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}.Remove}"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource Chip}" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Kind}" FontSize="{DynamicResource FontSize.Small}"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                                </DockPanel>
+                                <TextBlock Text="{Binding Counts}" Margin="0,4,0,0" AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}.Counts}"/>
+                                <TextBlock Text="{Binding Added, StringFormat=Added {0}}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                                <TextBlock Text="{Binding Status}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
+                                           AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}.Status}"/>
+                                <!-- the accepted documents: select some to distill or label them -->
+                                <Expander Header="Documents" Margin="0,6,0,0" IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Expanded="Docs_Expanded" Collapsed="Docs_Collapsed"
+                                          AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}.Docs}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding SelectedText}" Style="{StaticResource Caption}" Margin="0,2,0,4"/>
+                                        <ListBox ItemsSource="{Binding Documents}" SelectionMode="Extended" MaxHeight="240" SelectionChanged="Docs_SelectionChanged"
+                                                 HorizontalContentAlignment="Stretch" BorderThickness="0" Background="Transparent"
+                                                 VirtualizingPanel.IsVirtualizing="True" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 AutomationProperties.AutomationId="{Binding Name, StringFormat=Learn.Library.Source.{0}.DocList}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <DockPanel Margin="0,1">
+                                                        <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="6,0,0,0"
+                                                                Visibility="{Binding HasChildren, Converter={StaticResource BoolToVis}}">
+                                                            <TextBlock Text="{Binding NotesText}" FontSize="{DynamicResource FontSize.Small}"/>
+                                                        </Border>
+                                                        <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="6,0,0,0"
+                                                                Visibility="{Binding HasCategory, Converter={StaticResource BoolToVis}}">
+                                                            <TextBlock Text="{Binding Category}" FontSize="{DynamicResource FontSize.Small}"/>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </StackPanel>
+                                </Expander>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

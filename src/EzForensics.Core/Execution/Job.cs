@@ -49,6 +49,8 @@ public sealed class Job : INotifyPropertyChanged
     /// <summary>When the job was queued, as a <see cref="NextSequence"/> value.</summary>
     public long QueueSequence { get; }
     public JobSpec Spec { get; }
+    /// <summary>Not shown in the Jobs list or its badge (<see cref="JobSpec.Hidden"/>).</summary>
+    public bool Hidden => Spec.Hidden;
     public string CaseDir { get; }
     public JobState State
     {
@@ -120,7 +122,7 @@ public sealed class Job : INotifyPropertyChanged
     internal void Log(string line, bool raise = true, bool write = true)
     {
         // Called from the process output callbacks: a write error (disk full, case drive removed) must never escape there, where it
-        // would end the whole app. The line still reaches the Jobs page through Output.
+        // would end the whole app. The line still reaches the Ingest job list through Output.
         if (write)
             lock (_logLock)
             {

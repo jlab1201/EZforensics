@@ -39,7 +39,7 @@ public static class ToolAvailability
     {
         var rule = p.Artifact.RuleId;
         // built-in steps: no external tool to find
-        if (IngestSteps.IsComputerDetails(p)) return null;
+        if (IngestSteps.IsComputerDetails(p) || IngestSteps.IsProcessTree(p)) return null;
         if (IngestSteps.IsSupertimeline(p)) return s.PlasoMissing ? "plaso is not set up (Tools > Timeline)." : null;
         if (rule == NetworkTriage.RuleId) return s.ZeekMissing ? "Zeek is not set up (Tools > Network)." : null;
         if (rule == Rita.RitaJobs.RuleId)

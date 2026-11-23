@@ -3,8 +3,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
         xmlns:v="clr-namespace:EzForensics.App.Views"
+        xmlns:ex="clr-namespace:EzForensics.App.Views.Explore"
+        xmlns:exvm="clr-namespace:EzForensics.App.ViewModels.Explore"
+        xmlns:fv="clr-namespace:EzForensics.App.Views.Findings"
+        xmlns:fvm="clr-namespace:EzForensics.App.ViewModels.Findings"
+        xmlns:lv="clr-namespace:EzForensics.App.Views.Learn"
+        xmlns:lvm="clr-namespace:EzForensics.App.ViewModels.Learn"
         xmlns:c="clr-namespace:EzForensics.App.Controls"
-        Title="{Binding WindowTitle}" Icon="pack://application:,,,/Assets/EzForensics.png" Height="860" Width="1400" MinWidth="980" MinHeight="600"
+        xmlns:ai="clr-namespace:EzForensics.App.Views.Assistant"
+        Title="{Binding WindowTitle}" Icon="pack://application:,,,/Assets/EzForensics.png" Height="860" Width="1400" MinWidth="860" MinHeight="500"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
         FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}"
@@ -12,10 +19,33 @@
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:TriageViewModel}"><v:TriageView/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:ToolsViewModel}"><v:ToolsView/></DataTemplate>
-        <DataTemplate DataType="{x:Type vm:JobsViewModel}"><v:JobsView/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:ResultsViewModel}"><v:ResultsView/></DataTemplate>
+        <DataTemplate DataType="{x:Type exvm:ExploreViewModel}"><ex:ExploreView/></DataTemplate>
+        <DataTemplate DataType="{x:Type fvm:FindingsViewModel}"><fv:FindingsView/></DataTemplate>
+        <DataTemplate DataType="{x:Type lvm:LearnViewModel}"><lv:LearnView/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><v:SettingsView/></DataTemplate>
-        <!-- footer buttons of the nav (theme toggle, gear): same geometry as the nav list items so the icons line up in rail and drawer -->
+        <!-- keyboard-only focus ring for the nav buttons: WPF draws FocusVisualStyle for keyboard focus only, so a mouse click (or focus returning
+             to the bottom rows) never leaves an accent border behind -->
+        <Style x:Key="NavFocusVisual">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Border CornerRadius="5" BorderThickness="1.5" BorderBrush="{DynamicResource Brush.Accent}" SnapsToDevicePixels="True" IsHitTestVisible="False"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- focus ring of the sidebar toggle (keyboard focus only) -->
+        <Style x:Key="NavToggleFocusVisual">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Border CornerRadius="7" BorderThickness="1.5" BorderBrush="{DynamicResource Brush.Accent}" SnapsToDevicePixels="True" IsHitTestVisible="False"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- footer buttons of the nav (AI, Tools, Options, theme toggle): same geometry as the nav list items so the icons line up in rail and drawer -->
         <Style x:Key="NavFooterButton" TargetType="Button">
             <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -23,7 +53,7 @@
             <Setter Property="Margin" Value="6,2"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource NavFocusVisual}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -39,9 +69,6 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="b" Property="Background" Value="{DynamicResource Brush.Control}"/>
                                 <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
                             </Trigger>
                             <Trigger Property="Tag" Value="True">
                                 <Setter TargetName="b" Property="Background" Value="{DynamicResource Brush.Control}"/>
@@ -63,7 +90,7 @@
             <Setter Property="MinHeight" Value="0"/>
             <Setter Property="Padding" Value="5,1"/>
             <Setter Property="FontFamily" Value="{StaticResource Font.Icon}"/>
-            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
     </Window.Resources>
@@ -80,9 +107,50 @@
         </Grid.ColumnDefinitions>
 
         <!-- page (declared first; the unpinned nav expands over it without reflowing it) -->
-        <DockPanel Grid.Column="1">
+        <Grid x:Name="ContentArea" Grid.Column="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition x:Name="SpectreSplitColumn" Width="0"/>
+                <ColumnDefinition x:Name="SpectreDockColumn" Width="0" MinWidth="0"/>
+            </Grid.ColumnDefinitions>
             <ContentControl x:Name="PageHost" AutomationProperties.AutomationId="Page" Focusable="False" Margin="24,20,24,12"/>
-        </DockPanel>
+
+            <!-- Spectre docked on the right (mode "Dock to side"); SpectreLayout shows / hides these -->
+            <GridSplitter x:Name="SpectreSplitter" Grid.Column="1" Width="6" Background="Transparent" HorizontalAlignment="Center" ResizeBehavior="PreviousAndNext" Visibility="Collapsed"
+                          AutomationProperties.AutomationId="Spectre.Splitter" AutomationProperties.Name="Resize Spectre"/>
+            <ai:AssistantChatPanel x:Name="SpectreDockPanel" Grid.Column="2" Margin="0,20,12,12" Visibility="Collapsed" DataContext="{Binding Assistant}"/>
+
+            <!-- Spectre pop-up (default mode): over the page, bottom right, above the launcher. The shadow is a sibling because the panel hosts a WebView2. -->
+            <Grid x:Name="SpectrePopup" Grid.ColumnSpan="3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Panel.ZIndex="20" Visibility="Collapsed"
+                  AutomationProperties.AutomationId="Spectre.Popup">
+                <Border CornerRadius="8" Background="{DynamicResource Brush.Surface}">
+                    <Border.Effect><DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270" Opacity="0.4" Color="Black"/></Border.Effect>
+                </Border>
+                <ai:AssistantChatPanel x:Name="SpectrePopupPanel" DataContext="{Binding Assistant}"/>
+                <Thumb x:Name="SpectreGrip" HorizontalAlignment="Left" VerticalAlignment="Top" Width="14" Height="14" Opacity="0" Cursor="SizeNWSE"
+                       ToolTip="Drag to resize" AutomationProperties.AutomationId="Spectre.Resize" AutomationProperties.Name="Resize Spectre"/>
+            </Grid>
+
+            <!-- launcher: round chat-bubble button, bottom right on every page -->
+            <Button x:Name="SpectreLauncher" Grid.ColumnSpan="3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,16" Width="48" Height="48" Panel.ZIndex="21"
+                    Command="{Binding Assistant.ToggleExpandedCommand}" ToolTip="Spectre: ask about this case" Cursor="Hand" Focusable="True" Visibility="Collapsed" FocusVisualStyle="{StaticResource FocusRingEllipse}"
+                    AutomationProperties.AutomationId="Spectre.Launcher" AutomationProperties.Name="Spectre">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse x:Name="Disc" Fill="{DynamicResource Brush.Accent}">
+                                <Ellipse.Effect><DropShadowEffect BlurRadius="12" ShadowDepth="2" Direction="270" Opacity="0.45" Color="Black"/></Ellipse.Effect>
+                            </Ellipse>
+                            <TextBlock Text="&#xE8BD;" FontFamily="{StaticResource Font.Icon}" FontSize="22" Foreground="{DynamicResource Brush.AccentText}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Disc" Property="Fill" Value="{DynamicResource Brush.AccentHover}"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </Grid>
 
         <!-- navigation: pinned = full width in layout; unpinned = 48px icon rail that widens as an overlay on hover / hamburger.
              The content is always laid out at the full width and only clipped, so the icons never move; code-behind animates Width. -->
@@ -109,49 +177,176 @@
                 <Border ClipToBounds="True">
                     <DockPanel Width="{x:Static vm:ShellViewModel.NavFullWidth}" HorizontalAlignment="Left">
                         <DockPanel DockPanel.Dock="Top" Margin="0,14,0,14" LastChildFill="False" Height="36">
-                            <Button DockPanel.Dock="Left" AutomationProperties.AutomationId="Shell.Nav.Toggle" AutomationProperties.Name="Expand navigation"
-                                    Style="{StaticResource SubtleButton}" Content="&#xE700;" FontFamily="{StaticResource Font.Icon}" FontSize="15"
-                                    Width="36" Height="36" MinHeight="0" Padding="0" Margin="6,0,0,0" ToolTip="Show navigation"
-                                    FocusVisualStyle="{x:Null}" Command="{Binding ToggleNavExpandedCommand}"
-                                    Visibility="{Binding NavPinned, Converter={StaticResource BoolToVisInv}}"/>
+                            <!-- sidebar toggle (ghost icon button, ChatGPT / Notion style). Pinned: faded out until the mouse is over the drawer or the
+                                 button has keyboard focus. Rail mode: clipped away with the rest of the full-width header. -->
+                            <Button DockPanel.Dock="Right" Width="30" Height="30" Margin="0,0,10,0" VerticalAlignment="Center"
+                                    Command="{Binding ToggleNavPinnedCommand}" Cursor="Hand" Focusable="True" IsTabStop="True"
+                                    SnapsToDevicePixels="True" UseLayoutRounding="True"
+                                    GotKeyboardFocus="NavPin_GotKeyboardFocus" LostKeyboardFocus="NavPin_LostKeyboardFocus"
+                                    AutomationProperties.AutomationId="Shell.Nav.Pin">
+                                <Button.ToolTip>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="Keep sidebar open"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding NavPinned}" Value="True"><Setter Property="Text" Value="Collapse sidebar"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="Ctrl+B" Margin="10,0,0,0" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                    </StackPanel>
+                                </Button.ToolTip>
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+                                        <Setter Property="FocusVisualStyle" Value="{StaticResource NavToggleFocusVisual}"/>
+                                        <Setter Property="AutomationProperties.Name" Value="Keep sidebar open"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding NavPinned}" Value="True">
+                                                <Setter Property="AutomationProperties.Name" Value="Collapse sidebar"/>
+                                            </DataTrigger>
+                                            <!-- pinned and idle (mouse outside the drawer, no keyboard focus): fade out; fade back in on hover or focus -->
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding NavPinned}" Value="True"/>
+                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=c:AutomationPane}}" Value="False"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Opacity" Value="0"/>
+                                                <MultiDataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.15" FillBehavior="Stop"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </MultiDataTrigger.EnterActions>
+                                                <MultiDataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.15" FillBehavior="Stop"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </MultiDataTrigger.ExitActions>
+                                            </MultiDataTrigger>
+                                            <!-- reached with the keyboard (Tag set in code-behind): always visible. Plain IsKeyboardFocused is not used, since
+                                                 the button also takes focus at start-up and would then never fade out. -->
+                                            <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="kbd">
+                                                <Setter Property="Opacity" Value="1"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="bg" Background="Transparent" CornerRadius="7" SnapsToDevicePixels="True">
+                                            <!-- panel icon, 18x15: outline, divider 6px from the left, filled left pane when pinned, chevron on hover -->
+                                            <Canvas Width="18" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center" SnapsToDevicePixels="True" UseLayoutRounding="True">
+                                                <Path x:Name="Pane" Fill="{TemplateBinding Foreground}" Opacity="0"
+                                                      Data="M 3.75,0.75 H 6.75 V 14.25 H 3.75 A 3,3 0 0 1 0.75,11.25 V 3.75 A 3,3 0 0 1 3.75,0.75 Z"/>
+                                                <Rectangle Canvas.Left="0.75" Canvas.Top="0.75" Width="16.5" Height="13.5" RadiusX="3" RadiusY="3"
+                                                           Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"/>
+                                                <Line X1="6.75" Y1="0.75" X2="6.75" Y2="14.25" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"/>
+                                                <Path x:Name="ChevL" Opacity="0" Stroke="{DynamicResource Brush.Text}" StrokeThickness="1.5"
+                                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M 13.5,4.5 L 10.5,7.5 L 13.5,10.5"/>
+                                                <Path x:Name="ChevR" Opacity="0" Stroke="{DynamicResource Brush.Text}" StrokeThickness="1.5"
+                                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M 10.5,4.5 L 13.5,7.5 L 10.5,10.5"/>
+                                            </Canvas>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <!-- left pane fill follows NavPinned (150ms fade) -->
+                                            <DataTrigger Binding="{Binding NavPinned}" Value="True">
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard><DoubleAnimation Storyboard.TargetName="Pane" Storyboard.TargetProperty="Opacity" To="0.9" Duration="0:0:0.15"/></Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard><DoubleAnimation Storyboard.TargetName="Pane" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/></Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
+                                            </DataTrigger>
+                                            <!-- hover: chevron fades in on the right pane (points left when pinned = collapse, right when unpinned = keep open) -->
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
+                                                    <Condition Binding="{Binding NavPinned}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <MultiDataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard><DoubleAnimation Storyboard.TargetName="ChevL" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15"/></Storyboard>
+                                                    </BeginStoryboard>
+                                                </MultiDataTrigger.EnterActions>
+                                                <MultiDataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard><DoubleAnimation Storyboard.TargetName="ChevL" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/></Storyboard>
+                                                    </BeginStoryboard>
+                                                </MultiDataTrigger.ExitActions>
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
+                                                    <Condition Binding="{Binding NavPinned}" Value="False"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <MultiDataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard><DoubleAnimation Storyboard.TargetName="ChevR" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15"/></Storyboard>
+                                                    </BeginStoryboard>
+                                                </MultiDataTrigger.EnterActions>
+                                                <MultiDataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard><DoubleAnimation Storyboard.TargetName="ChevR" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/></Storyboard>
+                                                    </BeginStoryboard>
+                                                </MultiDataTrigger.ExitActions>
+                                            </MultiDataTrigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource Brush.Control}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource Brush.ControlPressed}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
                             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="12,0,0,0">
-                                <!-- unpinned: the hamburger takes the badge's place so the pin button still fits in the expanded drawer -->
-                                <Border Width="30" Height="30" CornerRadius="7" Margin="0,0,10,0" ClipToBounds="True"
-                                        Visibility="{Binding NavPinned, Converter={StaticResource BoolToVis}}">
+                                <Border Width="30" Height="30" CornerRadius="7" Margin="0,0,10,0" ClipToBounds="True">
                                     <Image Source="pack://application:,,,/Assets/EzForensics.png" RenderOptions.BitmapScalingMode="HighQuality"
                                            AutomationProperties.AutomationId="Shell.Brand.Logo"/>
                                 </Border>
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="EZ Forensics" FontSize="16" FontWeight="SemiBold" AutomationProperties.AutomationId="Shell.Brand"/>
-                                    <TextBlock Text="Forensic toolkit" Style="{StaticResource Caption}" FontSize="10.5"/>
+                                    <TextBlock Text="Forensic toolkit" Style="{StaticResource Caption}" FontSize="11"/>
                                 </StackPanel>
                             </StackPanel>
-                            <ToggleButton DockPanel.Dock="Right" AutomationProperties.AutomationId="Shell.Nav.Pin" AutomationProperties.Name="Pin navigation"
-                                          IsChecked="{Binding NavPinned}" Width="28" Height="28" Padding="0" Margin="0,0,8,0" VerticalAlignment="Center"
-                                          Background="Transparent" BorderBrush="Transparent" Focusable="True" IsTabStop="True">
-                                <ToggleButton.Style>
-                                    <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
-                                        <Setter Property="ToolTip" Value="Pin the navigation open"/>
-                                        <Setter Property="Content" Value="&#xE718;"/>
-                                        <Setter Property="FontFamily" Value="{StaticResource Font.Icon}"/>
-                                        <Setter Property="FontSize" Value="13"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsChecked" Value="True">
-                                                <Setter Property="ToolTip" Value="Unpin: collapse the navigation to an icon rail"/>
-                                                <Setter Property="Content" Value="&#xE77A;"/>
-                                            </Trigger>
-                                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ToggleButton.Style>
-                            </ToggleButton>
                         </DockPanel>
-                        <!-- footer: theme toggle + Settings entry (flyout with Tools and Options) -->
+                        <!-- bottom zone: AI, Tools, Options, then the theme toggle -->
                         <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,8">
                             <Rectangle Height="1" Margin="12,0,12,6" Fill="{DynamicResource Brush.Border}"/>
-                            <StackPanel x:Name="FooterRows">
+                            <Button Style="{StaticResource NavFooterButton}" Tag="{Binding IsAiActive}" Command="{Binding OpenFooterPageCommand}" CommandParameter="{Binding AiItem}"
+                                    ToolTip="AI" AutomationProperties.AutomationId="Shell.Nav.AI" AutomationProperties.Name="AI">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE99A;" FontSize="16" Width="22"/>
+                                    <TextBlock Text="AI" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource NavFooterButton}" Tag="{Binding IsToolsActive}" Command="{Binding OpenFooterPageCommand}" CommandParameter="{Binding ToolsItem}"
+                                    ToolTip="Tools" AutomationProperties.AutomationId="Shell.Nav.Tools" AutomationProperties.Name="Tools">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE90F;" FontSize="16" Width="22"/>
+                                    <TextBlock Text="Tools" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource NavFooterButton}" Tag="{Binding IsOptionsActive}" Command="{Binding OpenFooterPageCommand}" CommandParameter="{Binding OptionsItem}"
+                                    ToolTip="Options" AutomationProperties.AutomationId="Shell.Nav.Options" AutomationProperties.Name="Options">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE9E9;" FontSize="16" Width="22"/>
+                                    <TextBlock Text="Options" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                             <Button Style="{StaticResource NavFooterButton}" Command="{Binding ToggleThemeCommand}" ToolTip="{Binding ThemeTip}"
                                     AutomationProperties.AutomationId="Shell.Nav.Theme" AutomationProperties.Name="Toggle light or dark theme">
                                 <StackPanel Orientation="Horizontal">
@@ -159,48 +354,6 @@
                                     <TextBlock Text="{Binding ThemeTip}" Margin="14,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="GearButton" Style="{StaticResource NavFooterButton}" Tag="{Binding IsSettingsParentActive}" Click="Gear_Click"
-                                    HorizontalContentAlignment="Stretch"
-                                    ToolTip="Settings: Tools and Options" AutomationProperties.AutomationId="Shell.Nav.Gear"
-                                    AutomationProperties.Name="Settings">
-                                <DockPanel LastChildFill="True">
-                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="11" Margin="0,0,6,0"
-                                               VerticalAlignment="Center" AutomationProperties.AutomationId="Shell.Nav.Gear.Chevron"/>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE713;" FontSize="16" Width="22"/>
-                                        <TextBlock Text="Settings" Margin="14,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </DockPanel>
-                            </Button>
-                            </StackPanel>
-                            <!-- flyout with Tools and Options: a continuation of the drawer. Placed Right of FooterRows (theme + Settings rows), so its top edge is the
-                                 theme row top; the Border has a 1px top border, so VerticalOffset -1 puts the Tools row level with the Switch theme row and the
-                                 Options row level with the Settings row (same NavFooterButton style: same height, margins and text baseline). -->
-                            <Popup x:Name="SettingsFlyout" PlacementTarget="{Binding ElementName=FooterRows}" Placement="Right"
-                                   HorizontalOffset="0" VerticalOffset="-1" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
-                                   IsOpen="{Binding IsSettingsExpanded, Mode=TwoWay}" Closed="SettingsFlyout_Closed" Opened="SettingsFlyout_Opened"
-                                   AutomationProperties.AutomationId="Shell.Gear.Flyout">
-                                <Border Margin="0" Padding="0" CornerRadius="0,8,8,0" MinWidth="170"
-                                        Background="{DynamicResource Brush.Nav}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,1,1"
-                                        PreviewKeyDown="SettingsFlyout_PreviewKeyDown" KeyboardNavigation.DirectionalNavigation="Cycle" KeyboardNavigation.TabNavigation="Cycle">
-                                    <StackPanel>
-                                        <Button x:Name="FlyoutToolsButton" Style="{StaticResource NavFooterButton}" Tag="{Binding IsToolsActive}" Command="{Binding OpenFooterPageCommand}" CommandParameter="{Binding ToolsItem}"
-                                                ToolTip="Tools" AutomationProperties.AutomationId="Shell.Gear.Tools" AutomationProperties.Name="Tools">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE90F;" FontSize="16" Width="22"/>
-                                                <TextBlock Text="Tools" Margin="14,0,24,0" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Style="{StaticResource NavFooterButton}" Tag="{Binding IsOptionsActive}" Command="{Binding OpenFooterPageCommand}" CommandParameter="{Binding OptionsItem}"
-                                                ToolTip="Options" AutomationProperties.AutomationId="Shell.Gear.Options" AutomationProperties.Name="Options">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE9E9;" FontSize="16" Width="22"/>
-                                                <TextBlock Text="Options" Margin="14,0,24,0" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Button>
-                                    </StackPanel>
-                                </Border>
-                            </Popup>
                         </StackPanel>
                         <ListBox ItemsSource="{Binding MainItems}" SelectedItem="{Binding SelectedMain}" AutomationProperties.AutomationId="Nav"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -269,7 +422,7 @@
         <!-- status bar -->
         <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource Brush.Nav}" BorderBrush="{DynamicResource Brush.Border}"
                 BorderThickness="0,1,0,0" Padding="14,5">
-            <DockPanel TextElement.FontSize="11.5" TextElement.Foreground="{DynamicResource Brush.TextSecondary}">
+            <DockPanel TextElement.FontSize="{DynamicResource FontSize.Caption}" TextElement.Foreground="{DynamicResource Brush.TextSecondary}">
                 <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{DynamicResource Brush.WarningBg}"
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" Margin="12,0,0,0">
                     <StackPanel Orientation="Horizontal">
@@ -292,12 +445,17 @@
                            AutomationProperties.AutomationId="StatusBar.Net9" AutomationProperties.HelpText="{Binding Net9Tip}"/>
                 <TextBlock DockPanel.Dock="Right" Text="{Binding ToolCountText}" Margin="16,0,0,0" VerticalAlignment="Center"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="11"/>
-                    <TextBlock Margin="6,0,0,0">
-                        <Run Text="{Binding RunningJobs, Mode=OneWay}"/><Run Text=" running"/>
-                        <Run Text="·"/>
-                        <Run Text="{Binding QueuedJobs, Mode=OneWay}"/><Run Text=" queued"/>
-                    </TextBlock>
+                    <Button Style="{StaticResource StatusMiniButton}" Command="{Binding ShowJobsCommand}" Width="Auto" Padding="4,0" FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}"
+                            ToolTip="Open Ingest" AutomationProperties.AutomationId="StatusBar.Jobs" AutomationProperties.Name="Open Ingest jobs">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="11"/>
+                            <TextBlock Margin="6,0,0,0">
+                                <Run Text="{Binding RunningJobs, Mode=OneWay}"/><Run Text=" running"/>
+                                <Run Text="·"/>
+                                <Run Text="{Binding QueuedJobs, Mode=OneWay}"/><Run Text=" queued"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Button>
                     <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" FontSize="11" Margin="18,0,0,0"/>
                     <TextBlock Margin="6,0,0,0" Text="{Binding ToolsRoot}" TextTrimming="CharacterEllipsis" MaxWidth="520"
                                ToolTip="{Binding ToolsRoot}"/>

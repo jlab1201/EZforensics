@@ -1,0 +1,2 @@
+TreeDepth,PID,Process,Start VPN,End VPN,Tag,Protection,CommitCharge,PrivateMemory,File output,Notes,Hexdump,Disasm
+0,6104,svchost.exe,0x1c0000,0x1fefff,VadS,PAGE_EXECUTE_READWRITE,63,1,Disabled,MZ header,4d 5a 90 00 03 00 00 00 04 00 00 00 ff ff 00 00,0x1c0000: dec ebp; pop edx; nop

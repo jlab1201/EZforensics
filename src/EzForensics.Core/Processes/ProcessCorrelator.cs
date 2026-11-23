@@ -47,7 +47,7 @@ public static class ProcessCorrelator
     public const string ListFolderName = "Processes";
     /// <summary>The merged, readable process list (one row per process instance, all sources combined).</summary>
     public const string ListCsv = "Processes.csv";
-    /// <summary>Category of the correlator job (Jobs page); not a case-tree category.</summary>
+    /// <summary>Category of the correlator job (the Jobs list on Ingest); not a case-tree category.</summary>
     public const string JobCategory = "Process tree data";
     public const string Switch = "--process-correlator";
     public const string NodesCsv = "Processes.csv";
@@ -55,7 +55,7 @@ public static class ProcessCorrelator
     public const string SetsCsv = "Processes_Sets.csv";
     public const string InputsFile = ".inputs.json";
     /// <summary>Bumped when a column or the meaning of a file changes: older output then counts as stale.</summary>
-    public const int FormatVersion = 7;
+    public const int FormatVersion = 8;   // 8: several ghosts per parent PID (split by boot / PID reuse / ParentImage)
     internal const string TimeFormat = "yyyy-MM-dd HH:mm:ss.fffffff";
     /// <summary>A JSON cell (Cells, Headers, Rows) is kept under this length so <see cref="PersistenceCollector.Esc"/> never cuts it.</summary>
     private const int MaxJsonCell = 30000;
@@ -514,7 +514,7 @@ public static class ProcessCorrelator
     private static string T(DateTime? t) => t?.ToString(TimeFormat, CultureInfo.InvariantCulture) ?? "";
 
     internal static DateTime? ParseTime(string s) =>
-        DateTime.TryParseExact(s, TimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var t) ? t : null;
+        EzForensics.Core.Time.TimeParse.Exact(s, TimeFormat);
 
     // ------------------------------------------------------------------ load
 
@@ -569,6 +569,9 @@ public static class ProcessCorrelator
                 Company = S("Company"), Product = S("Product"), VersionInfoSource = S("VersionInfoSource"), UserSource = S("UserSource"), Integrity = S("Integrity"),
                 IsGhost = S("IsGhost") == "True",
             };
+            // several ghosts of one PID differ only by the suffix of their written key
+            if (n.IsGhost && S("Key") is var gk && gk.StartsWith(ProcessNode.GhostKey(n.Pid) + "/", StringComparison.Ordinal))
+                n.GhostSuffix = gk[ProcessNode.GhostKey(n.Pid).Length..];
             (n.IsGhost ? g.Ghosts : g.AllNodes).Add(n);
             extra?.Invoke(n, S);
             byKey.TryAdd(n.Key, n);

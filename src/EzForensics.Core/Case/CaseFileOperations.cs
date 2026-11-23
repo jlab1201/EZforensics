@@ -115,7 +115,7 @@ public sealed class CaseFileOperations
         name.Equals(CaseLayout.MarkerFileName, StringComparison.OrdinalIgnoreCase)
         || CaseIndex.IsManifestFileName(name);
 
-    /// <summary>The first segment of a case-relative path is <c>logs</c>, <c>.ezstaging</c> or <c>.ezcache</c>.</summary>
+    /// <summary>The first segment of a case-relative path is <c>logs</c>, <c>.ezstaging</c>, <c>.ezcache</c> or <c>.ezassistant</c>.</summary>
     private bool IsInReservedFolder(string full)
     {
         var rel = Relative(full);
@@ -123,7 +123,8 @@ public sealed class CaseFileOperations
         var first = rel.Split('\\', '/')[0];
         return first.Equals(LogsFolderName, StringComparison.OrdinalIgnoreCase)
                || first.Equals(OutputPlan.StagingFolderName, StringComparison.OrdinalIgnoreCase)
-               || first.Equals(CacheFolderName, StringComparison.OrdinalIgnoreCase);
+               || first.Equals(CacheFolderName, StringComparison.OrdinalIgnoreCase)
+               || first.Equals(Assistant.AssistantConsent.FolderName, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Normalises <paramref name="path"/> and refuses anything an operation may not take as its source.</summary>
@@ -412,7 +413,8 @@ public sealed class CaseFileOperations
         {
             // roll back what moved, so a CSV never loses its sidecars
             foreach (var (from, to) in Enumerable.Reverse(done))
-                try { File.Move(to, from, overwrite: false); } catch { }
+                try { File.Move(to, from, overwrite: false); }
+                catch (Exception rex) { EzForensics.Core.Diagnostics.CoreLog.Warn($"Rollback could not move {to} back to {from}", rex); }
             throw;
         }
         foreach (var (from, to) in moves) Log(op, from, to, "-");

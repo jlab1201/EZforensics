@@ -79,6 +79,9 @@ public partial class App : Application
         }
         _single.StartListening(() => Dispatcher.BeginInvoke(new Action(BringToFront)));
         base.OnStartup(e);
+        EzForensics.Core.Assistant.PromptStore.Log = AppLog.Info;
+        EzForensics.Core.Knowledge.KnowledgeLog.Sink = AppLog.Info;
+        EzForensics.Core.Diagnostics.CoreLog.Sink = AppLog.Warn;
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += (_, a) =>
         {
@@ -263,18 +266,36 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        try { AppServices.Current?.Queue.CancelAll(); } catch { }
-        FlushUserState();
-        try { _single?.Dispose(); } catch { }
+        try { AppServices.Current?.Queue.CancelAll(); } catch (Exception ex) { AppLog.Error("Shutdown: could not cancel running jobs", ex); }
+        var failed = FlushUserState();
+        try { EzForensics.App.Views.Explore.ExploreView.ShutdownHost(); } catch (Exception ex) { AppLog.Error("Shutdown: could not stop the Explore host", ex); }
+        try { EzForensics.App.ViewModels.AssistantChatViewModel.Shutdown(); } catch (Exception ex) { AppLog.Error("Shutdown: could not stop Spectre", ex); }
+        try { _single?.Dispose(); } catch (Exception ex) { AppLog.Error("Shutdown: could not release the single-instance lock", ex); }
+        if (failed.Count > 0)
+        {
+            try
+            {
+                Dialogs.Show("Some changes were not saved",
+                    "EZ Forensics could not save: " + string.Join(", ", failed) + ".\n\nSee the log for details:\n" + AppLog.LogPath,
+                    EzDialogSeverity.Warning);
+            }
+            catch (Exception ex) { AppLog.Error("Shutdown: could not show the save-failure dialog", ex); }
+        }
         AppLog.Info("EZ Forensics exiting");
         base.OnExit(e);
+        // Last step, after everything is saved: if the process is still alive 10 s later, log it and force the exit.
+        EzForensics.Core.Diagnostics.ExitWatchdog.Start(TimeSpan.FromSeconds(10), AppLog.Warn, Environment.Exit, e.ApplicationExitCode);
     }
 
-    /// <summary>Writes pending row flags and the Analyze session state now (exit, Windows logoff / shutdown, crash). Never throws.</summary>
-    private void FlushUserState()
+    /// <summary>Writes pending row flags and the Analyze session state now (exit, Windows logoff / shutdown, crash). Never throws; every failure is logged and the names of what could not be saved are returned.</summary>
+    private List<string> FlushUserState()
     {
-        try { _shell?.Results.FlushFlags(); } catch { }
-        try { _shell?.Results.SaveSessionNow(); } catch { }
+        var failed = new List<string>();
+        try { if (_shell != null && !_shell.Results.FlushFlags()) failed.Add("row flags"); }
+        catch (Exception ex) { AppLog.Error("Could not save row flags", ex); failed.Add("row flags"); }
+        try { if (_shell != null && !_shell.Results.SaveSessionNow()) failed.Add("the Analyze view"); }
+        catch (Exception ex) { AppLog.Error("Could not save the Analyze session", ex); failed.Add("the Analyze view"); }
+        return failed;
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

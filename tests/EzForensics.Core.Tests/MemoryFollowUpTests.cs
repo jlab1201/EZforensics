@@ -190,6 +190,18 @@ public class MemoryFollowUpTests
         log.Should().Contain(l => l.Contains("cancelled before any rows were produced") && l.Contains("PsScan.csv"));
     }
 
+    [Fact]
+    public void Partial_csv_keeps_backslashes_through_the_drop_check_and_publish_normalise()
+    {
+        using var d = new TempDir();
+        var f = Path.Combine(d.Path, "PsList_PARTIAL.csv");
+        File.WriteAllText(f, "TreeDepth,PID,Path\n0,4,\"C:\\\\Windows\\\\cmd.exe\"\n");
+        MemoryJobs.DropEmptyPartialCsvs(new[] { f }, _ => { });   // JobQueue pass
+        VolatilityCsv.Normalize(f, f);                             // FinallyStep pass on the published file
+        File.ReadAllText(f).Should().Contain("C:\\Windows\\cmd.exe");
+        File.Exists(f + ".rows").Should().BeFalse();
+    }
+
     // ---- unsupported dump types
 
     private static MemoryImage Dump(DumpKind kind, string? note = null) =>

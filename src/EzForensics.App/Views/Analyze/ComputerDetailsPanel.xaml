@@ -17,22 +17,24 @@
                         AutomationProperties.AutomationId="Results.ComputerDetails.Refresh" AutomationProperties.Name="Refresh computer details"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="&#xE8A5;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
                         MinHeight="0" Padding="6,4" Margin="2,0,0,0" Command="{Binding OpenReportCommand}"
-                        ToolTip="Open the full report (SystemInfo\ComputerDetails.csv: Category, Field, Value, Source) in the grid"
+                        ToolTip="Open the full report (SystemInfo\ComputerDetails.csv: Category, Field, Value, Source) in the table"
                         AutomationProperties.AutomationId="Results.ComputerDetails.OpenReport" AutomationProperties.Name="Open full report"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="&#xE8C8;" FontFamily="{StaticResource Font.Icon}" FontSize="11"
                         MinHeight="0" Padding="6,4" Margin="2,0,0,0" Command="{Binding CopyAllCommand}" ToolTip="Copy all details"
                         AutomationProperties.AutomationId="Results.ComputerDetails.CopyAll" AutomationProperties.Name="Copy all computer details"/>
                 <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Width="36" Height="3" Margin="0,0,6,0" VerticalAlignment="Center"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-                <Button DockPanel.Dock="Right" Command="{Binding ToggleDetailsCommand}" Style="{StaticResource SubtleButton}" MinHeight="0" Padding="6,3" Margin="2,0,0,0"
+                <Button DockPanel.Dock="Right" Command="{Binding ToggleDetailsCommand}" Style="{StaticResource SubtleButton}" MinHeight="0" Padding="6,3" Margin="8,0,0,0"
                               AutomationProperties.AutomationId="Results.ComputerDetails.Toggle" AutomationProperties.Name="Show details"
                               ToolTip="Show or hide the detailed computer details"
                         Content="{Binding DetailsButtonText}"/>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE7F8;" FontFamily="{StaticResource Font.Icon}" FontSize="13" Margin="0,0,6,0"
+                <!-- the title trims (…) when the pane is narrow instead of running under the buttons -->
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="&#xE7F8;" FontFamily="{StaticResource Font.Icon}" FontSize="13" Margin="0,0,6,0"
                                VerticalAlignment="Center" Foreground="{DynamicResource Brush.Accent}"/>
-                    <TextBlock Text="Computer details" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text}"/>
-                </StackPanel>
+                    <TextBlock Text="Computer details" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text}"
+                               TextTrimming="CharacterEllipsis" ToolTip="Computer details"/>
+                </DockPanel>
             </DockPanel>
             <TextBlock Text="{Binding SummaryText}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding SummaryText}"
                        Foreground="{DynamicResource Brush.TextSecondary}" Visibility="{Binding ShowSummary, Converter={StaticResource BoolToVis}}"

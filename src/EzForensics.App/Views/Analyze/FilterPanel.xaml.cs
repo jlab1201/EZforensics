@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Text;
 using System.Windows;
@@ -22,6 +23,15 @@ public partial class FilterPanel : UserControl
     {
         InitializeComponent();
         FilterText.MouseLeftButtonDown += (_, _) => FilterText.Focus();
+    }
+
+    /// <summary>Keeps the filter text (and the button after it) out of the bottom-right area where the Spectre launcher floats.</summary>
+    private void Trail_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        const double LauncherReserve = 72;
+        var avail = TrailHost.ActualWidth - LauncherReserve - ActionsButton.ActualWidth - ActionsButton.Margin.Left
+                    - (SavedName.Visibility == Visibility.Visible ? SavedName.ActualWidth + SavedName.Margin.Left + SavedName.Margin.Right : 0);
+        FilterText.MaxWidth = Math.Max(60, avail);
     }
 
     private void CopyFilter_Click(object sender, RoutedEventArgs e) => CopyText();

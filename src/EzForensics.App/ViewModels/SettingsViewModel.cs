@@ -49,7 +49,29 @@ public sealed partial class SettingsViewModel : PageViewModel
     [ObservableProperty] private AppSettings _edit = new();
     [ObservableProperty] private bool _isDirty;
 
-    public SettingsViewModel() => Load();
+    public SettingsViewModel()
+    {
+        Ai = new AiSettingsViewModel(() => Edit, new ApiKeyStore(), S.CreateHttpClient);
+        Load();
+        S.Settings.PropertyChanged += OnLiveChanged;
+    }
+
+    private bool _mirroring;
+
+    /// <summary>
+    /// The Spectre panel's Auto-mode switch writes the live setting directly. Mirror it into the Options copy so a later Save (of
+    /// other, unsaved edits) does not put back the value the copy was loaded with.
+    /// </summary>
+    private void OnLiveChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(AppSettings.AssistantAutoMode) || Edit == null || Edit.AssistantAutoMode == S.Settings.AssistantAutoMode) return;
+        _mirroring = true;
+        try { Edit.AssistantAutoMode = S.Settings.AssistantAutoMode; }
+        finally { _mirroring = false; }
+    }
+
+    /// <summary>Options > AI.</summary>
+    public AiSettingsViewModel Ai { get; }
 
     public override string Title => "Options";
     public string SettingsPath => S.Store.Path;
@@ -90,6 +112,7 @@ public sealed partial class SettingsViewModel : PageViewModel
         Copy(S.Settings, e);
         e.PropertyChanged += OnEditChanged;
         Edit = e;
+        Ai.OnProviderChanged(loading: true);
         LoadFlagItems(e.Flags);
         LoadHotKeys(e.HotKeys);
         RefreshSelectionRows();
@@ -161,7 +184,9 @@ public sealed partial class SettingsViewModel : PageViewModel
 
     private void OnEditChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (_mirroring) return;
         IsDirty = true;
+        if (e.PropertyName == nameof(AppSettings.AiProvider)) Ai.OnProviderChanged();
         if (e.PropertyName == nameof(AppSettings.Theme)) ThemeManager.Apply(Edit.Theme); // preview immediately
         else if (e.PropertyName is nameof(AppSettings.UiFontFamily) or nameof(AppSettings.UiFontSize)
                  or nameof(AppSettings.MonoFontFamily) or nameof(AppSettings.MonoFontSize))
@@ -185,7 +210,7 @@ public sealed partial class SettingsViewModel : PageViewModel
             ApplyFonts(live);
             IsDirty = false;
             if (rootChanged) await S.RescanAsync();
-            ShowMessage("Settings saved.", InfoSeverity.Success);
+            ShowMessage("Options saved.", InfoSeverity.Success);
         }, "Could not save settings");
     }
 
@@ -208,7 +233,7 @@ public sealed partial class SettingsViewModel : PageViewModel
     [RelayCommand]
     private void BrowseCaseRoot()
     {
-        var d = Dialogs.PickFolder("Case root folder", Edit.CaseRoot);
+        var d = Dialogs.PickFolder("Case folder", Edit.CaseRoot);
         if (d != null) Edit.CaseRoot = d;
     }
 
@@ -263,6 +288,13 @@ public sealed partial class SettingsViewModel : PageViewModel
     public static void Copy(AppSettings from, AppSettings to)
     {
         to.ToolsRoot = from.ToolsRoot;
+        to.AiProvider = from.AiProvider;
+        to.AiModel = from.AiModel;
+        to.AiModelByProvider = new Dictionary<string, string>(from.AiModelByProvider);
+        to.AiBaseUrl = from.AiBaseUrl;
+        to.AssistantAutoMode = from.AssistantAutoMode;
+        to.RunSpectreAfterIngest = from.RunSpectreAfterIngest;
+        to.ExaminerName = from.ExaminerName;
         to.PreferredFlavor = from.PreferredFlavor;
         to.ProxyMode = from.ProxyMode;
         to.ProxyUrl = from.ProxyUrl;

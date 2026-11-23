@@ -1,0 +1,12 @@
+<Window x:Class="EzForensics.App.Views.Explore.CyberChefWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CyberChef" Width="1100" Height="720" MinWidth="480" MinHeight="320"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True" ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}" TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}"
+        AutomationProperties.AutomationId="CyberChef.Window">
+    <DockPanel LayoutTransform="{DynamicResource Ui.Scale}">
+        <ContentControl x:Name="PanelSlot" AutomationProperties.AutomationId="CyberChef.WindowSlot"/>
+    </DockPanel>
+</Window>

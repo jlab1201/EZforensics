@@ -1,0 +1,23 @@
+<UserControl x:Class="EzForensics.App.Views.Explore.CyberChefPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             AutomationProperties.AutomationId="CyberChef.Panel">
+    <Grid>
+        <Grid x:Name="WebHost" AutomationProperties.AutomationId="CyberChef.WebHost"/>
+        <Border x:Name="Placeholder" Visibility="Collapsed" Background="{DynamicResource Brush.Window}" Padding="20"
+                AutomationProperties.AutomationId="CyberChef.Placeholder">
+            <StackPanel VerticalAlignment="Center" MaxWidth="460">
+                <TextBlock Text="CyberChef is not available" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Text}"
+                           AutomationProperties.AutomationId="CyberChef.PlaceholderTitle"/>
+                <TextBlock x:Name="ReasonText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text}"
+                           AutomationProperties.AutomationId="CyberChef.PlaceholderReason"/>
+                <StackPanel x:Name="RuntimeLinkPanel" Visibility="Collapsed" Margin="0,12,0,0">
+                    <TextBlock Text="Microsoft WebView2 Runtime download:" Style="{DynamicResource Caption}"/>
+                    <TextBox x:Name="RuntimeUrlBox" IsReadOnly="True" Margin="0,4,0,6" AutomationProperties.AutomationId="CyberChef.RuntimeUrl"/>
+                    <Button Content="Open download page" HorizontalAlignment="Left" Click="OpenRuntime_Click"
+                            AutomationProperties.AutomationId="CyberChef.OpenRuntime"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

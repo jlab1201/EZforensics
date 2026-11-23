@@ -95,8 +95,7 @@ public static class ProcessSockets
 
     private static string Cell(string[] r, int i) => i >= 0 && i < r.Length ? (r[i] ?? "").Trim() : "";
 
-    private static DateTime? ParseTime(string s) =>
-        s.Length > 0 && DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var t) ? t : null;
+    private static DateTime? ParseTime(string s) => EzForensics.Core.Time.TimeParse.Lenient(s);
 
     /// <summary>A socket when both endpoints are complete (address and a non-zero port); null otherwise.</summary>
     public static ProcessSocket? Make(string proto, string localIp, string localPort, string remoteIp, string remotePort, DateTime? time, string source)

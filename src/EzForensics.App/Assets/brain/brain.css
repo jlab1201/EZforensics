@@ -1,0 +1,70 @@
+/* Brain page. The canvas follows the app theme (brain.js applyTheme); data-theme on <html> is set from the app. */
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 45%, #1a1538 0%, #0e1328 45%, #070a14 100%);
+  font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  user-select: none;
+}
+
+[data-theme="light"] body { background: radial-gradient(ellipse at 50% 45%, #ffffff 0%, #f1f3f9 45%, #dde2ec 100%); }
+[data-theme="light"] #drop { color: #1f2430; background: rgba(14, 116, 180, 0.06); border-color: rgba(14, 116, 180, 0.5); }
+
+#graph { position: absolute; inset: 0; }
+#graph canvas { display: block; outline: none; }
+
+/* 3d-force-graph's own overlays: we draw our own tooltip and need no "Loading..." line */
+.graph-info-msg, .float-tooltip-kap { display: none !important; }
+
+#tip {
+  position: fixed;
+  pointer-events: none;
+  max-width: 320px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #e6e8ee;
+  background: rgba(20, 26, 42, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#tip .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: 0;
+}
+
+#tip .kind { color: #94a3b8; margin-left: 6px; }
+
+[data-theme="light"] #tip {
+  color: #1f2430;
+  background: rgba(248, 250, 252, 0.95);
+  border-color: rgba(31, 36, 48, 0.15);
+}
+
+[data-theme="light"] #tip .kind { color: #5b6476; }
+
+#drop {
+  position: fixed;
+  inset: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font: 15px/1.4 system-ui, 'Segoe UI', sans-serif;
+  color: #e6e8ee;
+  background: rgba(79, 209, 255, 0.07);
+  border: 2px dashed rgba(79, 209, 255, 0.55);
+  border-radius: 12px;
+}
+
+#drop[hidden] { display: none; }

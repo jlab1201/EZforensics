@@ -4,7 +4,7 @@ using EzForensics.Core.Plaso;
 
 namespace EzForensics.Core.Memory;
 
-/// <summary>One install step, run as a JobQueue job (logged, on the Jobs page, in the run manifest).</summary>
+/// <summary>One install step, run as a JobQueue job (logged, in the Jobs list on Ingest, in the run manifest).</summary>
 public sealed record VolatilitySetupStep(string ToolId, string Exe, IReadOnlyList<string> Args, string Label, TimeSpan Timeout, string? ExeVersion = null)
 {
     public JobSpec ToJobSpec(string outputDir) =>
@@ -105,8 +105,12 @@ public static class VolatilitySetup
 
     public static bool SymbolPackInstalled(string symbolsDir) => File.Exists(Path.Combine(symbolsDir, SymbolPackMarker));
 
-    /// <summary>Streams <paramref name="url"/> into <paramref name="destFile"/> (via a .part file); progress is 0..1 when the size is known.</summary>
-    public static async Task DownloadFileAsync(HttpClient http, string url, string destFile, IProgress<double>? progress, Action<string>? log, CancellationToken ct)
+    /// <summary>
+    /// Streams <paramref name="url"/> into <paramref name="destFile"/> (via a .part file); progress is 0..1 when the size is known.
+    /// Returns the SHA-256 of the download (also logged). windows.zip is an unversioned "latest" file (~800 MB) that the Volatility
+    /// Foundation replaces, so it is not hash-pinned: https + the official host is the gate and the hash is kept for chain of custody.
+    /// </summary>
+    public static async Task<string> DownloadFileAsync(HttpClient http, string url, string destFile, IProgress<double>? progress, Action<string>? log, CancellationToken ct)
     {
         if (!IsOfficialSymbolUrl(url)) throw new InvalidOperationException($"Refusing to download from {url}.");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destFile))!);
@@ -117,6 +121,7 @@ public static class VolatilitySetup
         if (!host.Equals("downloads.volatilityfoundation.org", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"The download was redirected to an unexpected host ({host}); stopped.");
         long total = resp.Content.Headers.ContentLength ?? 0, done = 0, lastLog = 0;
+        using var sha = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
         try
         {
             await using (var src = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
@@ -127,6 +132,7 @@ public static class VolatilitySetup
                 while ((n = await src.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
                 {
                     await dst.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
+                    sha.AppendData(buf, 0, n);
                     done += n;
                     if (total > 0) progress?.Report(done / (double)total);
                     if (done - lastLog >= 100L << 20) { lastLog = done; log?.Invoke($"Downloaded {done >> 20} MB" + (total > 0 ? $" of {total >> 20} MB" : "")); }
@@ -135,10 +141,14 @@ public static class VolatilitySetup
             File.Move(part, destFile, overwrite: true);
         }
         catch { PrivatePython.TryDelete(part); throw; }
+        var hex = Convert.ToHexString(sha.GetHashAndReset());
+        log?.Invoke($"Downloaded {Path.GetFileName(destFile)} from {resp.RequestMessage?.RequestUri} ({done:N0} bytes), SHA-256 {hex}");
+        return hex;
     }
 
     /// <summary>Extracts the pack into <paramref name="symbolsDir"/> keeping its folder structure (rejects paths that escape it). Returns the file count.</summary>
-    public static int ExtractSymbolPack(string zipFile, string symbolsDir, IProgress<double>? progress = null, CancellationToken ct = default)
+    public static int ExtractSymbolPack(string zipFile, string symbolsDir, IProgress<double>? progress = null, CancellationToken ct = default,
+        string? sha256 = null)
     {
         var root = Path.GetFullPath(symbolsDir).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
         Directory.CreateDirectory(root);
@@ -159,7 +169,7 @@ public static class VolatilitySetup
             n++;
             if (i % 200 == 0) progress?.Report(i / (double)count);
         }
-        File.WriteAllText(Path.Combine(root, SymbolPackMarker), $"{DateTime.UtcNow:O} {SymbolPackUrl}\n");
+        File.WriteAllText(Path.Combine(root, SymbolPackMarker), $"{DateTime.UtcNow:O} {SymbolPackUrl}" + (sha256 != null ? $" sha256={sha256}" : "") + "\n");
         progress?.Report(1);
         return n;
     }

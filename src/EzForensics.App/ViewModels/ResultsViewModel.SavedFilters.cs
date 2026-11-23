@@ -95,16 +95,63 @@ public sealed partial class ResultsViewModel
         WarnMissingColumns(f.Name, node);
     }
 
-    /// <summary>Filter builder OK: expression, search text and saved-filter name in one go.</summary>
-    public void ApplyBuilderResult(FilterGroup root, string globalText, string? savedName)
+    /// <summary>The filter expression plus the grid's flag filter as a trailing <see cref="FilterFlag"/> (what the filter builder opens with).</summary>
+    public FilterGroup BuildExpressionWithFlag()
     {
+        var root = BuildExpression();
+        if (FlagFilter == true) root.Children.Add(new FilterFlag(true, SelectedFlagIds));
+        else if (FlagFilter == false) root.Children.Add(new FilterFlag(false));
+        return root;
+    }
+
+    /// <summary>
+    /// Filter builder OK: expression, search text and saved-filter name in one go. Top-level <see cref="FilterFlag"/> nodes become the grid's flag filter
+    /// (none = flag filter cleared, unless <paramref name="keepFlagWhenAbsent"/>).
+    /// </summary>
+    public void ApplyBuilderResult(FilterGroup root, string globalText, string? savedName, bool keepFlagWhenAbsent = false)
+    {
+        var (expr, flag) = SplitFlag(root);
         EditFilters(() =>
         {
-            LoadExpression(root);
+            LoadExpression(expr);
             GlobalText = globalText ?? "";
             ActiveSavedFilter = savedName;
+            if (flag != null || !keepFlagWhenAbsent) ApplyFlagNode(flag);
         });
-        if (savedName != null) WarnMissingColumns(savedName, root);
+        if (savedName != null) WarnMissingColumns(savedName, expr);
+    }
+
+    /// <summary>Splits the top-level flag conditions off <paramref name="root"/> (an unnegated And group); nested ones are left out of the grid filter.</summary>
+    public static (FilterGroup Expr, FilterFlag? Flag) SplitFlag(FilterGroup root)
+    {
+        var copy = (FilterGroup)root.Clone();
+        FilterFlag? flag = null;
+        if (copy is { Kind: FilterGroupKind.And, Negate: false })
+        {
+            var flags = copy.Children.OfType<FilterFlag>().ToList();
+            copy.Children.RemoveAll(c => c is FilterFlag);
+            if (flags.Count > 0)
+            {
+                var flagged = flags.Where(f => f.Flagged).ToList();
+                // "not flagged" together with "flagged" matches nothing sensible; flagged wins
+                flag = flagged.Count > 0 ? new FilterFlag(true, flagged.SelectMany(f => f.Ids)) : new FilterFlag(false);
+                if (flagged.Any(f => f.Ids.Count == 0)) flag = new FilterFlag(true);
+            }
+        }
+        return (copy, flag);
+    }
+
+    private void ApplyFlagNode(FilterFlag? flag)
+    {
+        _syncingFlagOptions = true;
+        try
+        {
+            var ids = flag is { Flagged: true } ? flag.Ids : new HashSet<string>();
+            foreach (var o in FlagOptions) o.IsSelected = ids.Contains(o.Id);
+            FlagFilter = flag == null ? null : flag.Flagged;
+        }
+        finally { _syncingFlagOptions = false; }
+        UpdateFlagFilterText();
     }
 
     /// <summary>Warning toast for columns a filter refers to that this CSV does not have.</summary>
@@ -113,7 +160,7 @@ public sealed partial class ResultsViewModel
         if (node == null) return;
         var missing = SavedFilterStore.Columns(node).Where(c => !Headers.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
         if (missing.Count > 0)
-            ShowMessage($"Filter '{filterName}': columns not in this CSV were ignored: {string.Join(", ", missing)}", InfoSeverity.Warning);
+            ShowMessage($"Filter '{filterName}': columns not in this CSV match nothing: {string.Join(", ", missing)}", InfoSeverity.Warning);
     }
 
     /// <summary>Opens the file (when not already current) and applies the saved filter.</summary>

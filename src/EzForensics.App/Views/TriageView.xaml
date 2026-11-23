@@ -3,6 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:services="clr-namespace:EzForensics.App.Services"
              xmlns:c="clr-namespace:EzForensics.App.Controls"
+             xmlns:app="clr-namespace:EzForensics.App"
+             xmlns:v="clr-namespace:EzForensics.App.Views.Jobs"
              AllowDrop="True" PreviewDragOver="Page_PreviewDragOver" PreviewDrop="Page_PreviewDrop">
     <UserControl.Resources>
         <!-- one compact line of the archive details (below Planned jobs) -->
@@ -58,7 +60,7 @@
             </Style.Triggers>
         </Style>
         <Style x:Key="ResultBadgeText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSize.Small}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
             <Setter Property="Foreground" Value="{DynamicResource Brush.Info}"/>
@@ -74,306 +76,458 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- details row: a small "select a job" placeholder while nothing is selected, the shared height once a job is -->
+        <app:BoolToGridLengthConverter x:Key="DetailsRowHeight" TrueLength="*" FalseLength="Auto"/>
     </UserControl.Resources>
-    <!-- the page scrolls when the window is too short; PageRoot is sized to the viewport (TriageView.xaml.cs) so the planned jobs list keeps a usable height -->
-    <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
-    <DockPanel x:Name="PageRoot">
-        <StackPanel x:Name="PageHeader" DockPanel.Dock="Top">
-            <c:PageHeader Title="{x:Static services:PageNames.Ingest}" Margin="0,0,0,8"/>
-            <ContentControl Content="{Binding Banner}" ContentTemplate="{StaticResource InfoBarTemplate}"
-                            Visibility="{Binding Banner, Converter={StaticResource BoolToVis}}"/>
+    <!-- Ingest, top to bottom: title, the source and artifacts section (folds away when a run starts), the Jobs line, the hint lines, the jobs list and
+         the details pane of the selected job under a splitter. -->
+    <Grid Margin="0,0,8,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*" MinHeight="140"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition MinHeight="0">
+                <RowDefinition.Height>
+                    <Binding Path="Jobs.DetailsFill" Converter="{StaticResource DetailsRowHeight}"/>
+                </RowDefinition.Height>
+            </RowDefinition>
+        </Grid.RowDefinitions>
 
-            <!-- source + case -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="110"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0">
+                <c:PageHeader Title="{x:Static services:PageNames.Ingest}"/>
+                <ContentControl Content="{Binding Banner}" ContentTemplate="{StaticResource InfoBarTemplate}"
+                                Visibility="{Binding Banner, Converter={StaticResource BoolToVis}}"/>
 
-                    <TextBlock Text="Source" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                    <!-- type or paste a path (Explorer's "Copy as path" quotes are removed), or drop a file / folder anywhere on the page -->
-                    <TextBox x:Name="SourceBox" Grid.Column="1" AutomationProperties.AutomationId="Triage.Source" Text="{Binding Source, UpdateSourceTrigger=PropertyChanged}"
-                             Tag="Drive, KAPE output, mounted image, evidence folder, pcap, memory image or archive: browse, paste or drop it here"
-                             ToolTip="Paste a path, or drop a file or folder here"/>
-                    <!-- one dialog for both: pick a file, or open a folder and click Open ("Select this folder") -->
-                    <Button Grid.Column="2" Margin="6,0,0,0" Content="Browse…" Command="{Binding BrowseSourceCommand}" AutomationProperties.AutomationId="Triage.Browse"
-                            AutomationProperties.Name="Browse for a source"
-                            ToolTip="Pick an evidence file (packet capture, memory image, archive), or open a folder (drive, KAPE output, mounted image) and click Open"/>
-
-                    <TextBlock Grid.Row="1" Text="Case name" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,8,0,0"/>
-                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Text="{Binding CaseName, UpdateSourceTrigger=PropertyChanged}" Tag="case"/>
-
-                    <TextBlock Grid.Row="2" Text="Case folder" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,8,0,0"/>
-                    <TextBox AutomationProperties.AutomationId="Triage.CaseFolder" Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Text="{Binding CaseFolder, UpdateSourceTrigger=PropertyChanged}"/>
-                    <Button Grid.Row="2" Grid.Column="2" Margin="6,8,0,0" Content="Browse…" Command="{Binding BrowseCaseFolderCommand}"/>
-                </Grid>
-            </Border>
-
-            <DockPanel Margin="0,0,0,8">
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                    <Button AutomationProperties.AutomationId="Triage.Scan" Style="{StaticResource AccentButton}" Command="{Binding ScanCommand}" MinWidth="110">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE721;" FontSize="12"/>
-                            <TextBlock Text="Scan" Margin="6,0,0,0"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Content="Cancel" Command="{Binding CancelScanCommand}" Margin="6,0,0,0"
-                            Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
-                    <ProgressBar IsIndeterminate="{Binding IsScanning}" Width="120" Margin="12,0,0,0" VerticalAlignment="Center"
-                                 Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
-                </StackPanel>
-            </DockPanel>
-            <!-- Detected artifacts (after a scan): one small card per category. The checkboxes choose what the planned jobs run against;
-                 a card shows a warning line only when something must be fixed (a tool not set up, a stopped search). -->
-            <StackPanel Margin="0,0,0,8" Visibility="{Binding HasScan, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.Detected">
-                <TextBlock Text="Detected artifacts" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
-                <UniformGrid Columns="3">
-                    <!-- Disk: one checkbox per system ("WKS-01, Windows 10 Pro 22H2 (build 19045.3803)") -->
-                    <Border Style="{StaticResource DetectedCard}" Margin="0,0,6,0" AutomationProperties.AutomationId="Triage.Detected.Disk"
-                            Cursor="Hand" ToolTip="{Binding DiskCardToolTip}" MouseLeftButtonUp="DiskCard_Click">
-                        <StackPanel>
-                          <StackPanel Opacity="{Binding DiskOpacity}">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                <TextBlock Style="{StaticResource Icon}" Text="&#xEDA2;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="Disk" Style="{StaticResource DetectedHeader}"/>
-                            </StackPanel>
-                            <!-- three lines per system (name, Type, Artifacts): room for about two systems, then it scrolls -->
-                            <ScrollViewer Style="{StaticResource DetectedList}" MaxHeight="110">
-                                <ItemsControl ItemsSource="{Binding Systems}" Focusable="False">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <DockPanel ToolTip="{Binding ToolTip}">
-                                                <CheckBox DockPanel.Dock="Left" Style="{StaticResource DetectedCheck}" IsChecked="{Binding IsIncluded}" IsEnabled="{Binding IsEditable}"
-                                                          ToolTip="{Binding ToolTip}" ToolTipService.ShowOnDisabled="True" VerticalAlignment="Top"
-                                                          AutomationProperties.AutomationId="Triage.Detected.System" AutomationProperties.Name="{Binding DisplayText}"/>
-                                                <!-- the label is not part of the checkbox: a click on it opens the details -->
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis" Style="{StaticResource DetectedLabel}"
-                                                               AutomationProperties.AutomationId="Triage.Detected.System.Label"/>
-                                                    <!-- the evidence source and the artifact groups found for this system (full list in the detail window) -->
-                                                    <TextBlock Text="{Binding TypeText}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
-                                                               AutomationProperties.AutomationId="Triage.Detected.System.Type"/>
-                                                    <TextBlock Text="{Binding ArtifactsText}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
-                                                               ToolTip="{Binding ArtifactsToolTip}" Margin="0,0,0,2"
-                                                               AutomationProperties.AutomationId="Triage.Detected.System.Artifacts"/>
-                                                </StackPanel>
-                                            </DockPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                            <TextBlock Text="No system found" Style="{StaticResource Caption}" Visibility="{Binding HasSystems, Converter={StaticResource BoolToVisInv}}"
-                                       AutomationProperties.AutomationId="Triage.Detected.NoSystem"/>
-                            <TextBlock Text="{Binding SystemErrorText}" Foreground="{DynamicResource Brush.Error}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
-                                       Visibility="{Binding HasSystemErrors, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.Systems.Error"/>
-                          </StackPanel>
-                          <TextBlock FontSize="12" Margin="0,2,0,0" Visibility="{Binding HasDiskSetUp, Converter={StaticResource BoolToVis}}">
-                              <Hyperlink Command="{Binding SetUpDiskCommand}" AutomationProperties.AutomationId="Triage.SetUpDisk"><Run Text="{Binding DiskSetUpText, Mode=OneWay}"/></Hyperlink>
-                          </TextBlock>
-                        </StackPanel>
-                    </Border>
-                    <!-- Memory: one checkbox per memory image (name, size, format and OS) -->
-                    <Border Style="{StaticResource DetectedCard}" Margin="3,0,3,0" AutomationProperties.AutomationId="Triage.Detected.Memory"
-                            Cursor="Hand" ToolTip="{Binding MemoryCardToolTip}" MouseLeftButtonUp="MemoryCard_Click">
-                        <StackPanel>
-                          <StackPanel Opacity="{Binding MemoryOpacity}">
-                            <DockPanel Margin="0,0,0,2">
-                                <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Width="50" Height="4" VerticalAlignment="Center"
-                                             Visibility="{Binding IsMemoryPlanning, Converter={StaticResource BoolToVis}}"
-                                             ToolTip="Reading the computer name from the image…" AutomationProperties.AutomationId="Triage.MemoryPlanning"/>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE950;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <TextBlock Text="Memory" Style="{StaticResource DetectedHeader}"/>
-                                </StackPanel>
-                            </DockPanel>
-                            <ScrollViewer Style="{StaticResource DetectedList}">
-                                <ItemsControl ItemsSource="{Binding MemoryImages}" Focusable="False">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel>
-                                                <DockPanel ToolTip="{Binding CardToolTip}">
-                                                    <CheckBox DockPanel.Dock="Left" Style="{StaticResource DetectedCheck}" IsChecked="{Binding IsIncluded}" IsEnabled="{Binding CanToggle}"
-                                                              ToolTip="{Binding CardToolTip}" ToolTipService.ShowOnDisabled="True" VerticalAlignment="Top"
-                                                              AutomationProperties.AutomationId="Triage.Detected.MemoryImage" AutomationProperties.Name="{Binding Name}"/>
-                                                    <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis" Style="{StaticResource DetectedLabel}"
-                                                               AutomationProperties.AutomationId="Triage.Detected.MemoryImage.Label"/>
-                                                </DockPanel>
-                                                <!-- what keeps the image from being (fully) analysed -->
-                                                <TextBlock Text="{Binding Notes}" Style="{StaticResource Caption}" Foreground="{DynamicResource Brush.Warning}" Margin="22,0,0,2"
-                                                           Visibility="{Binding HasNotes, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.MemoryImage.Notes"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                            <TextBlock Text="No memory artifact found" Style="{StaticResource Caption}" Visibility="{Binding HasMemoryImages, Converter={StaticResource BoolToVisInv}}"
-                                       AutomationProperties.AutomationId="Triage.Detected.NoMemory"/>
-                            <DockPanel Visibility="{Binding AnyPagefile, Converter={StaticResource BoolToVis}}"
-                                       ToolTip="pagefile.sys found next to an image (or in its system root): adds --single-swap-locations so paged-out memory can be read. Off by default.">
-                                <CheckBox DockPanel.Dock="Left" Style="{StaticResource DetectedCheck}" IsChecked="{Binding IncludePagefile}" IsEnabled="{Binding PagefileEditable}"
-                                          AutomationProperties.AutomationId="Triage.MemoryIncludePagefile" AutomationProperties.Name="Include pagefile" VerticalAlignment="Top"/>
-                                <TextBlock Text="Include pagefile" Style="{StaticResource DetectedLabel}"/>
-                            </DockPanel>
-                          </StackPanel>
-                          <TextBlock FontSize="12" Margin="0,2,0,0" Visibility="{Binding HasMemorySetUp, Converter={StaticResource BoolToVis}}">
-                              <Hyperlink Command="{Binding ConfigureMemoryCommand}" AutomationProperties.AutomationId="Triage.SetUpVolatility"><Run Text="{Binding MemorySetUpText, Mode=OneWay}"/></Hyperlink>
-                          </TextBlock>
-                        </StackPanel>
-                    </Border>
-                    <!-- Network: one checkbox per packet capture (name, size, format) -->
-                    <Border Style="{StaticResource DetectedCard}" Margin="6,0,0,0" AutomationProperties.AutomationId="Triage.Detected.Network"
-                            Cursor="Hand" ToolTip="{Binding NetworkCardToolTip}" MouseLeftButtonUp="NetworkCard_Click">
-                        <StackPanel>
-                          <StackPanel Opacity="{Binding NetworkOpacity}">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                <TextBlock Style="{StaticResource Icon}" Text="&#xE968;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="Network" Style="{StaticResource DetectedHeader}"/>
-                            </StackPanel>
-                            <ScrollViewer Style="{StaticResource DetectedList}">
-                                <ItemsControl ItemsSource="{Binding Pcaps}" Focusable="False">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <DockPanel ToolTip="{Binding Path}">
-                                                <CheckBox DockPanel.Dock="Left" Style="{StaticResource DetectedCheck}" IsChecked="{Binding IsIncluded}" IsEnabled="{Binding IsEditable}"
-                                                          ToolTip="{Binding Path}" ToolTipService.ShowOnDisabled="True" VerticalAlignment="Top"
-                                                          AutomationProperties.AutomationId="Triage.Detected.Pcap" AutomationProperties.Name="{Binding File.Name}"/>
-                                                <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis" Style="{StaticResource DetectedLabel}"
-                                                           AutomationProperties.AutomationId="Triage.Detected.Pcap.Label"/>
-                                            </DockPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                            <TextBlock Text="No network artifact found" Style="{StaticResource Caption}" Visibility="{Binding HasPcapFiles, Converter={StaticResource BoolToVisInv}}"
-                                       AutomationProperties.AutomationId="Triage.Detected.NoNetwork"/>
-                            <TextBlock Text="{Binding PcapTruncatedText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource Brush.Warning}"
-                                       Visibility="{Binding PcapTruncatedText, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.PcapTruncated"/>
-                          </StackPanel>
-                          <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource Brush.Warning}"
-                                     Visibility="{Binding HasNetworkSetUp, Converter={StaticResource BoolToVis}}">
-                              <Run Text="{Binding NetworkNote, Mode=OneWay}"/>
-                              <Hyperlink Command="{Binding SetUpNetworkCommand}" AutomationProperties.AutomationId="Triage.SetUpZeek"><Run Text="{Binding NetworkSetUpText, Mode=OneWay}"/></Hyperlink>
-                          </TextBlock>
-                        </StackPanel>
-                    </Border>
-                </UniformGrid>
-            </StackPanel>
-            <!-- archive extraction progress: Hashing → Inspecting → Password → Extracting → Restoring times → Scanning (Cancel = the scan's Cancel) -->
-            <c:AutomationPane Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12,8" Visibility="{Binding IsArchiveBusy, Converter={StaticResource BoolToVis}}"
-                    AutomationProperties.AutomationId="Triage.ArchiveProgress">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xF012;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
-                        <TextBlock Text="Archive: " FontWeight="SemiBold" Margin="8,0,0,0"/>
-                        <TextBlock Text="{Binding ArchivePhaseText}" FontWeight="SemiBold" AutomationProperties.AutomationId="Triage.ArchivePhase"/>
-                    </StackPanel>
-                    <ProgressBar Height="6" Margin="0,6,0,4" Minimum="0" Maximum="100" Value="{Binding ArchiveProgressValue, Mode=OneWay}"
-                                 IsIndeterminate="{Binding ArchiveProgressIndeterminate}" AutomationProperties.AutomationId="Triage.ArchiveProgressBar"/>
-                    <TextBlock Text="{Binding ArchiveProgressDetail}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
-                               AutomationProperties.AutomationId="Triage.ArchiveProgressDetail"/>
-                </StackPanel>
-            </c:AutomationPane>
-            <!-- a source folder of archives (no system inside): offer to extract them all, then scan the contents together -->
-            <c:AutomationPane Style="{StaticResource Card}" Margin="0,0,0,8" Padding="10,4" Background="{DynamicResource Brush.InfoBg}" BorderBrush="{DynamicResource Brush.Info}"
-                    Visibility="{Binding HasContainerArchives, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.ContainerArchives">
-                <Grid>
-                    <Expander>
-                        <Expander.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource Icon}" Text="&#xF012;" FontSize="14" Foreground="{DynamicResource Brush.Info}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="{Binding ContainerArchivesText}" AutomationProperties.AutomationId="Triage.ContainerArchivesText"/>
-                            </StackPanel>
-                        </Expander.Header>
-                        <ItemsControl ItemsSource="{Binding ContainerArchives}" Focusable="False" Margin="22,2,0,4">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}" FontFamily="{DynamicResource Font.Mono}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </Expander>
-                    <Button Content="Extract and scan" Style="{StaticResource AccentButton}" Command="{Binding ExtractArchivesCommand}"
-                            HorizontalAlignment="Right" VerticalAlignment="Top" AutomationProperties.AutomationId="Triage.ExtractArchives"
-                            ToolTip="Extracts each archive into &lt;case&gt;\.ezstaging\extracted (asks for passwords when needed; the archives are not changed), then scans the extracted contents together"/>
-                </Grid>
-            </c:AutomationPane>
         </StackPanel>
 
-        <!-- plan checklist: the main list of the page (archived evidence below it); each row shows its run progress and result -->
-        <DockPanel MinHeight="420">
-            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button Margin="0,0,10,0" AutomationProperties.AutomationId="Triage.SelectionMenu" AutomationProperties.Name="Custom selection"
-                            Click="SelectionMenu_Click" IsEnabled="{Binding CanEditPlan}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Custom selection"/>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE70D;" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"/>
+        <!-- source + case, scan, detected artifacts, archives -->
+        <Grid Grid.Row="1" Margin="0,8,0,6">
+            <Expander x:Name="SourceExpander" IsExpanded="{Binding IsSourceExpanded, Mode=TwoWay}" AutomationProperties.AutomationId="Triage.SourceSection"
+                      Padding="0,6,0,0">
+                <Expander.Header>
+                    <TextBlock Text="Source &amp; artifacts"/>
+                </Expander.Header>
+                <ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0"
+                              AutomationProperties.AutomationId="Triage.SourceScroll">
+                    <StackPanel>
+                        <!-- source + case -->
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Text="Source" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                <!-- type or paste a path (Explorer's "Copy as path" quotes are removed), or drop a file / folder anywhere on the page -->
+                                <TextBox x:Name="SourceBox" Grid.Column="1" AutomationProperties.AutomationId="Triage.Source" Text="{Binding Source, UpdateSourceTrigger=PropertyChanged}"
+                                         Tag="Drive, KAPE output, mounted image, evidence folder, pcap, memory image or archive: browse, paste or drop it here"
+                                         ToolTip="Paste a path, or drop a file or folder here"/>
+                                <!-- one dialog for both: pick a file, or open a folder and click Open ("Select this folder") -->
+                                <Button Grid.Column="2" Margin="6,0,0,0" Content="Browse…" Command="{Binding BrowseSourceCommand}" AutomationProperties.AutomationId="Triage.Browse"
+                                        AutomationProperties.Name="Browse for a source"
+                                        ToolTip="Pick an evidence file (packet capture, memory image, archive), or open a folder (drive, KAPE output, mounted image) and click Open"/>
+
+                                <TextBlock Grid.Row="1" Text="Case name" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Text="{Binding CaseName, UpdateSourceTrigger=PropertyChanged}" Tag="case"/>
+
+                                <TextBlock Grid.Row="2" Text="Case folder" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                <TextBox AutomationProperties.AutomationId="Triage.CaseFolder" Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Text="{Binding CaseFolder, UpdateSourceTrigger=PropertyChanged}"/>
+                                <Button Grid.Row="2" Grid.Column="2" Margin="6,8,0,0" Content="Browse…" Command="{Binding BrowseCaseFolderCommand}"/>
+                            </Grid>
+                        </Border>
+
+                        <DockPanel Margin="0,0,0,8">
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                                <Button AutomationProperties.AutomationId="Triage.Scan" Style="{StaticResource AccentButton}" Command="{Binding ScanCommand}" MinWidth="110">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE721;" FontSize="12"/>
+                                        <TextBlock Text="Scan" Margin="6,0,0,0"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Content="Cancel" Command="{Binding CancelScanCommand}" Margin="6,0,0,0"
+                                        Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
+                                <ProgressBar IsIndeterminate="{Binding IsScanning}" Width="120" Margin="12,0,0,0" VerticalAlignment="Center"
+                                             Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                            <!-- start state (nothing scanned yet): a synthetic case to try the app without evidence -->
+                            <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right" Orientation="Horizontal"
+                                        Visibility="{Binding IsDemoAvailable, Converter={StaticResource BoolToVis}}">
+                                <Button Content="Load demo case" Command="{Binding LoadDemoCaseCommand}"
+                                        Visibility="{Binding HasScan, Converter={StaticResource BoolToVisInv}}"
+                                        AutomationProperties.AutomationId="Triage.LoadDemoCase"
+                                        ToolTip="No evidence at hand? Open a made-up case (host DEMO-WS01) with a process tree, CSVs to analyze, findings and key events"/>
+                            </StackPanel>
+                        </DockPanel>
+                        <!-- Detected artifacts (after a scan): one small card per category. The checkboxes choose what the planned jobs run against;
+                             a card shows a warning line only when something must be fixed (a tool not set up, a stopped search). -->
+                        <StackPanel Margin="0,0,0,8" Visibility="{Binding HasScan, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.Detected">
+                            <TextBlock Text="Detected artifacts" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                            <UniformGrid Columns="3">
+                                <!-- Disk: one checkbox per system ("WKS-01, Windows 10 Pro 22H2 (build 19045.3803)") -->
+                                <Border Style="{StaticResource DetectedCard}" Margin="0,0,6,0" AutomationProperties.AutomationId="Triage.Detected.Disk"
+                                        Cursor="Hand" ToolTip="{Binding DiskCardToolTip}" MouseLeftButtonUp="DiskCard_Click">
+                                    <StackPanel>
+                                      <StackPanel Opacity="{Binding DiskOpacity}">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xEDA2;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Disk" Style="{StaticResource DetectedHeader}"/>
+                                        </StackPanel>
+                                        <!-- three lines per system (name, Type, Artifacts): room for about two systems, then it scrolls -->
+                                        <ScrollViewer Style="{StaticResource DetectedList}" MaxHeight="110">
+                                            <ItemsControl ItemsSource="{Binding Systems}" Focusable="False">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <DockPanel ToolTip="{Binding ToolTip}">
+                                                            <CheckBox DockPanel.Dock="Left" Style="{StaticResource DetectedCheck}" IsChecked="{Binding IsIncluded}" IsEnabled="{Binding IsEditable}"
+                                                                      ToolTip="{Binding ToolTip}" ToolTipService.ShowOnDisabled="True" VerticalAlignment="Top"
+                                                                      AutomationProperties.AutomationId="Triage.Detected.System" AutomationProperties.Name="{Binding DisplayText}"/>
+                                                            <!-- the label is not part of the checkbox: a click on it opens the details -->
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis" Style="{StaticResource DetectedLabel}"
+                                                                           AutomationProperties.AutomationId="Triage.Detected.System.Label"/>
+                                                                <!-- the evidence source and the artifact groups found for this system (full list in the detail window) -->
+                                                                <TextBlock Text="{Binding TypeText}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
+                                                                           AutomationProperties.AutomationId="Triage.Detected.System.Type"/>
+                                                                <TextBlock Text="{Binding ArtifactsText}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
+                                                                           ToolTip="{Binding ArtifactsToolTip}" Margin="0,0,0,2"
+                                                                           AutomationProperties.AutomationId="Triage.Detected.System.Artifacts"/>
+                                                            </StackPanel>
+                                                        </DockPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                        <TextBlock Text="No system found" Style="{StaticResource Caption}" Visibility="{Binding HasSystems, Converter={StaticResource BoolToVisInv}}"
+                                                   AutomationProperties.AutomationId="Triage.Detected.NoSystem"/>
+                                        <TextBlock Text="{Binding SystemErrorText}" Foreground="{DynamicResource Brush.Error}" FontSize="{DynamicResource FontSize.Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                   Visibility="{Binding HasSystemErrors, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.Systems.Error"/>
+                                      </StackPanel>
+                                      <TextBlock FontSize="{DynamicResource FontSize.Caption}" Margin="0,2,0,0" Visibility="{Binding HasDiskSetUp, Converter={StaticResource BoolToVis}}">
+                                          <Hyperlink Command="{Binding SetUpDiskCommand}" AutomationProperties.AutomationId="Triage.SetUpDisk"><Run Text="{Binding DiskSetUpText, Mode=OneWay}"/></Hyperlink>
+                                      </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                                <!-- Memory: one checkbox per memory image (name, size, format and OS) -->
+                                <Border Style="{StaticResource DetectedCard}" Margin="3,0,3,0" AutomationProperties.AutomationId="Triage.Detected.Memory"
+                                        Cursor="Hand" ToolTip="{Binding MemoryCardToolTip}" MouseLeftButtonUp="MemoryCard_Click">
+                                    <StackPanel>
+                                      <StackPanel Opacity="{Binding MemoryOpacity}">
+                                        <DockPanel Margin="0,0,0,2">
+                                            <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Width="50" Height="4" VerticalAlignment="Center"
+                                                         Visibility="{Binding IsMemoryPlanning, Converter={StaticResource BoolToVis}}"
+                                                         ToolTip="Reading the computer name from the image…" AutomationProperties.AutomationId="Triage.MemoryPlanning"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE950;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                <TextBlock Text="Memory" Style="{StaticResource DetectedHeader}"/>
+                                            </StackPanel>
+                                        </DockPanel>
+                                        <ScrollViewer Style="{StaticResource DetectedList}">
+                                            <ItemsControl ItemsSource="{Binding MemoryImages}" Focusable="False">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel>
+                                                            <DockPanel ToolTip="{Binding CardToolTip}">
+                                                                <CheckBox DockPanel.Dock="Left" Style="{StaticResource DetectedCheck}" IsChecked="{Binding IsIncluded}" IsEnabled="{Binding CanToggle}"
+                                                                          ToolTip="{Binding CardToolTip}" ToolTipService.ShowOnDisabled="True" VerticalAlignment="Top"
+                                                                          AutomationProperties.AutomationId="Triage.Detected.MemoryImage" AutomationProperties.Name="{Binding Name}"/>
+                                                                <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis" Style="{StaticResource DetectedLabel}"
+                                                                           AutomationProperties.AutomationId="Triage.Detected.MemoryImage.Label"/>
+                                                            </DockPanel>
+                                                            <!-- what keeps the image from being (fully) analysed -->
+                                                            <TextBlock Text="{Binding Notes}" Style="{StaticResource Caption}" Foreground="{DynamicResource Brush.Warning}" Margin="22,0,0,2"
+                                                                       Visibility="{Binding HasNotes, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.MemoryImage.Notes"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                        <TextBlock Text="No memory artifact found" Style="{StaticResource Caption}" Visibility="{Binding HasMemoryImages, Converter={StaticResource BoolToVisInv}}"
+                                                   AutomationProperties.AutomationId="Triage.Detected.NoMemory"/>
+                                        <DockPanel Visibility="{Binding AnyPagefile, Converter={StaticResource BoolToVis}}"
+                                                   ToolTip="pagefile.sys found next to an image (or in its system root): adds --single-swap-locations so paged-out memory can be read. Off by default.">
+                                            <CheckBox DockPanel.Dock="Left" Style="{StaticResource DetectedCheck}" IsChecked="{Binding IncludePagefile}" IsEnabled="{Binding PagefileEditable}"
+                                                      AutomationProperties.AutomationId="Triage.MemoryIncludePagefile" AutomationProperties.Name="Include pagefile" VerticalAlignment="Top"/>
+                                            <TextBlock Text="Include pagefile" Style="{StaticResource DetectedLabel}"/>
+                                        </DockPanel>
+                                      </StackPanel>
+                                      <TextBlock FontSize="{DynamicResource FontSize.Caption}" Margin="0,2,0,0" Visibility="{Binding HasMemorySetUp, Converter={StaticResource BoolToVis}}">
+                                          <Hyperlink Command="{Binding ConfigureMemoryCommand}" AutomationProperties.AutomationId="Triage.SetUpVolatility"><Run Text="{Binding MemorySetUpText, Mode=OneWay}"/></Hyperlink>
+                                      </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                                <!-- Network: one checkbox per packet capture (name, size, format) -->
+                                <Border Style="{StaticResource DetectedCard}" Margin="6,0,0,0" AutomationProperties.AutomationId="Triage.Detected.Network"
+                                        Cursor="Hand" ToolTip="{Binding NetworkCardToolTip}" MouseLeftButtonUp="NetworkCard_Click">
+                                    <StackPanel>
+                                      <StackPanel Opacity="{Binding NetworkOpacity}">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE968;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Network" Style="{StaticResource DetectedHeader}"/>
+                                        </StackPanel>
+                                        <ScrollViewer Style="{StaticResource DetectedList}">
+                                            <ItemsControl ItemsSource="{Binding Pcaps}" Focusable="False">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <DockPanel ToolTip="{Binding Path}">
+                                                            <CheckBox DockPanel.Dock="Left" Style="{StaticResource DetectedCheck}" IsChecked="{Binding IsIncluded}" IsEnabled="{Binding IsEditable}"
+                                                                      ToolTip="{Binding Path}" ToolTipService.ShowOnDisabled="True" VerticalAlignment="Top"
+                                                                      AutomationProperties.AutomationId="Triage.Detected.Pcap" AutomationProperties.Name="{Binding File.Name}"/>
+                                                            <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis" Style="{StaticResource DetectedLabel}"
+                                                                       AutomationProperties.AutomationId="Triage.Detected.Pcap.Label"/>
+                                                        </DockPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                        <TextBlock Text="No network artifact found" Style="{StaticResource Caption}" Visibility="{Binding HasPcapFiles, Converter={StaticResource BoolToVisInv}}"
+                                                   AutomationProperties.AutomationId="Triage.Detected.NoNetwork"/>
+                                        <TextBlock Text="{Binding PcapTruncatedText}" FontSize="{DynamicResource FontSize.Caption}" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource Brush.Warning}"
+                                                   Visibility="{Binding PcapTruncatedText, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.PcapTruncated"/>
+                                      </StackPanel>
+                                      <TextBlock FontSize="{DynamicResource FontSize.Caption}" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource Brush.Warning}"
+                                                 Visibility="{Binding HasNetworkSetUp, Converter={StaticResource BoolToVis}}">
+                                          <Run Text="{Binding NetworkNote, Mode=OneWay}"/>
+                                          <Hyperlink Command="{Binding SetUpNetworkCommand}" AutomationProperties.AutomationId="Triage.SetUpZeek"><Run Text="{Binding NetworkSetUpText, Mode=OneWay}"/></Hyperlink>
+                                      </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </UniformGrid>
                         </StackPanel>
-                        <Button.ContextMenu>
-                            <ContextMenu ItemsSource="{Binding PlacementTarget.DataContext.SelectionMenu, RelativeSource={RelativeSource Self}}"
-                                         Placement="Bottom" AutomationProperties.AutomationId="Triage.SelectionMenu.List">
-                                <ContextMenu.ItemContainerStyle>
-                                    <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
-                                        <Setter Property="Header" Value="{Binding Label}"/>
-                                        <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.ApplySelectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                        <Setter Property="CommandParameter" Value="{Binding}"/>
-                                        <Setter Property="AutomationProperties.AutomationId" Value="{Binding Label, StringFormat=Triage.Selection.{0}}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsManage}" Value="True">
-                                                <Setter Property="FontStyle" Value="Italic"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ContextMenu.ItemContainerStyle>
-                            </ContextMenu>
-                        </Button.ContextMenu>
-                    </Button>
-                    <Button AutomationProperties.AutomationId="Triage.Run" Command="{Binding RunSelectedCommand}" MinWidth="120"
-                            ToolTipService.ShowOnDisabled="True" ToolTip="{Binding RunButtonToolTip}">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource AccentButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsStopMode}" Value="True">
-                                        <Setter Property="Background" Value="{DynamicResource Brush.Warning}"/>
-                                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource Icon}" Text="{Binding RunButtonGlyph}" FontSize="12"/>
-                            <TextBlock Text="{Binding RunButtonText}" Margin="6,0,0,0"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Planned jobs" Style="{StaticResource SectionTitle}" Margin="0"/>
-                    <TextBlock Text="{Binding SelectionSummary}" Style="{StaticResource Caption}" Margin="10,0,0,0" VerticalAlignment="Center"
-                               AutomationProperties.AutomationId="Triage.SelectionSummary"/>
-                </StackPanel>
-            </DockPanel>
+                        <!-- archive extraction progress: Hashing → Inspecting → Password → Extracting → Restoring times → Scanning (Cancel = the scan's Cancel) -->
+                        <c:AutomationPane Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12,8" Visibility="{Binding IsArchiveBusy, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.AutomationId="Triage.ArchiveProgress">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xF012;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Archive: " FontWeight="SemiBold" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding ArchivePhaseText}" FontWeight="SemiBold" AutomationProperties.AutomationId="Triage.ArchivePhase"/>
+                                </StackPanel>
+                                <ProgressBar Height="6" Margin="0,6,0,4" Minimum="0" Maximum="100" Value="{Binding ArchiveProgressValue, Mode=OneWay}"
+                                             IsIndeterminate="{Binding ArchiveProgressIndeterminate}" AutomationProperties.AutomationId="Triage.ArchiveProgressBar"/>
+                                <TextBlock Text="{Binding ArchiveProgressDetail}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
+                                           AutomationProperties.AutomationId="Triage.ArchiveProgressDetail"/>
+                            </StackPanel>
+                        </c:AutomationPane>
+                        <!-- a source folder of archives (no system inside): offer to extract them all, then scan the contents together -->
+                        <c:AutomationPane Style="{StaticResource Card}" Margin="0,0,0,8" Padding="10,4" Background="{DynamicResource Brush.InfoBg}" BorderBrush="{DynamicResource Brush.Info}"
+                                Visibility="{Binding HasContainerArchives, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.ContainerArchives">
+                            <Grid>
+                                <Expander>
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xF012;" FontSize="14" Foreground="{DynamicResource Brush.Info}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Text="{Binding ContainerArchivesText}" AutomationProperties.AutomationId="Triage.ContainerArchivesText"/>
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <ItemsControl ItemsSource="{Binding ContainerArchives}" Focusable="False" Margin="22,2,0,4">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                                <Button Content="Extract and scan" Style="{StaticResource AccentButton}" Command="{Binding ExtractArchivesCommand}"
+                                        HorizontalAlignment="Right" VerticalAlignment="Top" AutomationProperties.AutomationId="Triage.ExtractArchives"
+                                        ToolTip="Extracts each archive into &lt;case&gt;\.ezstaging\extracted (asks for passwords when needed; the archives are not changed), then scans the extracted contents together"/>
+                            </Grid>
+                        </c:AutomationPane>
+                    <!-- archived evidence (after an archive scan): provenance and the extracted copy, archives found inside the evidence -->
+                    <StackPanel x:Name="ScanDetails" Margin="0,8,0,0" AutomationProperties.AutomationId="Triage.ScanSummary">
+                        <!-- the extracted archive(s): provenance and the extracted copy -->
+                        <c:AutomationPane Style="{StaticResource ScanLine}" Visibility="{Binding HasArchives, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.AutomationId="Triage.ArchiveCard">
+                            <Grid>
+                                <Expander>
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xF012;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Text="{Binding ArchivesSummary}" AutomationProperties.AutomationId="Triage.ArchiveSummary"/>
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource Brush.Warning}" ToolTip="Warnings: expand for details"
+                                                       Visibility="{Binding ArchivesHaveWarnings, Converter={StaticResource BoolToVis}}"/>
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <ItemsControl ItemsSource="{Binding Archives}" Focusable="False" Margin="22,2,0,4">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <c:AutomationPane BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0,6,0,4"
+                                                        AutomationProperties.AutomationId="Triage.Archive" AutomationProperties.Name="{Binding Name}">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="110"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <TextBlock Text="Archive" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                                                        <WrapPanel Grid.Column="1" Grid.ColumnSpan="2" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" ToolTip="{Binding ArchivePath}" Margin="0,0,10,0"
+                                                                       AutomationProperties.AutomationId="Triage.Archive.Name"/>
+                                                            <TextBlock Text="{Binding FormatText}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0"
+                                                                       AutomationProperties.AutomationId="Triage.Archive.Format"/>
+                                                            <TextBlock Text="{Binding EncryptedText}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0"
+                                                                       AutomationProperties.AutomationId="Triage.Archive.Encrypted"/>
+                                                            <TextBlock Text="{Binding ChainText}" Style="{StaticResource Caption}" VerticalAlignment="Center"
+                                                                       Visibility="{Binding HasChain, Converter={StaticResource BoolToVis}}"/>
+                                                        </WrapPanel>
+
+                                                        <TextBlock Grid.Row="1" Text="SHA-256" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,4,0,0"/>
+                                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Sha256, Mode=OneWay}" IsReadOnly="True" Margin="0,4,6,0"
+                                                                 FontFamily="{DynamicResource Font.Mono}" AutomationProperties.AutomationId="Triage.Archive.Sha256"
+                                                                 AutomationProperties.Name="Archive SHA-256"/>
+                                                        <Button Grid.Row="1" Grid.Column="2" Content="Copy" Margin="0,4,0,0" ToolTip="Copy the SHA-256"
+                                                                Command="{Binding DataContext.CopyArchiveShaCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding}" AutomationProperties.AutomationId="Triage.Archive.CopySha"/>
+
+                                                        <TextBlock Grid.Row="2" Text="Extracted to" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,4,0,0"/>
+                                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ExtractedText}" ToolTip="{Binding ExtractedTo}" Margin="0,4,6,0"
+                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
+                                                                   AutomationProperties.AutomationId="Triage.Archive.ExtractedTo"/>
+                                                        <Button Grid.Row="2" Grid.Column="2" Content="Open extracted folder" Margin="0,4,0,0"
+                                                                Command="{Binding DataContext.OpenExtractedFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding}" AutomationProperties.AutomationId="Triage.Archive.OpenExtracted"/>
+
+                                                        <TextBlock Grid.Row="3" Text="Timestamps" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                                                        <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding CoverageText}" Style="{StaticResource Caption}"
+                                                                   TextWrapping="Wrap" Margin="0,4,0,0" AutomationProperties.AutomationId="Triage.Archive.Coverage"/>
+
+                                                        <ItemsControl Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" ItemsSource="{Binding Warnings}" Focusable="False" Margin="0,4,0,0"
+                                                                      Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVis}}"
+                                                                      AutomationProperties.AutomationId="Triage.Archive.Warnings">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <StackPanel Orientation="Horizontal" Margin="0,1">
+                                                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="11" Foreground="{DynamicResource Brush.Warning}"
+                                                                                   VerticalAlignment="Top" Margin="0,2,6,0"/>
+                                                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Caption}" MaxWidth="900"/>
+                                                                    </StackPanel>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </Grid>
+                                                </c:AutomationPane>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                                <Button Content="Delete extracted copy" Command="{Binding DeleteExtractedCopyCommand}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                        AutomationProperties.AutomationId="Triage.DeleteExtracted"
+                                        ToolTip="Deletes &lt;case&gt;\.ezstaging\extracted\&lt;sha8&gt; (asks first; available when no run is using it). The original archive and the case results are kept."/>
+                            </Grid>
+                        </c:AutomationPane>
+                        <!-- archives inside a system tree are evidence: listed, never extracted -->
+                        <Border Style="{StaticResource ScanLine}" Visibility="{Binding HasEvidenceArchives, Converter={StaticResource BoolToVis}}">
+                            <Expander AutomationProperties.AutomationId="Triage.EvidenceArchives">
+                                <Expander.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE946;" FontSize="14" Foreground="{DynamicResource Brush.Info}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding EvidenceArchivesText}" FontWeight="Normal" AutomationProperties.AutomationId="Triage.EvidenceArchivesText"/>
+                                    </StackPanel>
+                                </Expander.Header>
+                                <ItemsControl ItemsSource="{Binding EvidenceArchives}" Focusable="False" Margin="22,2,0,4">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Expander>
+                        </Border>
+                    </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Expander>
+        </Grid>
+
+        <!-- Jobs title line: selection summary on the left; Columns, Custom selection and Run / Stop on the right -->
+        <DockPanel Grid.Row="2" Margin="0,0,0,6">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="ColumnsButton" Content="Columns" Click="Columns_Click" MinHeight="0" Padding="10,3" Margin="0,0,10,0" Style="{StaticResource SubtleButton}"
+                        AutomationProperties.AutomationId="Triage.Columns" AutomationProperties.Name="Columns" ToolTip="Choose the columns of this list (right-click a column header too)"/>
+                <Button Margin="0,0,10,0" AutomationProperties.AutomationId="Triage.SelectionMenu" AutomationProperties.Name="Custom selection"
+                        Click="SelectionMenu_Click" IsEnabled="{Binding CanEditPlan}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Custom selection"/>
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE70D;" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button.ContextMenu>
+                        <ContextMenu ItemsSource="{Binding PlacementTarget.DataContext.SelectionMenu, RelativeSource={RelativeSource Self}}"
+                                     Placement="Bottom" AutomationProperties.AutomationId="Triage.SelectionMenu.List">
+                            <ContextMenu.ItemContainerStyle>
+                                <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                    <Setter Property="Header" Value="{Binding Label}"/>
+                                    <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.ApplySelectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                    <Setter Property="CommandParameter" Value="{Binding}"/>
+                                    <Setter Property="AutomationProperties.AutomationId" Value="{Binding Label, StringFormat=Triage.Selection.{0}}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsManage}" Value="True">
+                                            <Setter Property="FontStyle" Value="Italic"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ContextMenu.ItemContainerStyle>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
+                <Button AutomationProperties.AutomationId="Triage.Run" Command="{Binding RunSelectedCommand}" MinWidth="120"
+                        ToolTipService.ShowOnDisabled="True" ToolTip="{Binding RunButtonToolTip}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource AccentButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsStopMode}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Brush.Warning}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="{Binding RunButtonGlyph}" FontSize="12"/>
+                        <TextBlock Text="{Binding RunButtonText}" Margin="6,0,0,0"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Jobs" Style="{StaticResource SectionTitle}" Margin="0"/>
+                <TextBlock Text="{Binding SelectionSummary}" Style="{StaticResource Caption}" FontWeight="Normal" Margin="10,0,0,0" VerticalAlignment="Center"
+                           AutomationProperties.AutomationId="Triage.SelectionSummary"/>
+            </StackPanel>
+        </DockPanel>
+
+        <StackPanel Grid.Row="3">
             <!-- first hint after a completed (not stopped) run: green, text and button as one group -->
-            <Border DockPanel.Dock="Top" Margin="0,0,0,6" Padding="10,6" MinHeight="40" CornerRadius="4" BorderThickness="1" Background="{DynamicResource Brush.SuccessBg}"
+            <Border Margin="0,0,0,6" Padding="10,6" MinHeight="40" CornerRadius="4" BorderThickness="1" Background="{DynamicResource Brush.SuccessBg}"
                     BorderBrush="{DynamicResource Brush.Success}" Visibility="{Binding ShowNextSteps, Converter={StaticResource BoolToVis}}"
                     AutomationProperties.AutomationId="Triage.NextSteps">
                 <DockPanel VerticalAlignment="Center">
+                    <Button DockPanel.Dock="Right" Content="Dismiss" Style="{StaticResource SubtleButton}" Command="{Binding DismissNextStepsCommand}" Margin="8,0,0,0"
+                            VerticalAlignment="Center" AutomationProperties.AutomationId="Triage.NextSteps.Dismiss"/>
                     <TextBlock DockPanel.Dock="Left" Text="&#xE930;" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" Style="{StaticResource Icon}"
                                Foreground="{DynamicResource Brush.Success}"/>
                     <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text}" AutomationProperties.AutomationId="Triage.NextSteps.Text"><Run Text="{Binding NextStepsText, Mode=OneWay}"/><InlineUIContainer BaselineAlignment="Center"><Button Content="Analyze" Style="{StaticResource AccentButton}" Command="{Binding OpenAnalyzePageCommand}" Margin="8,0,0,0" AutomationProperties.AutomationId="Triage.NextSteps.Analyze"/></InlineUIContainer></TextBlock>
                 </DockPanel>
             </Border>
-
             <!-- the page's one run hint, directly below the Planned jobs title: the disabled reason, the last run outcome, or the Administrator
                  choice (Run selected with admin jobs while not elevated; Triage.AdminWarning holds its buttons) -->
             <!-- colours through DynamicResource triggers (like InfoBarTemplate), so they follow a theme switch -->
-            <Border x:Name="RunHintBar" DockPanel.Dock="Top" Margin="0,0,0,6" Padding="10,6" MinHeight="40" CornerRadius="4" BorderThickness="1"
+            <Border x:Name="RunHintBar" Margin="0,0,0,6" Padding="10,6" MinHeight="40" CornerRadius="4" BorderThickness="1"
                     Visibility="{Binding HasRunHint, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.RunStatus">
                 <Border.Style>
                     <Style TargetType="Border">
@@ -410,6 +564,9 @@
                     <Button DockPanel.Dock="Right" Content="Open setup" Command="{Binding GoDownloadToolsCommand}" Margin="8,0,0,0" VerticalAlignment="Center"
                             Visibility="{Binding ShowRunOpenSetup, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.RunOpenSetup"
                             ToolTip="Opens the setup wizard: downloads the EZ tools and what they need"/>
+                    <Button DockPanel.Dock="Right" Content="Dismiss" Style="{StaticResource SubtleButton}" Command="{Binding DismissRunHintCommand}" Margin="8,0,0,0"
+                            VerticalAlignment="Center" Visibility="{Binding ShowAdminWarning, Converter={StaticResource BoolToVisInv}}"
+                            AutomationProperties.AutomationId="Triage.RunHint.Dismiss"/>
                     <TextBlock DockPanel.Dock="Left" Text="{Binding RunHintSeverity, Converter={StaticResource SevGlyph}}" FontSize="13"
                                VerticalAlignment="Center" Margin="0,0,8,0">
                         <TextBlock.Style>
@@ -429,231 +586,140 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
-                    <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text}" AutomationProperties.AutomationId="Triage.RunHint"><Run Text="{Binding RunHint, Mode=OneWay}"/><InlineUIContainer BaselineAlignment="Center"><Button Content="Jobs" Command="{Binding OpenJobsPageCommand}" Margin="8,0,0,0" Visibility="{Binding ShowNextSteps, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.NextSteps.Jobs"/></InlineUIContainer></TextBlock>
+                    <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text}" AutomationProperties.AutomationId="Triage.RunHint"><Run Text="{Binding RunHint, Mode=OneWay}"/></TextBlock>
                 </DockPanel>
             </Border>
+        </StackPanel>
 
-            <!-- archived evidence (after an archive scan): provenance and the extracted copy, archives found inside the evidence -->
-            <StackPanel x:Name="ScanDetails" DockPanel.Dock="Bottom" Margin="0,8,0,0" AutomationProperties.AutomationId="Triage.ScanSummary">
-                <!-- the extracted archive(s): provenance and the extracted copy -->
-                <c:AutomationPane Style="{StaticResource ScanLine}" Visibility="{Binding HasArchives, Converter={StaticResource BoolToVis}}"
-                        AutomationProperties.AutomationId="Triage.ArchiveCard">
-                    <Grid>
-                        <Expander>
-                            <Expander.Header>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Style="{StaticResource Icon}" Text="&#xF012;" FontSize="14" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <TextBlock Text="{Binding ArchivesSummary}" AutomationProperties.AutomationId="Triage.ArchiveSummary"/>
-                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource Brush.Warning}" ToolTip="Warnings: expand for details"
-                                               Visibility="{Binding ArchivesHaveWarnings, Converter={StaticResource BoolToVis}}"/>
-                                </StackPanel>
-                            </Expander.Header>
-                            <ItemsControl ItemsSource="{Binding Archives}" Focusable="False" Margin="22,2,0,4">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <c:AutomationPane BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0,6,0,4"
-                                                AutomationProperties.AutomationId="Triage.Archive" AutomationProperties.Name="{Binding Name}">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="110"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                </Grid.RowDefinitions>
-                                                <TextBlock Text="Archive" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
-                                                <WrapPanel Grid.Column="1" Grid.ColumnSpan="2" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" ToolTip="{Binding ArchivePath}" Margin="0,0,10,0"
-                                                               AutomationProperties.AutomationId="Triage.Archive.Name"/>
-                                                    <TextBlock Text="{Binding FormatText}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0"
-                                                               AutomationProperties.AutomationId="Triage.Archive.Format"/>
-                                                    <TextBlock Text="{Binding EncryptedText}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0"
-                                                               AutomationProperties.AutomationId="Triage.Archive.Encrypted"/>
-                                                    <TextBlock Text="{Binding ChainText}" Style="{StaticResource Caption}" VerticalAlignment="Center"
-                                                               Visibility="{Binding HasChain, Converter={StaticResource BoolToVis}}"/>
-                                                </WrapPanel>
-
-                                                <TextBlock Grid.Row="1" Text="SHA-256" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,4,0,0"/>
-                                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Sha256, Mode=OneWay}" IsReadOnly="True" Margin="0,4,6,0"
-                                                         FontFamily="{DynamicResource Font.Mono}" AutomationProperties.AutomationId="Triage.Archive.Sha256"
-                                                         AutomationProperties.Name="Archive SHA-256"/>
-                                                <Button Grid.Row="1" Grid.Column="2" Content="Copy" Margin="0,4,0,0" ToolTip="Copy the SHA-256"
-                                                        Command="{Binding DataContext.CopyArchiveShaCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                        CommandParameter="{Binding}" AutomationProperties.AutomationId="Triage.Archive.CopySha"/>
-
-                                                <TextBlock Grid.Row="2" Text="Extracted to" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,4,0,0"/>
-                                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ExtractedText}" ToolTip="{Binding ExtractedTo}" Margin="0,4,6,0"
-                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
-                                                           AutomationProperties.AutomationId="Triage.Archive.ExtractedTo"/>
-                                                <Button Grid.Row="2" Grid.Column="2" Content="Open extracted folder" Margin="0,4,0,0"
-                                                        Command="{Binding DataContext.OpenExtractedFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                        CommandParameter="{Binding}" AutomationProperties.AutomationId="Triage.Archive.OpenExtracted"/>
-
-                                                <TextBlock Grid.Row="3" Text="Timestamps" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
-                                                <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding CoverageText}" Style="{StaticResource Caption}"
-                                                           TextWrapping="Wrap" Margin="0,4,0,0" AutomationProperties.AutomationId="Triage.Archive.Coverage"/>
-
-                                                <ItemsControl Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" ItemsSource="{Binding Warnings}" Focusable="False" Margin="0,4,0,0"
-                                                              Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVis}}"
-                                                              AutomationProperties.AutomationId="Triage.Archive.Warnings">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <StackPanel Orientation="Horizontal" Margin="0,1">
-                                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="11" Foreground="{DynamicResource Brush.Warning}"
-                                                                           VerticalAlignment="Top" Margin="0,2,6,0"/>
-                                                                <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" MaxWidth="900"/>
-                                                            </StackPanel>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </Grid>
-                                        </c:AutomationPane>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Expander>
-                        <Button Content="Delete extracted copy" Command="{Binding DeleteExtractedCopyCommand}" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                AutomationProperties.AutomationId="Triage.DeleteExtracted"
-                                ToolTip="Deletes &lt;case&gt;\.ezstaging\extracted\&lt;sha8&gt; (asks first; available when no run is using it). The original archive and the case results are kept."/>
-                    </Grid>
-                </c:AutomationPane>
-                <!-- archives inside a system tree are evidence: listed, never extracted -->
-                <Border Style="{StaticResource ScanLine}" Visibility="{Binding HasEvidenceArchives, Converter={StaticResource BoolToVis}}">
-                    <Expander AutomationProperties.AutomationId="Triage.EvidenceArchives">
-                        <Expander.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource Icon}" Text="&#xE946;" FontSize="14" Foreground="{DynamicResource Brush.Info}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="{Binding EvidenceArchivesText}" FontWeight="Normal" AutomationProperties.AutomationId="Triage.EvidenceArchivesText"/>
-                            </StackPanel>
-                        </Expander.Header>
-                        <ItemsControl ItemsSource="{Binding EvidenceArchives}" Focusable="False" Margin="22,2,0,4">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}" FontFamily="{DynamicResource Font.Mono}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </Expander>
-                </Border>
-            </StackPanel>
-
-            <!-- pixel widths (a star column would shrink instead of overflowing, so no scroll bar appeared): widening a column overflows into a horizontal scroll bar. No header sorting: the rows
-                 follow the live run order (running, queued, finished, then unticked / excluded rows; TriageViewModel.ReorderNow).
-                 Progress / Result: the row's job(s) once Run selected queued them; a Result opens its job on the Jobs page. -->
-            <DataGrid ItemsSource="{Binding Planned}" CanUserSortColumns="False" SelectionMode="Single" MinHeight="160" RowHeight="34"
-                      EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True"
-                      AutomationProperties.AutomationId="Triage.Planned">
-                <!-- a row whose tool is not installed: dimmed, unticked, the reason as tooltip -->
-                <DataGrid.RowStyle>
-                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
-                        <Setter Property="Opacity" Value="{Binding RowOpacity}"/>
-                        <Setter Property="ToolTip" Value="{Binding RowToolTip}"/>
-                        <EventSetter Event="PreviewMouseLeftButtonUp" Handler="PlannedRow_MouseUp"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding HasJob}" Value="True">
-                                <Setter Property="Cursor" Value="Hand"/>
-                            </DataTrigger>
-                        </Style.Triggers>
+        <!-- the jobs list -->
+    <!-- the jobs list: Ingest's planned rows (live run order), then jobs started elsewhere. Pixel widths (a star column would shrink instead of overflowing, so no scroll bar appeared): widening a column overflows into a horizontal scroll bar. Code-behind (ApplyColumns) turns the last visible column into 1* with its pixel width as MinWidth, so no blank filler follows it. No header sorting: the rows
+         follow the live run order (running, queued, finished, then unticked / excluded rows; TriageViewModel.ReorderNow).
+         Progress / Result: the row's job(s) once Run selected queued them; a Result selects its job (log in the details pane). -->
+    <DataGrid x:Name="JobsGrid" Grid.Row="4" ItemsSource="{Binding JobRows}" SelectedItem="{Binding SelectedRow, Mode=TwoWay}" CanUserSortColumns="False" SelectionMode="Single" MinHeight="140" RowHeight="34"
+              EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True"
+              PreviewMouseRightButtonDown="JobsGrid_RightDown" PreviewMouseRightButtonUp="Grid_HeaderRightUp" ContextMenuOpening="JobsGrid_ContextMenuOpening"
+              AutomationProperties.AutomationId="Triage.Planned">
+        <!-- a row whose tool is not installed: dimmed, unticked, the reason as tooltip -->
+        <DataGrid.RowStyle>
+            <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                <Setter Property="Opacity" Value="{Binding RowOpacity}"/>
+                <Setter Property="ToolTip" Value="{Binding RowToolTip}"/>
+            </Style>
+        </DataGrid.RowStyle>
+        <DataGrid.ContextMenu>
+            <ContextMenu AutomationProperties.AutomationId="Triage.Planned.Menu">
+                <MenuItem Header="Cancel" IsEnabled="{Binding PlacementTarget.SelectedItem.CanCancelJob, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Command="{Binding CancelRowJobCommand}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" AutomationProperties.AutomationId="Triage.Planned.Menu.Cancel"/>
+                <MenuItem Header="Retry" IsEnabled="{Binding PlacementTarget.SelectedItem.CanRetryJob, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Command="{Binding RetryRowJobCommand}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" AutomationProperties.AutomationId="Triage.Planned.Menu.Retry"/>
+                <Separator/>
+                <MenuItem Header="Open output folder" Command="{Binding OpenRowOutputCommand}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" AutomationProperties.AutomationId="Triage.Planned.Menu.OpenOutput"/>
+                <MenuItem Header="Open log file" Command="{Binding OpenRowLogCommand}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" AutomationProperties.AutomationId="Triage.Planned.Menu.OpenLog"/>
+            </ContextMenu>
+        </DataGrid.ContextMenu>
+        <DataGrid.Columns>
+            <DataGridTemplateColumn Width="44" MinWidth="44" CanUserResize="False" CanUserSort="False">
+                <!-- no header padding / sort arrow: the select-all checkbox sits centred over the row checkboxes, never clipped -->
+                <DataGridTemplateColumn.HeaderStyle>
+                    <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="DataGridColumnHeader">
+                                    <Border Background="{TemplateBinding Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,1" Padding="0,6">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
                     </Style>
-                </DataGrid.RowStyle>
-                <DataGrid.Columns>
-                    <DataGridTemplateColumn Width="44" MinWidth="44" CanUserResize="False" CanUserSort="False">
-                        <!-- no header padding / sort arrow: the select-all checkbox sits centred over the row checkboxes, never clipped -->
-                        <DataGridTemplateColumn.HeaderStyle>
-                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
-                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="DataGridColumnHeader">
-                                            <Border Background="{TemplateBinding Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,1" Padding="0,6">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </DataGridTemplateColumn.HeaderStyle>
-                        <DataGridTemplateColumn.HeaderTemplate>
-                            <DataTemplate>
-                                <CheckBox IsThreeState="True" IsChecked="{Binding DataContext.SelectAllState, Mode=OneWay, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                          IsEnabled="{Binding DataContext.CanEditPlan, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                          Click="SelectAllHeader_Click" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          ToolTip="Tick or clear every job that can be selected" ToolTipService.ShowOnDisabled="True"
-                                          AutomationProperties.AutomationId="Triage.SelectAllHeader" AutomationProperties.Name="Select all jobs"/>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.HeaderTemplate>
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanToggle}" HorizontalAlignment="Center"
-                                          ToolTip="{Binding RowToolTip}" ToolTipService.ShowOnDisabled="True"/>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <!-- the tool name, then an "admin" chip when the job needs Administrator (raw volume access) -->
-                    <DataGridTemplateColumn Header="Tool" Width="160" IsReadOnly="True">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Tool}" ToolTip="{Binding Tool}" VerticalAlignment="Center"
-                                               AutomationProperties.AutomationId="Triage.Planned.Tool"/>
-                                    <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.WarningBg}" Margin="6,0,0,0" VerticalAlignment="Center"
-                                            Visibility="{Binding RequiresAdmin, Converter={StaticResource BoolToVis}}" ToolTip="Requires Administrator"
-                                            AutomationProperties.AutomationId="Triage.Planned.AdminChip" AutomationProperties.Name="admin">
-                                        <TextBlock Text="admin" FontSize="11" Foreground="{DynamicResource Brush.Warning}"/>
-                                    </Border>
-                                </StackPanel>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Artifact" Binding="{Binding Label}" Width="260" IsReadOnly="True"/>
-                    <DataGridTextColumn Header="Matched path" Binding="{Binding MatchedPath}" Width="360" MinWidth="120" IsReadOnly="True"/>
-                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="130" IsReadOnly="True"/>
-                    <DataGridTemplateColumn Header="Progress" Width="110" CanUserSort="False">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding ProgressValue, Mode=OneWay}" Margin="4,0"
-                                             IsIndeterminate="{Binding ProgressIndeterminate, Mode=OneWay}" VerticalAlignment="Center"
-                                             Visibility="{Binding ShowProgress, Converter={StaticResource BoolToVis}}"
-                                             AutomationProperties.AutomationId="Triage.Planned.Progress"/>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Result" Width="130" SortMemberPath="Status">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <!-- a state badge (chip coloured by StatusSeverity). A job: the badge is a button that opens it on the Jobs page;
-                                     no job (waiting, skipped): the same badge, not clickable -->
-                                <Grid VerticalAlignment="Center" HorizontalAlignment="Left" ToolTip="{Binding StatusToolTip}">
-                                    <Button Command="{Binding DataContext.OpenRowJobCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                            VerticalAlignment="Center" CommandParameter="{Binding}" AutomationProperties.AutomationId="Triage.Planned.Result"
-                                            AutomationProperties.Name="{Binding Status}" Cursor="Hand"
-                                            Visibility="{Binding HasJob, Converter={StaticResource BoolToVis}}">
-                                        <Button.Template>
-                                            <ControlTemplate TargetType="Button">
-                                                <ContentPresenter/>
-                                            </ControlTemplate>
-                                        </Button.Template>
-                                        <Border Style="{StaticResource ResultBadge}" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Status}" Style="{StaticResource ResultBadgeText}"/>
-                                        </Border>
-                                    </Button>
-                                    <Border Style="{StaticResource ResultBadge}" VerticalAlignment="Center"
-                                            Visibility="{Binding ShowStatusBadge, Converter={StaticResource BoolToVis}}">
-                                        <TextBlock Text="{Binding Status}" Style="{StaticResource ResultBadgeText}" AutomationProperties.AutomationId="Triage.Planned.Status"/>
-                                    </Border>
-                                </Grid>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
-        </DockPanel>
-    </DockPanel>
-    </ScrollViewer>
+                </DataGridTemplateColumn.HeaderStyle>
+                <DataGridTemplateColumn.HeaderTemplate>
+                    <DataTemplate>
+                        <CheckBox IsThreeState="True" IsChecked="{Binding DataContext.SelectAllState, Mode=OneWay, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                  IsEnabled="{Binding DataContext.CanEditPlan, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                  Click="SelectAllHeader_Click" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  ToolTip="Tick or clear every job that can be selected" ToolTipService.ShowOnDisabled="True"
+                                  AutomationProperties.AutomationId="Triage.SelectAllHeader" AutomationProperties.Name="Select all jobs"/>
+                    </DataTemplate>
+                </DataGridTemplateColumn.HeaderTemplate>
+                <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                        <CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanToggle}" HorizontalAlignment="Center"
+                                  Visibility="{Binding ShowTick, Converter={StaticResource BoolToVis}}"
+                                  ToolTip="{Binding RowToolTip}" ToolTipService.ShowOnDisabled="True"/>
+                    </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <!-- the tool name, then an "admin" chip when the job needs Administrator (raw volume access) -->
+            <DataGridTemplateColumn Header="Tool" Width="160" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Tool}" ToolTip="{Binding Tool}" VerticalAlignment="Center"
+                                       AutomationProperties.AutomationId="Triage.Planned.Tool"/>
+                            <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.WarningBg}" Margin="6,0,0,0" VerticalAlignment="Center"
+                                    Visibility="{Binding RequiresAdmin, Converter={StaticResource BoolToVis}}" ToolTip="Requires Administrator"
+                                    AutomationProperties.AutomationId="Triage.Planned.AdminChip" AutomationProperties.Name="admin">
+                                <TextBlock Text="admin" FontSize="{DynamicResource FontSize.Small}" Foreground="{DynamicResource Brush.Warning}"/>
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTextColumn Header="Artifact" Binding="{Binding Label}" Width="260" IsReadOnly="True"/>
+            <DataGridTextColumn Header="Matched path" Binding="{Binding MatchedPath}" Width="360" MinWidth="120" IsReadOnly="True" Visibility="Collapsed"/>
+            <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="130" IsReadOnly="True"/>
+            <DataGridTemplateColumn Header="Progress" Width="110" CanUserSort="False">
+                <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                        <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding ProgressValue, Mode=OneWay}" Margin="4,0"
+                                     IsIndeterminate="{Binding ProgressIndeterminate, Mode=OneWay}" VerticalAlignment="Center"
+                                     Visibility="{Binding ShowProgress, Converter={StaticResource BoolToVis}}"
+                                     AutomationProperties.AutomationId="Triage.Planned.Progress"/>
+                    </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="Status" Width="130" SortMemberPath="Status">
+                <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                        <!-- a state badge (chip coloured by StatusSeverity). A job: the badge is a button that selects its job (log in the details pane);
+                             no job (waiting, skipped): the same badge, not clickable -->
+                        <Grid VerticalAlignment="Center" HorizontalAlignment="Left" ToolTip="{Binding StatusToolTip}">
+                            <Button Command="{Binding DataContext.OpenRowJobCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                    VerticalAlignment="Center" CommandParameter="{Binding}" AutomationProperties.AutomationId="Triage.Planned.Result"
+                                    AutomationProperties.Name="{Binding Status}" Cursor="Hand"
+                                    Visibility="{Binding HasJob, Converter={StaticResource BoolToVis}}">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <ContentPresenter/>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <Border Style="{StaticResource ResultBadge}" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Status}" Style="{StaticResource ResultBadgeText}"/>
+                                </Border>
+                            </Button>
+                            <Border Style="{StaticResource ResultBadge}" VerticalAlignment="Center"
+                                    Visibility="{Binding ShowStatusBadge, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="{Binding Status}" Style="{StaticResource ResultBadgeText}" AutomationProperties.AutomationId="Triage.Planned.Status"/>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTextColumn Header="Duration" Binding="{Binding Duration, Mode=OneWay}" Width="80" IsReadOnly="True"/>
+            <DataGridTextColumn Header="Result" Binding="{Binding Result}" Width="340" IsReadOnly="True">
+                <DataGridTextColumn.ElementStyle>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                        <Setter Property="ToolTip" Value="{Binding Result}"/>
+                    </Style>
+                </DataGridTextColumn.ElementStyle>
+            </DataGridTextColumn>
+            <DataGridTextColumn Header="Output" Binding="{Binding OutputDir}" Width="400" IsReadOnly="True" Visibility="Collapsed"/>
+        </DataGrid.Columns>
+    </DataGrid>
+
+        <GridSplitter Grid.Row="5" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="Transparent" ShowsPreview="False"
+                      Visibility="{Binding Jobs.DetailsFill, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Triage.Splitter"/>
+        <v:JobDetailsPane Grid.Row="6" DataContext="{Binding Jobs}" Margin="0,4,0,0" AutomationProperties.AutomationId="Triage.Details"/>
+    </Grid>
 </UserControl>

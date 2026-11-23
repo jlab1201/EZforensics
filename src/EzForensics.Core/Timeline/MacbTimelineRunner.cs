@@ -7,7 +7,7 @@ namespace EzForensics.Core.Timeline;
 public enum MacbTimelineState { Built, Failed, Cancelled, NotStarted }
 
 /// <summary>The outcome of one host's MACB timeline: <paramref name="Host"/> as shown (host folder, or "unattributed evidence").</summary>
-public sealed record MacbTimelineOutcome(string Host, MacbTimelineState State, long Rows = 0, string? OutputCsv = null, string? Error = null);
+public sealed record MacbTimelineOutcome(string Host, MacbTimelineState State, long Rows = 0, string? OutputCsv = null, string? Error = null, long SkippedLines = 0);
 
 /// <summary>Result of <see cref="MacbTimelineRunner.RunAsync"/>.</summary>
 public sealed class MacbRunResult
@@ -16,6 +16,8 @@ public sealed class MacbRunResult
     public bool Cancelled { get; set; }
     public string? Error { get; set; }
     public long Rows { get; set; }
+    /// <summary>Bodyfile lines dropped for having fewer than 11 fields.</summary>
+    public long SkippedLines { get; set; }
     public string? OutputCsv { get; set; }
     /// <summary>The MFTECmd jobs queued for the run, in order.</summary>
     public List<Job> Jobs { get; } = new();
@@ -57,7 +59,7 @@ public static class MacbTimelineRunner
     public static string BodyFileName(string stamp, int index) => $"{stamp}_{index + 1}.body";
 
     /// <summary>
-    /// A MACB timeline that could not start (no $MFT file, MFTECmd not installed) is still listed on the Jobs page, as a Failed job holding the reason.
+    /// A MACB timeline that could not start (no $MFT file, MFTECmd not installed) is still listed in the Jobs list on Ingest, as a Failed job holding the reason.
     /// </summary>
     public static Job EnqueueNotStarted(JobQueue queue, string caseDir, string outputDir, string host, string reason) =>
         queue.EnqueueRejected(new JobSpec(Triage.IngestSteps.MacbToolId, Triage.IngestSteps.MacbExeName, Array.Empty<string>(), outputDir,
@@ -94,7 +96,9 @@ public static class MacbTimelineRunner
                 }
                 bodies.Add(body);
             }
-            result.Rows = await Task.Run(() => MactimeConverter.Convert(bodies, csv, ct: ct), ct).ConfigureAwait(false);
+            var stats = await Task.Run(() => MactimeConverter.ConvertWithStats(bodies, csv, ct: ct), ct).ConfigureAwait(false);
+            result.Rows = stats.Rows;
+            result.SkippedLines = stats.ShortLines;
             result.Succeeded = true;
             foreach (var b in bodies) try { File.Delete(b); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             try { if (!Directory.EnumerateFileSystemEntries(bodyDir).Any()) Directory.Delete(bodyDir); } catch (IOException) { } catch (UnauthorizedAccessException) { }
@@ -127,6 +131,8 @@ public static class MacbTimelineSummary
         }
         else if (built.Count > 1)
             parts.Add($"Filesystem timelines built for {built.Count} hosts ({string.Join("; ", built.Select(b => $"{b.Host} {b.Rows:N0} rows"))}).");
+        foreach (var b in built.Where(b => b.SkippedLines > 0))
+            parts.Add($"{b.SkippedLines:N0} malformed bodyfile line{(b.SkippedLines == 1 ? "" : "s")} (fewer than 11 fields) of {b.Host} {(b.SkippedLines == 1 ? "was" : "were")} skipped.");
         foreach (var o in outcomes.Where(o => o.State != MacbTimelineState.Built))
             parts.Add(o.State switch
             {

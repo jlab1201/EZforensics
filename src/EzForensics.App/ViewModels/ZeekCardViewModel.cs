@@ -117,7 +117,7 @@ public sealed partial class ZeekCardViewModel : ObservableObject
     public string LatestText => _latest != null && _latest.Error == null
         ? (_latest.Version != null ? $"{_latest.Version}" + (_latest.PublishedUtc is { } p ? $"  (released {p:yyyy-MM-dd}, GitHub)" : "") : "")
           + (_latest.ImageVersion != null ? $"{(_latest.Version != null ? "   ·   " : "")}{ZeekLocator.DockerImage} = {_latest.ImageVersion}" : "")
-        : _checkingLatest ? "Checking GitHub and Docker Hub…" : _latest?.Error != null ? $"Unknown ({_latest.Error}; check the proxy in Settings)" : "-";
+        : _checkingLatest ? "Checking GitHub and Docker Hub…" : _latest?.Error != null ? $"Unknown ({_latest.Error}; check the proxy in Options)" : "-";
     public string EngineText => Install == null ? "-" : $"{Install.EngineLabel} ({Install.OriginLabel})";
     public string LocationText => Install == null ? "-"
         : Install.Engine == ZeekEngine.Docker ? $"{Install.DockerImage}" + (Install.Image?.Digest is { } d ? $"  @ {d}" : "")
@@ -323,7 +323,7 @@ public sealed partial class ZeekCardViewModel : ObservableObject
                     StepText = $"Installing Zeek in WSL {d.WslCandidate} (apt, official packages)";
                     var job = await RunStepAsync(ZeekSetup.WslInstallStep(d.WslExe!, d.WslCandidate!), ct);
                     if (job.State == JobState.Cancelled) { _onMessage("Install cancelled. Click Install to resume (apt continues where it stopped).", InfoSeverity.Warning); return; }
-                    if (job.State != JobState.Succeeded) { _onMessage($"Installing Zeek in WSL failed: {job.StatusReason}. See the log below or the Jobs page, then click Install to retry.", InfoSeverity.Error); return; }
+                    if (job.State != JobState.Succeeded) { _onMessage($"Installing Zeek in WSL failed: {job.StatusReason}. See the log below, then click Install to retry.", InfoSeverity.Error); return; }
                     if (!state.WslDistros.Contains(d.WslCandidate!, StringComparer.OrdinalIgnoreCase)) state.WslDistros.Add(d.WslCandidate!);
                     state.Save();
                     break;
@@ -364,7 +364,7 @@ public sealed partial class ZeekCardViewModel : ObservableObject
         StepText = $"Step 2 of 2: installing Zeek in {EzDistro.Name} (apt, official packages)";
         var job = await RunStepAsync(ZeekSetup.WslInstallStep(wsl, EzDistro.Name), ct);
         if (job.State == JobState.Cancelled) { _onMessage("Cancelled. Click again to resume (apt continues where it stopped).", InfoSeverity.Warning); return false; }
-        if (job.State != JobState.Succeeded) { _onMessage($"Installing Zeek in the EZ Forensics Linux environment failed: {job.StatusReason}. See the log below or the Jobs page, then retry.", InfoSeverity.Error); return false; }
+        if (job.State != JobState.Succeeded) { _onMessage($"Installing Zeek in the EZ Forensics Linux environment failed: {job.StatusReason}. See the log below, then retry.", InfoSeverity.Error); return false; }
         var state = ZeekSetupState.Load();
         if (!state.WslDistros.Contains(EzDistro.Name, StringComparer.OrdinalIgnoreCase)) state.WslDistros.Add(EzDistro.Name);
         state.Save();
@@ -410,7 +410,7 @@ public sealed partial class ZeekCardViewModel : ObservableObject
         if (IsBusy) return;
         if (S.HasActiveJob("zeek", "rita", "ezdistro"))
         {
-            _onMessage("A Zeek or RITA job is still running. Wait for it or cancel it on the Jobs page, then try again.", InfoSeverity.Warning);
+            _onMessage("A Zeek or RITA job is still running. Wait for it or cancel it in the Jobs list on Ingest, then try again.", InfoSeverity.Warning);
             return;
         }
         var size = _ezDistro?.DiskBytes is { } b ? $" ({EzDistro.FormatBytes(b)})" : "";
@@ -474,7 +474,7 @@ public sealed partial class ZeekCardViewModel : ObservableObject
             StepText = step.Label;
             var job = await RunStepAsync(step, _cts!.Token);
             if (job.State == JobState.Cancelled) { _onMessage("Update cancelled.", InfoSeverity.Warning); return; }
-            if (job.State != JobState.Succeeded) { _onMessage($"Update failed: {job.StatusReason}. See the log below or the Jobs page.", InfoSeverity.Error); return; }
+            if (job.State != JobState.Succeeded) { _onMessage($"Update failed: {job.StatusReason}. See the log below.", InfoSeverity.Error); return; }
             var before = i.Image?.Digest ?? i.Version;
             await AutoConfigureAsync("Zeek updated");
             var after = Install?.Image?.Digest ?? Install?.Version;
@@ -492,7 +492,7 @@ public sealed partial class ZeekCardViewModel : ObservableObject
         if (state.IsEmpty) { _onMessage("EZ Forensics did not install Zeek, so there is nothing to remove.", InfoSeverity.Info); return; }
         if (S.HasActiveJob("zeek"))
         {
-            _onMessage("A Zeek job is still running. Wait for it or cancel it on the Jobs page, then click Uninstall again.", InfoSeverity.Warning);
+            _onMessage("A Zeek job is still running. Wait for it or cancel it in the Jobs list on Ingest, then click Uninstall again.", InfoSeverity.Warning);
             return;
         }
         var what = new List<string>();

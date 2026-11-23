@@ -17,7 +17,8 @@ public static class ThemeManager
     {
         var app = Application.Current;
         if (app == null) return;
-        var uri = new Uri($"pack://application:,,,/Themes/{theme}.xaml", UriKind.Absolute);
+        // Assembly-qualified so it also resolves when this assembly is not the entry one (the snapshot tests).
+        var uri = new Uri($"pack://application:,,,/EzForensics;component/Themes/{theme}.xaml", UriKind.Absolute);
         var dict = new ResourceDictionary { Source = uri };
         var merged = app.Resources.MergedDictionaries;
         if (_current != null) merged.Remove(_current);

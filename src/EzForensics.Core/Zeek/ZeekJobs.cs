@@ -5,7 +5,7 @@ using EzForensics.Core.Execution;
 namespace EzForensics.Core.Zeek;
 
 /// <summary>
-/// Zeek runs as JobQueue jobs (logged, cancellable, on the Jobs page, in the run manifest): one job per capture, output in
+/// Zeek runs as JobQueue jobs (logged, cancellable, in the Jobs list on Ingest, in the run manifest): one job per capture, output in
 /// <c>&lt;case&gt;\Network\Zeek\&lt;capture name&gt;\</c>. After Zeek exits, the job converts every <c>*.log</c> to CSV
 /// (<see cref="ZeekLogConverter"/>) and records the input SHA-256 and the engine facts in the manifest.
 /// </summary>

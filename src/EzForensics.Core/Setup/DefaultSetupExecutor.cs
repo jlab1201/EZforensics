@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using EzForensics.Core.Catalog;
+using EzForensics.Core.Explore;
 using EzForensics.Core.Execution;
 using EzForensics.Core.Memory;
 using EzForensics.Core.Plaso;
@@ -44,7 +45,7 @@ public sealed class SetupEnvironment
 {
     /// <summary>
     /// Queue for the setup processes: the host's private maintenance queue (<see cref="MaintenanceRunner.Queue"/>), never the
-    /// queue the Jobs page lists. Job logs and the manifest go to <see cref="MaintenanceDir"/>.
+    /// queue the Ingest job list lists. Job logs and the manifest go to <see cref="MaintenanceDir"/>.
     /// </summary>
     public required JobQueue Queue { get; init; }
     public required Func<HttpClient> CreateHttp { get; init; }
@@ -55,6 +56,8 @@ public sealed class SetupEnvironment
     public required string MaintenanceDir { get; init; }
     public IElevatedLauncher Elevation { get; init; } = new WindowsElevatedLauncher();
     public IRuntimeProbe Probe { get; init; } = SystemRuntimeProbe.Instance;
+    /// <summary>Checks dotnet-install.ps1's Authenticode signature before it runs with -ExecutionPolicy Bypass. Replaceable for tests.</summary>
+    public IScriptSignatureVerifier SignatureVerifier { get; init; } = PowerShellSignatureVerifier.Instance;
     /// <summary>Called after something was installed so the host can refresh its state (tools rescan, plaso / Zeek discovery).</summary>
     public Func<SetupStepKind, Task>? AfterStep { get; init; }
     /// <summary>
@@ -105,6 +108,23 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
         return Under(u.Host, "dot.net") || Under(u.Host, "microsoft.com");
     }
 
+    /// <summary>
+    /// Null when the downloaded dotnet-install.ps1 has a valid Authenticode signature by Microsoft Corporation (Microsoft signs it;
+    /// checked on the live script Nov 2026). Otherwise deletes the script and returns the failed step result.
+    /// </summary>
+    public static SetupStepResult? VerifyDotnetScript(IScriptSignatureVerifier verifier, string script, Action<string> log)
+    {
+        log("Checking the install script's Authenticode signature…");
+        var sig = verifier.Verify(script);
+        if (ScriptSignaturePolicy.MicrosoftSignedProblem(sig) is { } problem)
+        {
+            TryDeleteFile(script);
+            return SetupStepResult.Fail($"The .NET install script was not run because {problem}. Click Retry; if it keeps failing, install the .NET 9 Desktop Runtime from Microsoft's website.");
+        }
+        log($"Signature OK ({sig.SignerSubject}).");
+        return null;
+    }
+
     public async Task<SetupStepResult> ExecuteAsync(SetupStepContext c, CancellationToken ct)
     {
         var step = c.Step;
@@ -123,6 +143,8 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
             SetupStepKind.InstallPlaso => await InstallPlasoAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.InstallVolatility => await InstallVolatilityAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.InstallVolatilitySymbols => await InstallVolatilitySymbolsAsync(c, ct).ConfigureAwait(true),
+            SetupStepKind.InstallExploreTool => await InstallExploreToolAsync(c, ct).ConfigureAwait(true),
+            SetupStepKind.InstallLocalAi => await InstallLocalAiAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.EnableWsl => await EnableWslAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.InstallRita => await InstallRitaAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.InstallEzDistro => await InstallEzDistroAsync(c, ct).ConfigureAwait(true),
@@ -207,10 +229,12 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
 
     private async Task<SetupStepResult> InstallDotnetAsync(SetupStepContext c, CancellationToken ct)
     {
-        if (RuntimeProbe.HasSystemNet9()) return SetupStepResult.AlreadyDone("The .NET 9 runtime is already installed on this computer.");
+        if (RuntimeProbe.HasSystemNet9()) return SetupStepResult.AlreadyDone("The required .NET runtimes (9 and 10) are already installed on this computer.");
         var dir = Path.GetFullPath(RuntimeProbe.PrivateDotnetRoot);
-        if (RuntimeProbe.HasFramework(dir, "Microsoft.WindowsDesktop.App", 9) && RuntimeProbe.HasFramework(dir, "Microsoft.NETCore.App", 9))
-            return SetupStepResult.AlreadyDone($"EZ Forensics' private .NET 9 runtime is already in {dir}.");
+        var runtimes = new[] { ("dotnet", "Microsoft.NETCore.App"), ("windowsdesktop", "Microsoft.WindowsDesktop.App") };
+        var pairs = RuntimeProbe.RequiredMajors.SelectMany(m => runtimes.Select(r => (Major: m, Runtime: r.Item1, Framework: r.Item2))).ToList();
+        if (pairs.All(p => RuntimeProbe.HasFramework(dir, p.Framework, p.Major)))
+            return SetupStepResult.AlreadyDone($"EZ Forensics' private .NET 9 and 10 runtimes are already in {dir}.");
         var scriptDir = Maint("dotnet-install");
         Directory.CreateDirectory(scriptDir);
         var script = Path.Combine(scriptDir, "dotnet-install.ps1");
@@ -224,27 +248,28 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
                 return SetupStepResult.Fail($"The install script came from an unexpected location ({final}); not run.");
             await File.WriteAllBytesAsync(script, await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(true), ct).ConfigureAwait(true);
         }
+        if (VerifyDotnetScript(_env.SignatureVerifier, script, c.Log) is { } refused) return refused;
         var ps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
-        // Two runs into the same folder: "windowsdesktop" brings only Microsoft.WindowsDesktop.App, the base runtime
-        // (Microsoft.NETCore.App, needed by every net9 apphost) is the "dotnet" runtime. Verified with dotnet-install 9.0.20.
-        var runtimes = new[] { ("dotnet", "Microsoft.NETCore.App"), ("windowsdesktop", "Microsoft.WindowsDesktop.App") };
-        for (int i = 0; i < runtimes.Length; i++)
+        // One run per major and runtime into the same folder: "windowsdesktop" brings only Microsoft.WindowsDesktop.App, the base runtime
+        // (Microsoft.NETCore.App, needed by every net9 apphost) is the "dotnet" runtime. DOTNET_ROOT replaces the system location,
+        // so the private copy must hold every required major even when the system has some of them.
+        for (int i = 0; i < pairs.Count; i++)
         {
-            var (runtime, framework) = runtimes[i];
-            if (RuntimeProbe.HasFramework(dir, framework, 9)) { c.Log($"{framework} 9 is already in {dir}."); continue; }
+            var (major, runtime, framework) = pairs[i];
+            if (RuntimeProbe.HasFramework(dir, framework, major)) { c.Log($"{framework} {major} is already in {dir}."); c.Report((i + 1) / (double)pairs.Count); continue; }
             var spec = new JobSpec("dotnet-install", "powershell.exe",
-                new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Runtime", runtime, "-Channel", "9.0",
+                new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Runtime", runtime, "-Channel", $"{major}.0",
                         "-InstallDir", dir, "-Architecture", "x64", "-NoPath" },
-                scriptDir, $"Install .NET 9 runtime '{runtime}' (private, dotnet-install.ps1)", "Maintenance", ExePath: ps, Timeout: TimeSpan.FromMinutes(30));
+                scriptDir, $"Install .NET {major} runtime '{runtime}' (private, dotnet-install.ps1)", "Maintenance", ExePath: ps, Timeout: TimeSpan.FromMinutes(30));
             var job = await RunJobAsync(c, spec, ct).ConfigureAwait(true);
             if (job.State != JobState.Succeeded) return FromJob(job, "", "Check the internet connection / proxy, then click Retry.");
-            c.Report((i + 1) / (double)runtimes.Length);
+            c.Report((i + 1) / (double)pairs.Count);
         }
         RuntimeProbe.Reset();
         if (!RuntimeProbe.HasPrivateNet9())
-            return SetupStepResult.Fail($"dotnet-install finished but no .NET 9 runtime is in {dir}. See the log.");
+            return SetupStepResult.Fail($"dotnet-install finished but not every required .NET runtime (9 and 10) is in {dir}. See the log.");
         RuntimeProbe.ApplyToCurrentProcess();
-        return SetupStepResult.Ok($".NET 9 Desktop Runtime installed in {dir} (used only by EZ Forensics' tools).");
+        return SetupStepResult.Ok($".NET 9 and 10 Desktop Runtimes installed in {dir} (used only by EZ Forensics' tools).");
     }
 
     // ------------------------------------------------------------------ EZ tools
@@ -300,8 +325,10 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
             if (p.Phase == "Done") { doneBytes += Math.Max(pick[p.FileIndex - 1].Size, 1); c.Report((double)doneBytes / totalBytes); }
             else if (p.Phase == "Downloading") c.Report((doneBytes + p.BytesReceived) / (double)totalBytes);
         });
-        await updater.DownloadAsync(pick, root, progress, ct).ConfigureAwait(true);
+        var rejected = await updater.DownloadAsync(pick, root, progress, ct, c.Log).ConfigureAwait(true);
         _env.Locator.Rescan(root);
+        if (rejected.Count > 0)
+            return SetupStepResult.Fail(string.Join(" ", rejected) + " Click Retry; if it keeps failing, report it.");
         return SetupStepResult.Ok($"Downloaded {pick.Count} tool package(s) ({(netVersion == 9 ? "net9" : "net4")} builds, {pick.Sum(f => f.Size) / 1048576.0:0} MB) into {root}." +
                                   (missing.Count > 0 ? $" Not available for this .NET: {string.Join(", ", missing.Select(Path.GetFileNameWithoutExtension))}." : ""));
     }
@@ -414,6 +441,43 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
             : SetupStepResult.Fail("pip finished but Volatility 3 does not answer. See the log, then click Retry.");
     }
 
+    private async Task<SetupStepResult> InstallLocalAiAsync(SetupStepContext c, CancellationToken ct)
+    {
+        var model = c.Step.Args.TryGetValue("model", out var m) ? m : Assistant.LocalAiAdvisor.FallbackModel;
+        var ops = new Assistant.OllamaOps(_env.CreateHttp, _env.Settings, _env.SaveSettings);
+        string? last = null;
+        var r = await Assistant.LocalAiSetup.RunAsync(model, ops, p =>
+        {
+            if (p.Text != last) { last = p.Text; c.Log(p.Text); }
+            if (p.Fraction is { } f) c.Report(f);
+        }, ct).ConfigureAwait(true);
+        return SetupStepResult.Ok(r.Summary + (r.Skipped.Count > 0 ? " " + string.Join(" ", r.Skipped) : ""));
+    }
+
+    private async Task<SetupStepResult> InstallExploreToolAsync(SetupStepContext c, CancellationToken ct)
+    {
+        var spec = c.Step.ItemId switch
+        {
+            SetupIds.ExploreDie => ExploreToolReleases.Die,
+            SetupIds.ExploreExifTool => ExploreToolReleases.ExifTool,
+            SetupIds.ExploreCyberChef => ExploreToolReleases.CyberChef,
+            _ => null,
+        };
+        if (spec == null) return SetupStepResult.Fail($"Unknown Explore tool '{c.Step.ItemId}'.");
+        try
+        {
+            using var http = _env.CreateHttp();
+            var progress = new Progress<double>(p => c.Report(p));
+            await ExploreToolSetup.InstallAsync(http, spec, new ExploreToolLocator(), c.Log, progress, ct).ConfigureAwait(true);
+            return SetupStepResult.Ok($"{spec.Name} {spec.Version} installed.");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            return SetupStepResult.Fail($"{spec.Name} could not be installed: {ex.Message} Check the internet connection, then click Retry.");
+        }
+    }
+
     private async Task<SetupStepResult> InstallVolatilitySymbolsAsync(SetupStepContext c, CancellationToken ct)
     {
         var vl = new VolatilityLocator();
@@ -425,13 +489,14 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
         c.Log($"Downloading {VolatilitySetup.SymbolPackUrl} (≈{VolatilitySetup.SymbolPackDownloadMB} MB)…");
         try
         {
+            string sha;
             using (var http = _env.CreateHttp())
             {
                 http.Timeout = Timeout.InfiniteTimeSpan;
-                await VolatilitySetup.DownloadFileAsync(http, VolatilitySetup.SymbolPackUrl, zip, new Progress<double>(p => c.Report(p * 0.8)), c.Log, ct).ConfigureAwait(true);
+                sha = await VolatilitySetup.DownloadFileAsync(http, VolatilitySetup.SymbolPackUrl, zip, new Progress<double>(p => c.Report(p * 0.8)), c.Log, ct).ConfigureAwait(true);
             }
             c.Log($"Extracting into {vl.SymbolsDir}…");
-            int n = await Task.Run(() => VolatilitySetup.ExtractSymbolPack(zip, vl.SymbolsDir, new Progress<double>(p => c.Report(0.8 + p * 0.2)), ct), ct).ConfigureAwait(true);
+            int n = await Task.Run(() => VolatilitySetup.ExtractSymbolPack(zip, vl.SymbolsDir, new Progress<double>(p => c.Report(0.8 + p * 0.2)), ct, sha), ct).ConfigureAwait(true);
             return SetupStepResult.Ok($"Windows symbol pack installed: {n:N0} files in {vl.SymbolsDir}.");
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException)

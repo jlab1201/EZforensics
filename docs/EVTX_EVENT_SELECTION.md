@@ -24,6 +24,7 @@ Map lookup for this pass: the GitHub tree view for `evtx/Maps` truncates at 97 f
 | Logon and authentication | Security | 7 | 4 (4624, 4625, 4648, 4672) |
 | Account management | Security | 7 | 2 (4720, 4732) |
 | Process execution | Security, Sysmon | 6 | 4 (4688, Sysmon 1, 3, 10) |
+| Process activity (process tree details) | Sysmon, AppLocker, TaskScheduler, WMI-Activity, Windows PowerShell, Security | 28 | 23 |
 | Services and persistence | System, Security, Sysmon | 4 | 2 (7045, 4697) |
 | Scheduled tasks | TaskScheduler, Security | 5 | 3 (TS 106, TS 200, 4698) |
 | PowerShell | PowerShell/Operational | 3 | 2 (4104, 4103) |
@@ -31,7 +32,7 @@ Map lookup for this pass: the GitHub tree view for `evtx/Maps` truncates at 97 f
 | Log tampering | Security, System | 3 | 3 (1102, 104, 4719) |
 | Defender | Windows Defender/Operational | 4 | 4 (1116, 1117, 5001, 5007) |
 | WMI persistence | WMI-Activity/Operational | 2 | 1 (5861) |
-| **Total** | | **50** | **28** |
+| **Total** | | **78** | **51** |
 
 Each event entry has: `channel`, `provider`, `eventId`, `title`, `fields` (Windows EventData names), `mapProperties` (EZ targets, where verified), `mapStatus`, and `default`.
 
@@ -52,7 +53,7 @@ Each event entry has: `channel`, `provider`, `eventId`, `title`, `fields` (Windo
 
 ## Caveats
 
-- Map status across the 50 events: 48 `verified` (16 from the earlier pass plus 32 checked on 2026-10-16), 2 `no-map` (Security 4756, PowerShell 4105), 0 `unverified`.
+- Map status across the 78 events: 74 `verified`, 4 `no-map` (Security 4756, PowerShell 4105, AppLocker 8003 and 8006), 0 `unverified`.
 - Verified EZ maps are the only source of named `mapProperties`. For `no-map` events, use the raw Payload.
 - Sysmon, WinRM, TaskScheduler/Operational, Defender and WMI-Activity are not enabled on a default Windows install and only produce events when configured or installed.
 - 4688 command-line capture requires the "Include command line in process creation events" policy. Without it, `CommandLine` will be empty.
@@ -71,3 +72,15 @@ Each event entry has: `channel`, `provider`, `eventId`, `title`, `fields` (Windo
 - https://www.jpcert.or.jp/english/pub/sr/DetectingLateralMovementThroughTrackingEventLogs_version2.pdf
 - https://hannahsuarez.github.io/2019/eventids-lateral/
 - https://www.nsa.gov/ia/_files/app/spotting_the_adversary_with_windows_event_log_monitoring.pdf
+
+## Custom maps (Edit fields…)
+
+In Customize, **Edit fields…** on an event opens a map editor. It reads up to 20 records of that event from the evidence, shows their fields, and lets you pick which field goes into which EvtxECmd column (UserName, RemoteHost, ExecutableInfo, PayloadData1-6). The format uses `%Name%` for each value, as in the stock maps. The preview shows the result on the samples and marks empty columns.
+
+**Save** runs the installed EvtxECmd on the sample's .evtx with only the new map (`--maps`, `--inc <id>`) and compares its CSV with the preview. You can save anyway or fix the map. Without EvtxECmd the check is skipped.
+
+- Custom maps live in `%LocalAppData%\EzForensicsData\evtx-maps`, named `Channel_Provider_EventId.map`. Stock maps are never edited.
+- Before each EvtxECmd run, and after `--sync`, they are copied into the tool's `Maps` folder as `0_EzForensics_<name>.map`.
+- EvtxECmd loads maps in file name order and keeps the first one per EventId + Channel + Provider. The `0_` copy sorts first, so it wins. The stock map is then skipped with an "An item with the same key has already been added" line in the job log. Checked with EvtxECmd 2026 (net9).
+- **Reset to stock** deletes the custom map and its copy.
+- Known gap: EvtxECmd writes `>` as `&gt;` in some values (Time-Service 35/37); the preview shows `>`, so the check reports it.

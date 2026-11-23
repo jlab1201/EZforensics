@@ -1,0 +1,285 @@
+<Window x:Class="EzForensics.App.Views.Explore.ExploreSearchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ex="clr-namespace:EzForensics.App.Views.Explore"
+        Title="Advanced search" Width="1100" Height="740" MinWidth="760" MinHeight="460"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True" ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}" TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}"
+        AutomationProperties.AutomationId="Explore.Search.Window">
+    <Window.Resources>
+        <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+        <Style x:Key="SmallCombo" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="MinWidth" Value="104"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="SmallCheck" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+            <Setter Property="Margin" Value="10,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="CaseToggle" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+            <Setter Property="Content" Value="Aa"/>
+            <Setter Property="MinWidth" Value="34"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="ToolTip" Value="Match case"/>
+        </Style>
+        <Style x:Key="OptLabel" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+        </Style>
+        <Style x:Key="OptGroup" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal"/>
+            <Setter Property="Margin" Value="0,0,22,8"/>
+        </Style>
+        <Style x:Key="StartButton" TargetType="Button" BasedOn="{StaticResource AccentButton}">
+            <Setter Property="MinWidth" Value="92"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsRunning}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel LayoutTransform="{DynamicResource Ui.Scale}" Margin="12,10,12,8">
+        <!-- status bar -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <TextBlock DockPanel.Dock="Right" Style="{DynamicResource Caption}" Margin="12,0,0,0" Text="{Binding StatusRight}" VerticalAlignment="Center"
+                       AutomationProperties.AutomationId="Explore.Search.StatusRight"/>
+            <TextBlock Style="{DynamicResource Caption}" Text="{Binding StatusLeft}" ToolTip="{Binding StatusLeft}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                       AutomationProperties.AutomationId="Explore.Search.StatusLeft"/>
+        </DockPanel>
+
+        <!-- criteria + Start / Stop / menu -->
+        <Grid DockPanel.Dock="Top">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="File name:" Style="{StaticResource FieldLabel}" Margin="0,0,8,8"/>
+                        <TextBox Grid.Column="1" Margin="0,0,0,8" Tag="e.g. *.log;*.txt, or report AND final" Text="{Binding Criteria.NameText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.AutomationId="Explore.Search.Name" AutomationProperties.Name="File name"/>
+                        <ComboBox Grid.Column="2" Margin="6,0,0,8" Style="{StaticResource SmallCombo}" ItemsSource="{Binding NameModes}" SelectedItem="{Binding Criteria.NameMode}"
+                                  ToolTip="How the file name is matched" AutomationProperties.AutomationId="Explore.Search.NameMode" AutomationProperties.Name="File name match mode"/>
+                        <ToggleButton Grid.Column="3" Margin="6,0,0,8" Style="{StaticResource CaseToggle}" IsChecked="{Binding Criteria.NameMatchCase}"
+                                      AutomationProperties.AutomationId="Explore.Search.NameCase" AutomationProperties.Name="Match case in the file name"/>
+
+                        <TextBlock Grid.Row="1" Text="Containing text:" Style="{StaticResource FieldLabel}" Margin="0,0,8,8"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" Tag="Text inside the files" Text="{Binding Criteria.ContentText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.AutomationId="Explore.Search.Content" AutomationProperties.Name="Containing text"/>
+                        <ComboBox Grid.Row="1" Grid.Column="2" Margin="6,0,0,8" Style="{StaticResource SmallCombo}" ItemsSource="{Binding ContentModes}" SelectedItem="{Binding Criteria.ContentMode}"
+                                  ToolTip="How the text is matched" AutomationProperties.AutomationId="Explore.Search.ContentMode" AutomationProperties.Name="Text match mode"/>
+                        <ToggleButton Grid.Row="1" Grid.Column="3" Margin="6,0,0,8" Style="{StaticResource CaseToggle}" IsChecked="{Binding Criteria.ContentMatchCase}"
+                                      AutomationProperties.AutomationId="Explore.Search.ContentCase" AutomationProperties.Name="Match case in the text"/>
+
+                        <TextBlock Grid.Row="2" Text="Look in:" Style="{StaticResource FieldLabel}" Margin="0,0,8,8"/>
+                        <ComboBox Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" IsEditable="True" ItemsSource="{Binding RecentFolders}" Text="{Binding LookIn, UpdateSourceTrigger=PropertyChanged}"
+                                  ToolTip="Folders to search, separated by ;  (recent folders in the list)" AutomationProperties.AutomationId="Explore.Search.LookIn" AutomationProperties.Name="Look in"/>
+                        <CheckBox Grid.Row="2" Grid.Column="2" Margin="12,0,0,8" Style="{StaticResource SmallCheck}" Content="Subfolders" IsChecked="{Binding Criteria.IncludeSubfolders}"
+                                  AutomationProperties.AutomationId="Explore.Search.Subfolders"/>
+                        <Button Grid.Row="2" Grid.Column="3" Margin="6,0,0,8" Content="&#xE838;" FontFamily="{DynamicResource Font.Icon}" VerticalAlignment="Center" MinWidth="34" Command="{Binding BrowseLookInCommand}"
+                                ToolTip="Pick a folder" AutomationProperties.AutomationId="Explore.Search.BrowseFolder" AutomationProperties.Name="Pick a folder"/>
+
+                        <StackPanel Grid.Row="3" Grid.ColumnSpan="4" Orientation="Horizontal">
+                            <TextBlock Text="Size (KB)" Style="{StaticResource FieldLabel}" Width="110"/>
+                            <TextBlock Text="&gt;" Style="{StaticResource OptLabel}"/>
+                            <TextBox Width="76" Text="{Binding Criteria.MinSize, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="Explore.Search.MinSize" AutomationProperties.Name="Larger than (KB)"/>
+                            <TextBlock Text="&lt;" Style="{StaticResource OptLabel}" Margin="12,0,6,0"/>
+                            <TextBox Width="76" Text="{Binding Criteria.MaxSize, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="Explore.Search.MaxSize" AutomationProperties.Name="Smaller than (KB)"/>
+                            <TextBlock Text="Modified after" Style="{StaticResource OptLabel}" Margin="34,0,6,0"/>
+                            <DatePicker SelectedDate="{Binding Criteria.ModifiedAfter}" Width="130" ToolTip="On or after (UTC day)" AutomationProperties.AutomationId="Explore.Search.ModifiedAfter" AutomationProperties.Name="Modified after"/>
+                            <TextBlock Text="before" Style="{StaticResource OptLabel}" Margin="12,0,6,0"/>
+                            <DatePicker SelectedDate="{Binding Criteria.ModifiedBefore}" Width="130" ToolTip="On or before (UTC day)" AutomationProperties.AutomationId="Explore.Search.ModifiedBefore" AutomationProperties.Name="Modified before"/>
+                        </StackPanel>
+                    </Grid>
+
+            <StackPanel Grid.Column="1" Margin="14,2,0,0" VerticalAlignment="Top">
+                <Button Content="Start" Style="{StaticResource StartButton}" Command="{Binding StartCommand}" ToolTip="Start the search (Enter in a box does the same)"
+                        AutomationProperties.AutomationId="Explore.Search.Start"/>
+                <Button Content="Stop" MinWidth="92" Margin="0,0,0,6" Command="{Binding StopCommand}" IsEnabled="{Binding IsRunning}" AutomationProperties.AutomationId="Explore.Search.Stop"/>
+                <Button x:Name="MenuButton" Content="&#x22EF;" MinWidth="92" Click="Menu_Click" ToolTip="Saved searches, export, clear, help"
+                        AutomationProperties.AutomationId="Explore.Search.MenuButton" AutomationProperties.Name="More"/>
+                <Popup x:Name="HelpPopup" PlacementTarget="{Binding ElementName=MenuButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                    <Border Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.BorderStrong}" BorderThickness="1" CornerRadius="4" Padding="12,10" MaxWidth="460"
+                            TextElement.Foreground="{DynamicResource Brush.Text}" AutomationProperties.AutomationId="Explore.Search.Help.Popup">
+                        <StackPanel>
+                            <TextBlock Text="File name" FontWeight="SemiBold"/>
+                            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,8">
+                                <Run Text="Contains: words are AND'ed. Use AND, OR, NOT (uppercase), ( ) and &quot;quotes&quot;."/><LineBreak/>
+                                <Run Text="Wildcards: * and ?  Several patterns with ; or space are OR'ed:  *.log;*.txt"/><LineBreak/>
+                                <Run Text="Regex: .NET regex on the name. ^invoice.*\.pdf$"/>
+                            </TextBlock>
+                            <TextBlock Text="Containing text" FontWeight="SemiBold"/>
+                            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,8">
+                                <Run Text="Literal: the exact text, spaces included."/><LineBreak/>
+                                <Run Text="Regex: matched on each line separately. \b\d{3}-\d{4}\b"/><LineBreak/>
+                                <Run Text="Boolean: password AND NOT example, or &quot;api key&quot; OR token"/>
+                            </TextBlock>
+                            <TextBlock Text="Look in: several folders separated by ;   Exclude folders: a name (node_modules, temp*) or a full path, separated by ;" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </StackPanel>
+        </Grid>
+
+        <!-- one-line errors -->
+        <TextBlock DockPanel.Dock="Top" Foreground="{DynamicResource Brush.Error}" TextTrimming="CharacterEllipsis" Margin="0,0,0,8" Text="{Binding ErrorsOneLine}" ToolTip="{Binding Errors}"
+                   Visibility="{Binding Errors, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Explore.Search.Errors"/>
+
+        <!-- results | summary / hits -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*" MinWidth="300"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="2*" MinWidth="220"/>
+            </Grid.ColumnDefinitions>
+
+            <DataGrid x:Name="ResultGrid" ItemsSource="{Binding Results}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                      HeadersVisibility="Column" CanUserAddRows="False" CanUserResizeColumns="True" CanUserSortColumns="True" GridLinesVisibility="None"
+                      EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                      SelectedItem="{Binding SelectedResult, Mode=TwoWay}" MouseDoubleClick="ResultGrid_MouseDoubleClick" PreviewKeyDown="ResultGrid_PreviewKeyDown"
+                      PreviewMouseRightButtonDown="ResultGrid_PreviewMouseRightButtonDown" SelectionChanged="ResultGrid_SelectionChanged"
+                      AutomationProperties.AutomationId="Explore.Search.Results" AutomationProperties.Name="Search results">
+                <DataGrid.ContextMenu>
+                    <ContextMenu AutomationProperties.AutomationId="Explore.Search.Menu">
+                        <MenuItem Header="Open in Explore" Command="{Binding OpenInExploreCommand}" AutomationProperties.AutomationId="Explore.Search.Menu.Open"/>
+                        <MenuItem Header="Show folder in Explore" Command="{Binding ShowFolderInExploreCommand}" AutomationProperties.AutomationId="Explore.Search.Menu.Folder"/>
+                        <Separator/>
+                        <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" AutomationProperties.AutomationId="Explore.Search.Menu.CopyPath"/>
+                        <MenuItem Header="Copy name" Command="{Binding CopyNameCommand}" AutomationProperties.AutomationId="Explore.Search.Menu.CopyName"/>
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="Name" Width="190" SortMemberPath="Name">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Glyph}" Style="{DynamicResource Icon}" Margin="2,0,6,0" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FullPath}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="220"/>
+                    <DataGridTextColumn Header="Size" Binding="{Binding SizeText}" SortMemberPath="SizeBytes" Width="76">
+                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextAlignment" Value="Right"/><Setter Property="Padding" Value="0,0,6,0"/></Style></DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Hits" Binding="{Binding HitsText}" SortMemberPath="HitCount" Width="60">
+                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextAlignment" Value="Right"/><Setter Property="Padding" Value="0,0,6,0"/></Style></DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Type" Binding="{Binding Extension}" Width="70"/>
+                    <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedText}" SortMemberPath="ModifiedUtc" Width="*" MinWidth="120"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <GridSplitter Grid.Column="1" Width="8" Background="Transparent" HorizontalAlignment="Center" ResizeBehavior="PreviousAndNext"
+                          AutomationProperties.AutomationId="Explore.Search.Splitter" AutomationProperties.Name="Resize the summary and hits pane"/>
+
+            <Border Grid.Column="2" Style="{DynamicResource Card}" Padding="10,8,10,8">
+                <TabControl x:Name="SideTabs" Style="{DynamicResource FlatTabs}" AutomationProperties.AutomationId="Explore.Search.SideTabs">
+                    <TabItem Header="Summary" AutomationProperties.AutomationId="Explore.Search.Tab.Summary">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="86"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Found" Style="{DynamicResource Caption}" Margin="0,0,0,6"/>
+                                <TextBlock Grid.Column="1" Text="{Binding FoundCount, StringFormat={}{0:N0}}" Margin="0,0,0,6" AutomationProperties.AutomationId="Explore.Search.Summary.Found"/>
+                                <TextBlock Grid.Row="1" Text="Checked" Style="{DynamicResource Caption}" Margin="0,0,0,6"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CheckedCount, StringFormat={}{0:N0}}" Margin="0,0,0,6" AutomationProperties.AutomationId="Explore.Search.Summary.Checked"/>
+                                <TextBlock Grid.Row="2" Text="Skipped" Style="{DynamicResource Caption}" Margin="0,0,0,6"/>
+                                <Button Grid.Row="2" Grid.Column="1" Style="{DynamicResource LinkButton}" HorizontalAlignment="Left" Margin="0,0,0,6" IsEnabled="{Binding HasSkipped}"
+                                        Content="{Binding SkippedCount, StringFormat={}{0:N0}}" Command="{Binding ToggleSkippedCommand}"
+                                        ToolTip="Show or hide what could not be searched, and why" AutomationProperties.AutomationId="Explore.Search.SkippedToggle" AutomationProperties.Name="Skipped items"/>
+                                <TextBlock Grid.Row="3" Text="Status" Style="{DynamicResource Caption}" Margin="0,0,0,6"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,6" AutomationProperties.AutomationId="Explore.Search.Status"/>
+                                <TextBlock Grid.Row="4" Text="Elapsed" Style="{DynamicResource Caption}" Margin="0,0,0,6"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ElapsedText}" Margin="0,0,0,6" AutomationProperties.AutomationId="Explore.Search.Summary.Elapsed"/>
+                            </Grid>
+                            <StackPanel Visibility="{Binding ShowSkipped, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="{Binding SkippedHeader}" Style="{DynamicResource Caption}" Margin="0,4,0,4"/>
+                                <DataGrid ItemsSource="{Binding Skipped}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="None" MaxHeight="260"
+                                          AutomationProperties.AutomationId="Explore.Search.Skipped" AutomationProperties.Name="Skipped items">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="150"/>
+                                        <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </DockPanel>
+                    </TabItem>
+
+                    <TabItem Header="Hits" AutomationProperties.AutomationId="Explore.Search.Tab.Hits">
+                        <Grid>
+                            <ListBox x:Name="HitList" ItemsSource="{Binding Hits}" BorderThickness="0" Background="Transparent" Focusable="False" HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                     AutomationProperties.AutomationId="Explore.Search.Hits" AutomationProperties.Name="Hits in the selected file">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Focusable" Value="False"/>
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="48"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding LineNumber}" TextAlignment="Right" Margin="0,0,10,0" Foreground="{DynamicResource Brush.TextSecondary}"
+                                                       FontFamily="{DynamicResource Font.Mono}" VerticalAlignment="Top"/>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Before}" Visibility="{Binding HasBefore, Converter={StaticResource BoolToVis}}" TextWrapping="Wrap"
+                                                           FontFamily="{DynamicResource Font.Mono}" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                <TextBlock ex:HitText.Segments="{Binding Segments}" TextWrapping="Wrap" FontFamily="{DynamicResource Font.Mono}"/>
+                                                <TextBlock Text="{Binding After}" Visibility="{Binding HasAfter, Converter={StaticResource BoolToVis}}" TextWrapping="Wrap"
+                                                           FontFamily="{DynamicResource Font.Mono}" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock Text="{Binding HitsHint}" Style="{DynamicResource Caption}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       TextWrapping="Wrap" IsHitTestVisible="False" Visibility="{Binding HitsHint, Converter={StaticResource BoolToVis}}"
+                                       AutomationProperties.AutomationId="Explore.Search.HitsEmpty"/>
+                            <TextBlock Text="{Binding HitsNote}" Style="{DynamicResource Caption}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,14,2"
+                                       Visibility="{Binding HitsNote, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Explore.Search.HitsNote"/>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>

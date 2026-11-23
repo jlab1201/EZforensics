@@ -28,6 +28,11 @@ namespace EzForensics.Core.Execution;
 /// windows.info job registers itself with its image's symbol gate). Exceptions are ignored.</param>
 /// <param name="StdoutPath">When set, the process's raw stdout is written to this file byte for byte (e.g. Volatility's CSV); only stderr
 /// goes to the job log and <see cref="Job.Output"/>. Null = stdout is logged as usual.</param>
+/// <param name="Hidden">Runs through the queue (ordering, Exclusive, Cancel, manifest) but is not listed in the Jobs list and not counted in the Jobs badge; its page shows its own progress.</param>
+/// <param name="InProcess">Makes this an in-process job: no tool is located and no process is started; the queue runs this delegate in the job's
+/// slot (<see cref="Exclusive"/>, parallelism, Cancel, log, manifest record and Jobs list all work as for any job). The delegate logs through
+/// <see cref="JobPostProcessContext.Log"/> and may set <see cref="JobPostProcessContext.Summary"/>; an exception fails the job, cancellation cancels it
+/// (and runs <paramref name="CancelCommand"/> if set). <paramref name="ExeName"/>, <paramref name="Args"/> and the output settings are ignored.</param>
 public sealed record JobSpec(
     string ToolId,
     string ExeName,
@@ -50,7 +55,9 @@ public sealed record JobSpec(
     JobProvenance? Provenance = null,
     string? StdoutPath = null,
     bool PrepareOutsideSlot = false,
-    Action<Job>? Enqueued = null);
+    Action<Job>? Enqueued = null,
+    Func<JobPostProcessContext, CancellationToken, Task>? InProcess = null,
+    bool Hidden = false);
 
 /// <summary>
 /// New-layout output of one job: the tool writes into <see cref="StagingDir"/> (a hidden <c>&lt;case&gt;\.ezstaging\...</c> folder, so
@@ -116,4 +123,6 @@ public sealed class JobPostProcessContext
     public void SetDetail(string key, string value) => Job.SetDetail(key, value);
     /// <summary>Tool logging is set to Debug (Options > Installation): write the extra "# Debug:" detail (<see cref="ToolDebugLog"/>).</summary>
     public bool Debug => Job.DebugLogging;
+    /// <summary>In-process jobs (<see cref="JobSpec.InProcess"/>): short result text shown as the job's status when it succeeds.</summary>
+    public string? Summary { get; set; }
 }

@@ -16,7 +16,7 @@ public sealed partial class ResultsViewModel
 {
     // ------------------------------------------------------------ filters
 
-    partial void OnRowsChanged(VirtualRowList? value) { OnPropertyChanged(nameof(HasFile)); RefreshSavedFilterState(); RefreshSavedViewState(); }
+    partial void OnRowsChanged(VirtualRowList? value) { OnPropertyChanged(nameof(HasFile)); OnPropertyChanged(nameof(GroupBarVisible)); RefreshSavedFilterState(); RefreshSavedViewState(); }
     partial void OnHeadersChanged(IReadOnlyList<string> value) { RefreshSavedFilterState(); RefreshSavedViewState(); }
     partial void OnGlobalTextChanged(string value)
     {
@@ -102,6 +102,7 @@ public sealed partial class ResultsViewModel
             Extra = new FilterGroup();
             GlobalText = "";
             FlagFilter = null;
+            _evidenceRows = null; _keyEventRows = null; ActiveFindingId = null; foreach (var ke in Findings) ke.IsActive = false; NotifyEvidenceRows();
             FiltersEnabled = true;
             ActiveSavedFilter = null;
         });
@@ -161,6 +162,7 @@ public sealed partial class ResultsViewModel
             GlobalText = string.IsNullOrWhiteSpace(_lastValidGlobalText) ? null : _lastValidGlobalText.Trim(),
             Expression = BuildExpression(),
             Flag = FlagFilter switch { true => FlagFilterMode.Flagged, false => FlagFilterMode.Unflagged, _ => FlagFilterMode.All },
+            RowSet = _keyEventRows ?? _evidenceRows,
         };
         if (spec.Flag != FlagFilterMode.All)
         {
@@ -182,6 +184,23 @@ public sealed partial class ResultsViewModel
 
     private bool IsFilterEmpty() => BuildSpec().IsEmpty;
 
+    private string? _warnedUnknownColumns;
+
+    /// <summary>
+    /// Warns (once per distinct set) about typed filter conditions on columns this CSV lacks: such a condition matches nothing. A saved filter has its own
+    /// warning (<see cref="WarnMissingColumns"/>).
+    /// </summary>
+    private void WarnUnknownColumns(FilterSpec spec)
+    {
+        var missing = ActiveSavedFilter != null || spec.Expression == null ? new List<string>()
+            : SavedFilterStore.Columns(spec.Expression).Where(c => !Headers.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
+        var key = string.Join("|", missing);
+        if (key == _warnedUnknownColumns) return;
+        _warnedUnknownColumns = key;
+        if (missing.Count > 0)
+            ShowMessage($"Filter on columns not in this CSV matches nothing: {string.Join(", ", missing)}", InfoSeverity.Warning);
+    }
+
     private async Task ApplyFilterAsync()
     {
         var idx = _index;
@@ -193,6 +212,7 @@ public sealed partial class ResultsViewModel
         FilterSpec spec;
         try { spec = BuildSpec(); }
         catch (Exception ex) { ShowError("Invalid filter", ex); return; }
+        WarnUnknownColumns(spec);
         try
         {
             bool plain = spec.IsEmpty && SortColumn == null;

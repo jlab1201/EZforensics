@@ -292,9 +292,13 @@ public static class ProcessGraphBuilder
             if (hits.Count != 1) continue;   // two instances of the PID with the same image: which one verinfo read is not known
             var (node, v) = (hits[0].Node, hits[0].Row!);
             node.FileVersion = v.Version;
-            node.Company = v.Company;
-            node.Product = v.Product;
-            node.VersionInfoSource = ProcessNode.VersionInfoLabel;
+            if (v.Company.Length > 0 || v.Product.Length > 0 || node.VersionInfoSource.Length == 0)
+            {
+                // verinfo 2.x has no company / product: keep what a Sysmon 1 event gave instead of blanking it
+                node.Company = v.Company;
+                node.Product = v.Product;
+                node.VersionInfoSource = ProcessNode.VersionInfoLabel;
+            }
         }
     }
 
@@ -307,6 +311,9 @@ public static class ProcessGraphBuilder
         ["S-1-16-0"] = "Untrusted", ["S-1-16-4096"] = "Low", ["S-1-16-8192"] = "Medium", ["S-1-16-8448"] = "Medium Plus",
         ["S-1-16-12288"] = "High", ["S-1-16-16384"] = "System", ["S-1-16-20480"] = "Protected Process",
     };
+
+    /// <summary>Label of Company / Product taken from a Sysmon 1 event (the PE version resource Sysmon read from the file).</summary>
+    public const string SysmonVersionInfoLabel = "Sysmon 1 (PE version resource, not a signature)";
 
     private static bool Blank(string s) => s.Length == 0 || s == "-" || s.Equals("N/A", StringComparison.OrdinalIgnoreCase);
 
@@ -473,6 +480,14 @@ public static class ProcessGraphBuilder
             if (rec.Guid.Length > 0) { node.Guid = rec.Guid; byGuid[rec.Guid] = node; }
             if (rec.ParentGuid.Length > 0) node.ParentGuid = rec.ParentGuid;
             if (node.Hash.Length == 0 && rec.Hash.Length > 0) { node.Hash = rec.Hash; node.HashSource = "Sysmon 1"; }
+            // memory (getsids, pslist, verinfo) wins; the logs fill what it does not have, for log-only processes above all
+            if (node.Integrity.Length == 0 && rec.Integrity.Length > 0) node.Integrity = IntegrityLevels.TryGetValue(rec.Integrity, out var lvl) ? lvl : rec.Integrity;
+            node.SessionId ??= rec.SessionId;
+            if (node.Company.Length == 0 && node.Product.Length == 0 && (rec.Company.Length > 0 || rec.Product.Length > 0))
+            {
+                node.Company = rec.Company; node.Product = rec.Product;
+                if (node.VersionInfoSource.Length == 0) node.VersionInfoSource = SysmonVersionInfoLabel;
+            }
         }
 
         foreach (var ex in logs.Exits.OrderBy(e => e.Time))
@@ -530,9 +545,16 @@ public static class ProcessGraphBuilder
         foreach (var n in graph.AllNodes) n.Children.Sort(ByCreate);
     }
 
+    /// <summary>Longest quiet gap between two consecutive children of one ghost: a missing parent silent for longer is not assumed to be the same process.</summary>
+    internal static readonly TimeSpan GhostGap = TimeSpan.FromHours(24);
+
     /// <summary>
-    /// One ghost parent per missing parent PID: every root that is an orphan or whose parent PID was reused (Ppid &gt; 0) becomes a child of the ghost "ghost:&lt;ppid&gt;".
-    /// The ghost is named only after a stated <see cref="ProcessNode.ParentImage"/> of its children (empty when they state different ones).
+    /// Ghost parents for the roots that are orphans or whose parent PID was reused (Ppid &gt; 0). PIDs are reused (other boots, days of 4688 history), so a ghost
+    /// groups only children that plausibly share one parent instance. The children of a parent PID, in creation order, are cut at a boot (creation of System or
+    /// the master smss.exe), at any known start or exit of another process with that PID (while the parent lives its PID is taken) and at a gap over
+    /// <see cref="GhostGap"/>; within a span, children stating different <see cref="ProcessNode.ParentImage"/>s never share a ghost (see <see cref="ByParentImage"/>).
+    /// Children without a creation time cannot be placed and share ghosts only among themselves. A ghost is named only after a stated ParentImage; its key is
+    /// "ghost:&lt;ppid&gt;", plus <see cref="ProcessNode.GhostSuffix"/> when the PID has several ghosts.
     /// </summary>
     private static void AttachGhosts(ProcessGraph graph)
     {
@@ -540,29 +562,70 @@ public static class ProcessGraphBuilder
             .Where(r => r.Ppid > 0 && r.Parent == null && (r.Markers.HasFlag(ProcessMarkers.Orphan) || r.Markers.HasFlag(ProcessMarkers.ParentPidReused)))
             .GroupBy(r => r.Ppid).ToList();
         if (missing.Count == 0) return;
+        var boots = graph.AllNodes.Where(IsBootStart).Select(n => n.CreateTime!.Value).Distinct().ToList();
+        var byPid = graph.AllNodes.ToLookup(n => n.Pid);
         var moved = new HashSet<ProcessNode>(ReferenceEqualityComparer.Instance);
         foreach (var grp in missing)
         {
-            var images = grp.Select(c => c.ParentImage).Where(i => i.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var ghost = new ProcessNode { Pid = grp.Key, IsGhost = true };
-            if (images.Count == 1)
+            var cuts = boots.Concat(byPid[grp.Key].SelectMany(n => new[] { n.CreateTime, n.ExitTime }).Where(t => t != null).Select(t => t!.Value)).ToList();
+            var groups = new List<List<ProcessNode>>();
+            var timeless = grp.Where(c => c.CreateTime == null).ToList();
+            if (timeless.Count > 0) groups.AddRange(ByParentImage(timeless));
+            List<ProcessNode>? span = null;
+            DateTime last = default;
+            foreach (var c in grp.Where(c => c.CreateTime != null).OrderBy(c => c.CreateTime))
             {
-                ghost.Path = images[0];
-                ghost.Name = FileNameOf(images[0]);
+                var t = c.CreateTime!.Value;
+                if (span == null || t - last > GhostGap || cuts.Any(x => x > last && x <= t))
+                {
+                    if (span != null) groups.AddRange(ByParentImage(span));
+                    span = new List<ProcessNode>();
+                }
+                span.Add(c);
+                last = t;
             }
-            foreach (var c in grp)
+            if (span != null) groups.AddRange(ByParentImage(span));
+
+            foreach (var kids in groups)
             {
-                c.Parent = ghost;
-                ghost.Children.Add(c);
-                moved.Add(c);
+                kids.Sort(ByCreate);
+                var ghost = new ProcessNode { Pid = grp.Key, IsGhost = true, GhostSuffix = groups.Count > 1 ? "/" + kids[0].Key : "" };
+                var image = kids.Select(c => c.ParentImage).FirstOrDefault(i => i.Length > 0);
+                if (image != null)
+                {
+                    ghost.Path = image;
+                    ghost.Name = FileNameOf(image);
+                }
+                foreach (var c in kids)
+                {
+                    c.Parent = ghost;
+                    ghost.Children.Add(c);
+                    moved.Add(c);
+                }
+                graph.Ghosts.Add(ghost);
+                graph.Roots.Add(ghost);
             }
-            ghost.Children.Sort(ByCreate);
-            graph.Ghosts.Add(ghost);
-            graph.Roots.Add(ghost);
         }
         graph.Roots.RemoveAll(moved.Contains);
         graph.Roots.Sort(ByCreate);
     }
+
+    /// <summary>
+    /// Splits one span of orphans by stated <see cref="ProcessNode.ParentImage"/> (case-insensitive): one group per image. Children stating none join the only
+    /// stated image, else (none or several stated) form a group of their own.
+    /// </summary>
+    private static List<List<ProcessNode>> ByParentImage(List<ProcessNode> span)
+    {
+        var groups = span.Where(c => c.ParentImage.Length > 0).GroupBy(c => c.ParentImage, StringComparer.OrdinalIgnoreCase).Select(g => g.ToList()).ToList();
+        var unstated = span.Where(c => c.ParentImage.Length == 0).ToList();
+        if (groups.Count == 1) groups[0].AddRange(unstated);
+        else if (unstated.Count > 0) groups.Add(unstated);
+        return groups;
+    }
+
+    /// <summary>A boot: the System process (PID 4) or the master smss.exe (started by System) with a known creation time.</summary>
+    private static bool IsBootStart(ProcessNode n) =>
+        n.CreateTime != null && (n.Pid == 4 || (n.Ppid == 4 && n.Name.Equals("smss.exe", StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Idle (0) and System (4) have no parent by design, as does anything whose parent PID is 0 (Linux init, kthreadd).</summary>
     private static bool IsNaturalRoot(ProcessNode n) => n.Pid is 0 or 4 || n.Ppid == 0;

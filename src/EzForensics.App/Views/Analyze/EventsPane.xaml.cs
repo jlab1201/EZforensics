@@ -31,6 +31,11 @@ public partial class EventsPane : UserControl, IGridColumnBridge
     {
         InitializeComponent();
         PreviewKeyDown += Pane_PreviewKeyDown;
+        // Ctrl+C: the built-in DataGrid copy would put raw cell text (tabs, line breaks) on the clipboard; use the same cleaning as the menu copy.
+        Grid.CommandBindings.Add(new CommandBinding(ApplicationCommands.Copy,
+            (_, e) => { CopySelection(); e.Handled = true; },
+            (_, e) => { e.CanExecute = Grid.SelectedCells.Count > 0; e.Handled = true; }));
+        BarButtons.SizeChanged += (_, _) => FilterBar_SizeChanged(FilterBar, null);
         DataContextChanged += (_, e) =>
         {
             Detach();
@@ -93,6 +98,8 @@ public partial class EventsPane : UserControl, IGridColumnBridge
         _vm.PivotReflattened += OnPivotReflattened;
         _vm.GroupColumns.CollectionChanged += OnGroupColumnsChanged;
         _vm.GridBridge = this;
+        _vm.AssistantSelection = SelectedRowItems;
+        _vm.AssistantGoTo = GoToPosition;
         SyncFlagModeChecks();
     }
 
@@ -106,6 +113,37 @@ public partial class EventsPane : UserControl, IGridColumnBridge
         _vm.PivotReflattened -= OnPivotReflattened;
         _vm.GroupColumns.CollectionChanged -= OnGroupColumnsChanged;
         if (ReferenceEquals(_vm.GridBridge, this)) _vm.GridBridge = null;
+        _vm.AssistantSelection = null;
+        _vm.AssistantGoTo = null;
+    }
+
+    /// <summary>The first few rows with a selected cell (the assistant's "selected rows"); capped so Select all stays cheap.</summary>
+    private IReadOnlyList<RowItem> SelectedRowItems() =>
+        Grid.SelectedCells.Select(c => c.Item).OfType<RowItem>().Distinct().Take(10).ToList();
+
+    /// <summary>Spectre's "go to row": selects the first visible cell of the row at <paramref name="position"/> and scrolls it into view.</summary>
+    private bool GoToPosition(int position)
+    {
+        var rows = _vm?.Rows;
+        if (rows == null || position < 0 || position >= rows.Count || rows[position] is not RowItem item) return false;
+        var vis = VisibleDataColumns();
+        if (vis.Length == 0) return false;
+        var info = new DataGridCellInfo(item, DataCol(vis[0]));
+        Grid.SelectedCells.Clear();
+        Grid.CurrentCell = info;
+        Grid.SelectedCells.Add(info);
+        Grid.ScrollIntoView(item, info.Column);
+        return true;
+    }
+
+    /// <summary>Header arrows follow the view model's sort (it can change without a header click, e.g. by Spectre or Undo).</summary>
+    private void SyncSortArrows()
+    {
+        if (_vm == null) return;
+        foreach (var c in Grid.Columns)
+            c.SortDirection = c.SortMemberPath == _vm.SortColumn && !string.IsNullOrEmpty(c.SortMemberPath)
+                ? (_vm.SortDescending ? ListSortDirection.Descending : ListSortDirection.Ascending)
+                : null;
     }
 
     // ------------------------------------------------------------ session (column order, selected row, scroll position)
@@ -169,11 +207,22 @@ public partial class EventsPane : UserControl, IGridColumnBridge
         if (e.PropertyName is nameof(ResultsViewModel.FlagFilterText) or nameof(ResultsViewModel.FlagFilter)) SyncFlagModeChecks();
         else if (e.PropertyName == nameof(ResultsViewModel.HasSearchText) && _vm?.HasSearchText == true) SearchHelpPopup.IsOpen = false;
         else if (e.PropertyName == nameof(ResultsViewModel.PivotRowIndent)) UpdateFlagColumnWidth();
+        else if (e.PropertyName == nameof(ResultsViewModel.Rows)) UpdateRowHeaderWidth();
+        else if (e.PropertyName is nameof(ResultsViewModel.SortColumn) or nameof(ResultsViewModel.SortDescending)) SyncSortArrows();
+    }
+
+    /// <summary>Row-number header wide enough for the largest source row number (at least 4 digits), so it does not jump while scrolling.</summary>
+    private void UpdateRowHeaderWidth()
+    {
+        var n = _vm?.Rows?.SourceRowCount ?? 0;
+        var digits = Math.Max(4, n.ToString(System.Globalization.CultureInfo.InvariantCulture).Length);
+        Grid.RowHeaderWidth = digits * 7 + 20;
     }
 
     /// <summary>Frozen flag column, then one text column per CSV header (bound to the row indexer [0], [1], …) with a filter-row header.</summary>
     private void BuildColumns()
     {
+        UpdateRowHeaderWidth();
         Grid.Columns.Clear();
         _pivotHidden.Clear();
         if (_vm == null) return;
@@ -194,6 +243,7 @@ public partial class EventsPane : UserControl, IGridColumnBridge
 
         var cellStyle = new Style(typeof(TextBlock));
         cellStyle.Setters.Add(new Setter(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis));
+        cellStyle.Setters.Add(new Setter(Controls.CellSearchHit.EnabledProperty, true));
         var headerTemplate = (DataTemplate)FindResource("ColumnHeaderTemplate");
         var headerStyle = (Style)FindResource("StretchHeader");
         // PID links only when the file's PIDs open a host's process tree (not the super timeline or _Case); other files keep the plain Text binding
@@ -230,7 +280,8 @@ public partial class EventsPane : UserControl, IGridColumnBridge
         SyncPivotColumns();
     }
 
-    private static double DefaultWidth(string header) => Math.Clamp(header.Length * 9 + 60, 120, 280);
+    /// <summary>A column's starting width from its header (also used by the Findings evidence panel).</summary>
+    internal static double DefaultWidth(string header) => Math.Clamp(header.Length * 9 + 60, 120, 280);
 
     // ------------------------------------------------------------ saved views bridge
 
@@ -329,8 +380,18 @@ public partial class EventsPane : UserControl, IGridColumnBridge
     private void LoadLayout(IReadOnlyList<string> headers)
     {
         _sig = ColumnLayoutStore.Signature(headers);
-        _layout = AppServices.Current.Settings.ColumnLayouts.TryGetValue(_sig, out var l) ? l : new ColumnLayout();
+        bool saved = AppServices.Current.Settings.ColumnLayouts.TryGetValue(_sig, out var l);
+        _layout = saved ? l! : new ColumnLayout();
         int n = DataColumnCount;
+        // no saved layout: preset order + hidden record-id columns (a saved view applies later and wins; hidden columns stay in the Columns menu)
+        var preset = ColumnPresets.Pick(headers);
+        if (!saved) foreach (var i in preset.Hide) if ((uint)i < (uint)n) DataCol(i).Visibility = Visibility.Collapsed;
+        if (preset.Front.Count > 0 && n == headers.Count)
+        {
+            _restoringView = true;
+            try { int k = 1; foreach (var i in ColumnPresets.DisplayOrder(preset, n)) DataCol(i).DisplayIndex = k++; }
+            finally { _restoringView = false; }
+        }
         foreach (var i in _layout.Hidden) if ((uint)i < (uint)n) DataCol(i).Visibility = Visibility.Collapsed;
         if (n > 0 && VisibleDataColumns().Length == 0) foreach (var i in Enumerable.Range(0, n)) DataCol(i).Visibility = Visibility.Visible;
         foreach (var (i, w) in _layout.Widths) if ((uint)i < (uint)n) DataCol(i).Width = new DataGridLength(ColumnLayoutStore.ClampWidth(w));
@@ -558,11 +619,13 @@ public partial class EventsPane : UserControl, IGridColumnBridge
         ActShowFile.InputGestureText = HotKeyText(HotKeys.ShowInExplorer);
         if (_vm != null)
         {
+            ActGroupBar.IsChecked = _vm.GroupBarVisible;
+            ActGroupBar.IsEnabled = _vm.HasFile && !_vm.IsGrouped;
             ActHideHints.IsChecked = _vm.HideHintsChecked;
             ActHideHints.IsEnabled = _vm.HideHintsEnabled;
             ActHideHints.ToolTip = _vm.HideHintsEnabled
                 ? "Hides reliability banners and column markers on Analyze until you close the app"
-                : "Hidden in Settings > Options > Display";
+                : "Hidden in Options > Display";
         }
     }
 
@@ -580,6 +643,8 @@ public partial class EventsPane : UserControl, IGridColumnBridge
         SavedViewUi.AddViewItems(ActViewList, vm.SavedViewsForCurrent, vm.CurrentCategoryName, vm.ActiveSavedView, "Results.Actions.View.Item",
             v => vm.ApplySavedView(v), "Results.Actions.View.List");
     }
+
+    private void ActGroupBar_Click(object sender, RoutedEventArgs e) { if (_vm != null) _vm.ShowGroupBar = ActGroupBar.IsChecked; }
 
     private void ActHideHints_Click(object sender, RoutedEventArgs e) => _vm?.SetHideHintsThisSession(ActHideHints.IsChecked);
 
@@ -663,6 +728,22 @@ public partial class EventsPane : UserControl, IGridColumnBridge
     private string HotKeyText(string id) => _vm != null && _vm.HotKeyMap.TryGetValue(id, out var g) ? g : "";
 
     /// <summary>Runs the action bound to the pressed chord. Cell actions need the grid focused; typing in a text box is never intercepted.</summary>
+    /// <summary>
+    /// The filter bar keeps the search box at least its MinWidth wide: when the pane is too narrow for the search and the
+    /// flag filter / Actions / Focus group side by side, the group moves to a second row under the search.
+    /// </summary>
+    private void FilterBar_SizeChanged(object sender, SizeChangedEventArgs? e)
+    {
+        var buttons = BarButtons.DesiredSize.Width + 8;   // 8 = the gap before the group
+        var wrap = FilterBar.ActualWidth > 0 && FilterBar.ActualWidth < SearchHost.MinWidth + buttons;
+        if (wrap == (System.Windows.Controls.Grid.GetRow(BarButtons) == 1)) return;
+        System.Windows.Controls.Grid.SetRow(BarButtons, wrap ? 1 : 0);
+        System.Windows.Controls.Grid.SetColumn(BarButtons, wrap ? 0 : 1);
+        System.Windows.Controls.Grid.SetColumnSpan(SearchHost, wrap ? 2 : 1);
+        BarButtons.Margin = wrap ? new Thickness(0, 8, 0, 0) : new Thickness(8, 0, 0, 0);
+        BarButtons.HorizontalAlignment = wrap ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+    }
+
     private void Pane_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (_vm == null || e.Handled) return;
@@ -696,7 +777,7 @@ public partial class EventsPane : UserControl, IGridColumnBridge
         switch (id)
         {
             case HotKeys.CopyRow:
-                SetClipboard(string.Join("\t", row.Cells));
+                SetClipboard(CleanRow(row.Cells));
                 return true;
             case HotKeys.ViewValue:
                 if (col < 0) return false;
@@ -897,8 +978,8 @@ public partial class EventsPane : UserControl, IGridColumnBridge
             menu.Items.Add(more);
         }
         MenuUi.Group(menu.Items, "Copy");
-        if (col >= 0) menu.Items.Add(Item("CopyCell", "Copy cell", () => SetClipboard(value), true, MenuUi.Copy, "Accent"));
-        menu.Items.Add(Item("CopyRow", "Copy row (tab-separated)", () => SetClipboard(string.Join("\t", row.Cells)), true, MenuUi.Copy, "Accent", HotKeyText(HotKeys.CopyRow)));
+        if (col >= 0) menu.Items.Add(Item("CopyCell", "Copy cell", () => SetClipboard(CleanCell(value)), true, MenuUi.Copy, "Accent"));
+        menu.Items.Add(Item("CopyRow", "Copy row (tab-separated)", () => SetClipboard(CleanRow(row.Cells)), true, MenuUi.Copy, "Accent", HotKeyText(HotKeys.CopyRow)));
         var moreCopy = new MenuItem { Header = new TextBlock { Text = "More copy" }, Icon = MenuUi.Icon(MenuUi.More, "Accent") };
         AutomationProperties.SetAutomationId(moreCopy, "Results.Menu.MoreCopy");
         AutomationProperties.SetName(moreCopy, "More copy");
@@ -914,6 +995,8 @@ public partial class EventsPane : UserControl, IGridColumnBridge
             menu.Items.Add(fm);
         }
         menu.Items.Add(Item("UnflagSelected", $"Unflag selected ({sel.Count:N0})", () => _vm.SetFlags(sel, false), true, MenuUi.Flag, "Warn", "Ctrl+0"));
+        MenuUi.Group(menu.Items, "Finding");
+        AddKeyEventItems(menu.Items, sel);
         MenuUi.Group(menu.Items, "Clear");
         if (col >= 0)
         {
@@ -943,13 +1026,21 @@ public partial class EventsPane : UserControl, IGridColumnBridge
 
     private void CopySelection()
     {
-        var rows = Grid.SelectedCells.Select(c => c.Item).OfType<RowItem>().Distinct().OrderBy(r => r.Position).Take(100_000).ToList();
+        var rows = Grid.SelectedCells.Select(c => c.Item).OfType<RowItem>().Distinct().OrderBy(r => r.Position).ToList();
         if (rows.Count == 0) return;
         var cols = Grid.SelectedCells.Select(c => DataIndex(c.Column)).Where(i => i >= 0).Distinct().OrderBy(i => i).ToList();
         if (cols.Count == 0) return;
-        var sb = new StringBuilder();
-        foreach (var r in rows) sb.AppendLine(string.Join("\t", cols.Select(i => r[i])));
-        SetClipboard(sb.ToString());
+        try { _vm?.CopySelectedCells(rows, cols); }
+        catch (Exception ex) { _vm?.ReportCopyError(ex); }
+    }
+
+    // Same cleaning as the grid Ctrl+C path: tabs/newlines flattened, formulas escaped per Options (EscapeFormulasOnCopy).
+    private static bool EscapeOnCopy => AppServices.Current?.Settings.EscapeFormulasOnCopy ?? true;
+    private static string CleanCell(string? value) => TsvFormatter.Clean(value, EscapeOnCopy);
+    private static string CleanRow(IEnumerable<string?> cells)
+    {
+        bool escape = EscapeOnCopy;
+        return string.Join("\t", cells.Select(c => TsvFormatter.Clean(c, escape)));
     }
 
     private void SetClipboard(string text)

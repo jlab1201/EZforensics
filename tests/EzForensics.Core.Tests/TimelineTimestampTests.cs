@@ -44,8 +44,10 @@ public class TimelineTimestampTests
     public void Strict_mode_rejects_non_iso_but_lenient_accepts_invariant_formats()
     {
         TimelineTimestamp.TryParse("05/01/2020 10:00:00", out _, strict: true).Should().Be(TimestampParseResult.Invalid);
-        TimelineTimestamp.TryParse("05/01/2020 10:00:00", out var dt).Should().Be(TimestampParseResult.Ok);
-        dt.Should().Be(new DateTime(2020, 5, 1, 10, 0, 0, DateTimeKind.Utc));
+        // 05/01 could be May 1 or 5 Jan: never guessed. 25/01 is unambiguous.
+        TimelineTimestamp.TryParse("05/01/2020 10:00:00", out _).Should().Be(TimestampParseResult.Invalid);
+        TimelineTimestamp.TryParse("25/01/2020 10:00:00", out var dt).Should().Be(TimestampParseResult.Ok);
+        dt.Should().Be(new DateTime(2020, 1, 25, 10, 0, 0, DateTimeKind.Utc));
         TimelineTimestamp.TryParse("2020-05-01", out var d2).Should().Be(TimestampParseResult.Ok);
         d2.Should().Be(new DateTime(2020, 5, 1, 0, 0, 0, DateTimeKind.Utc));
     }

@@ -1,0 +1,64 @@
+{
+    "detects": [
+        {
+            "filetype": "PE64",
+            "info": "",
+            "offset": "0",
+            "parentfilepart": "Header",
+            "size": "5400376",
+            "values": [
+                {
+                    "info": "",
+                    "name": "Microsoft Linker",
+                    "string": "Linker: Microsoft Linker",
+                    "type": "linker",
+                    "version": ""
+                },
+                {
+                    "info": "",
+                    "name": "VB.NET",
+                    "string": "Compiler: VB.NET",
+                    "type": "compiler",
+                    "version": ""
+                },
+                {
+                    "info": "C# + VB.NET",
+                    "name": "CodeDom Compiler",
+                    "string": "Library: CodeDom Compiler[C# + VB.NET]",
+                    "type": "library",
+                    "version": ""
+                },
+                {
+                    "info": "",
+                    "name": ".NET Framework",
+                    "string": "Library: .NET Framework(CLR 4.0.30319)",
+                    "type": "library",
+                    "version": "CLR 4.0.30319"
+                },
+                {
+                    "info": "PKCS #7",
+                    "name": "Windows Authenticode",
+                    "string": "Sign tool: Windows Authenticode(2.0)[PKCS #7]",
+                    "type": "sign tool",
+                    "version": "2.0"
+                },
+                {
+                    "info": "codeview",
+                    "name": "Records",
+                    "string": "Debug data: Records[codeview]",
+                    "type": "debug data",
+                    "version": ""
+                },
+                {
+                    "info": "",
+                    "name": "Contains",
+                    "string": "(Heur)Debug data: Contains",
+                    "type": "~debug data",
+                    "version": ""
+                }
+            ]
+        }
+    ]
+}
+
+

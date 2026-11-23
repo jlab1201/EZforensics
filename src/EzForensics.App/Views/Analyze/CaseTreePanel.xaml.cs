@@ -304,7 +304,7 @@ public partial class CaseTreePanel : UserControl
             ToolTipService.SetShowOnDisabled(pt, true);
             // the Ingest correlator's Processes\Processes.csv + Processes_Activity.csv, built again now (the tree reloads from them when it is open)
             var rb = Item("RebuildProcessCorrelation", "Rebuild process tree data", null, "", can, () => _vm.RebuildProcessCorrelation(host));
-            rb.ToolTip = can ? "Correlate the host's process evidence again into Processes\\Processes.csv and Processes_Activity.csv (a job on the Jobs page)"
+            rb.ToolTip = can ? "Correlate the host's process evidence again into Processes\\Processes.csv and Processes_Activity.csv (a job in the Jobs list on Ingest)"
                 : "Run windows.pslist, windows.psscan or windows.pstree (Tools › Volatility), or ingest the event logs, for this host first";
             ToolTipService.SetShowOnDisabled(rb, true);
         }

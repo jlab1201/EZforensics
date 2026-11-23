@@ -132,7 +132,7 @@ public static class FileStatsCalculator
             for (int i = 0; i < headers.Length; i++)
                 if (string.Equals(headers[i], tsColumn, StringComparison.OrdinalIgnoreCase)) { tsIdx = i; break; }
         stats.TimestampColumn = tsIdx >= 0 ? tsColumn : null;
-        Scan(path, tsIdx, stats, ct);
+        Scan(path, tsIdx, Timeline.SlashDates.IsL2tcsvHeader(headers), stats, ct);
         return stats;
     }
 
@@ -140,7 +140,7 @@ public static class FileStatsCalculator
     /// Counts records exactly like <see cref="CsvIndex"/> (RFC 4180, quoted fields may span lines, blank lines skipped,
     /// first record = header) and collects the min / max of field <paramref name="tsIdx"/>.
     /// </summary>
-    private static void Scan(string path, int tsIdx, FileStats stats, CancellationToken ct)
+    private static void Scan(string path, int tsIdx, bool monthFirst, FileStats stats, CancellationToken ct)
     {
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.SequentialScan);
         var buf = new byte[BufferSize];
@@ -166,7 +166,7 @@ public static class FileStatsCalculator
             if (fl > 0 && !overflow)
             {
                 var s = Encoding.UTF8.GetString(fb, 0, fl);
-                if (TimelineTimestamp.TryParse(s, out var utc) == TimestampParseResult.Ok)
+                if (TimelineTimestamp.TryParse(s, out var utc, monthFirstSlash: monthFirst) == TimestampParseResult.Ok)
                 {
                     if (!TimestampPlausibility.IsPlausible(utc, nowUtc)) implausible++;
                     else

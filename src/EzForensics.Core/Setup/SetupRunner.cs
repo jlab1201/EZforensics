@@ -228,9 +228,9 @@ public sealed class SetupRunner
     /// <summary>Plain-language reason for common failures.</summary>
     public static string Explain(Exception ex) => ex switch
     {
-        HttpRequestException h when h.StatusCode is { } c => $"The download failed (HTTP {(int)c}). Check the internet connection and the proxy in Settings, then click Retry.",
-        HttpRequestException => "Could not reach the download server. Check the internet connection and the proxy in Settings, then click Retry.",
-        TaskCanceledException => "The download timed out. Check the internet connection and the proxy in Settings, then click Retry.",
+        HttpRequestException h when h.StatusCode is { } c => $"The download failed (HTTP {(int)c}). Check the internet connection and the proxy in Options, then click Retry.",
+        HttpRequestException => "Could not reach the download server. Check the internet connection and the proxy in Options, then click Retry.",
+        TaskCanceledException => "The download timed out. Check the internet connection and the proxy in Options, then click Retry.",
         UnauthorizedAccessException u => "Access denied: " + u.Message + " Close programs that use these files, then click Retry.",
         IOException io when Tools.ToolUpdater.IsNetworkIo(io) => "The connection to the download server dropped (" + io.Message.TrimEnd('.') +
                                                                   "). Completed downloads are kept: click Retry to continue with the rest.",

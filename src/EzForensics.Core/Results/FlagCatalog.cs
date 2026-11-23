@@ -1,4 +1,5 @@
 using System.Globalization;
+using EzForensics.Core.Settings;
 
 namespace EzForensics.Core.Results;
 
@@ -35,6 +36,16 @@ public static class FlagCatalog
     /// <summary>Flag of a plain flagged row in version 1 sidecars (was Red).</summary>
     public const string LegacyDefaultId = Malicious;
     public const string FallbackColor = "#9CA3AF";
+    /// <summary>Id of the "Spectre evidence" flag older builds added to the examiner's list from Findings; removed on load (Findings evidence rows are a transient filter now).</summary>
+    public const string RetiredSpectreEvidenceId = "spectre-evidence";
+
+    /// <summary>Removes the retired Spectre evidence flag from <paramref name="settings"/>; true when it was there.</summary>
+    public static bool RemoveRetiredSpectreEvidence(AppSettings settings)
+    {
+        if (!settings.Flags.Any(f => f.Id == RetiredSpectreEvidenceId)) return false;
+        settings.Flags = settings.Flags.Where(f => f.Id != RetiredSpectreEvidenceId).ToList();
+        return true;
+    }
 
     /// <summary>The standard flags, in order: Informational, Interesting, Suspicious, Malicious, Benign / Ruled out.</summary>
     public static List<FlagDefinition> Defaults() => new()

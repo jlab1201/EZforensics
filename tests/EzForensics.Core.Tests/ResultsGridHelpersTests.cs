@@ -18,6 +18,17 @@ public class ResultsGridHelpersTests
     }
 
     [Fact]
+    public void BuildCells_cleans_tabs_and_newlines_escapes_formulas_and_caps_rows()
+    {
+        var data = new[] { new[] { "a\tb", "=1+1", "x\r\ny" }, new[] { "c", "d", "e" }, new[] { "f", "g", "h" } };
+        var rows = data.Select(r => (Func<int, string?>)(i => r[i]));
+        TsvFormatter.BuildCells(rows, new[] { 0, 2 }, 10, out var text).Should().Be(3);
+        text.Should().Be("a b\tx  y\r\nc\te\r\nf\th\r\n");
+        TsvFormatter.BuildCells(rows, new[] { 1 }, 2, out text, escapeFormulas: true).Should().Be(2);
+        text.Should().Be("'=1+1\r\nd\r\n");
+    }
+
+    [Fact]
     public void Tsv_EscapesFormulaLikeCells_WhenAsked()
     {
         var rows = new[] { new[] { "=HYPERLINK(\"http://x\",\"y\")", "+cmd|' /C calc'!A0", "-2+3", "@SUM(A1)", "-5", "+1.5e3", "a=b", "" } };

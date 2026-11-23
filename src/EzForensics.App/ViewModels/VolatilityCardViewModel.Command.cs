@@ -30,7 +30,7 @@ public sealed partial class VolatilityCardViewModel
             SourceHelp = "A raw / .mem / .vmem image, a Windows crash dump (MEMORY.DMP), hiberfil.sys or a VMware / LiME image.",
             AllowFile = true,
             FileFilter = "Memory images|*.raw;*.mem;*.vmem;*.dmp;*.bin;*.lime;*.img;*.vmss;*.vmsn;hiberfil.sys|All files|*.*",
-            OutputHelp = "The case folder: the Memory_*.csv files go to <case>\\<Host>\\Memory. Auto uses a new folder under the case root for every run.",
+            OutputHelp = "The case folder: the Memory_*.csv files go to <case>\\<Host>\\Memory. Auto uses a new folder under the case folder for every run.",
             Caption = "One command per plugin ticked under Ingest plugins (plugins for another OS than the image's are skipped when it runs).",
         };
         PropertyChanged += (_, e) => { if (e.PropertyName == nameof(Offline)) tile.Refresh(); };
@@ -96,7 +96,7 @@ public sealed partial class VolatilityCardViewModel
             foreach (var p in plan) S.Queue.Enqueue(p.Spec, caseDir);
             S.LastCaseDir = caseDir;
             tile.RollAutoOutputDir();
-            _onMessage($"Queued {plan.Count} Volatility job(s) on {Path.GetFileName(path)}. Follow them on the Jobs page; the CSVs go to {caseDir}."
+            _onMessage($"Queued {plan.Count} Volatility job(s) on {Path.GetFileName(path)}. Follow them in the Jobs list on Ingest; the CSVs go to {caseDir}."
                        + (notes.Count > 0 ? " " + string.Join(" ", notes) : ""), InfoSeverity.Info);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)

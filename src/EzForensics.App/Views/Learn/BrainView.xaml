@@ -1,0 +1,144 @@
+<UserControl x:Class="EzForensics.App.Views.Learn.BrainView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:EzForensics.App.Controls"
+             AutomationProperties.AutomationId="Learn.Brain">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- search, add, reset -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,6">
+            <DockPanel LastChildFill="False">
+                <TextBox x:Name="SearchBox" Width="240" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
+                         ToolTip="Find a document or concept by name (Enter)" KeyDown="SearchBox_KeyDown"
+                         AutomationProperties.Name="Find in the graph" AutomationProperties.AutomationId="Learn.Brain.Search"/>
+                <Button Content="Find" Command="{Binding RunSearchCommand}" Margin="6,0,0,0" AutomationProperties.AutomationId="Learn.Brain.Find"/>
+                <Button Content="Add files…" Command="{Binding AddFilesCommand}" Margin="16,0,0,0"
+                        ToolTip="Add documents to Intake (they are read and labelled, then wait in To review until you accept them)" AutomationProperties.AutomationId="Learn.Brain.AddFiles"/>
+                <Button Content="Add folder…" Command="{Binding AddFolderCommand}" Margin="6,0,0,0"
+                        ToolTip="Add a folder or an Obsidian vault to Intake" AutomationProperties.AutomationId="Learn.Brain.AddFolder"/>
+                <Button DockPanel.Dock="Right" Content="Reset layout" Command="{Binding ResetLayoutCommand}"
+                        ToolTip="Forget where the dots were placed and let them settle again"
+                        AutomationProperties.AutomationId="Learn.Brain.ResetLayout"/>
+            </DockPanel>
+            <Border Margin="0,8,0,0" Padding="10,6" CornerRadius="6" Background="{DynamicResource Brush.Surface}" BorderThickness="1"
+                    BorderBrush="{DynamicResource Brush.Accent}" Visibility="{Binding HasBanner, Converter={StaticResource BoolToVis}}"
+                    AutomationProperties.AutomationId="Learn.Brain.Banner">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Open To review" Style="{StaticResource AccentButton}" Command="{Binding ReviewNowCommand}"
+                            Margin="10,0,0,0" AutomationProperties.AutomationId="Learn.Brain.ReviewNow"/>
+                    <TextBlock VerticalAlignment="Center" TextWrapping="Wrap">
+                        <Run Text="{Binding BannerText, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="{Binding BannerDetail, Mode=OneWay, StringFormat=' ({0})'}"/>
+                    </TextBlock>
+                </DockPanel>
+            </Border>
+            <TextBlock Text="{Binding Hint}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,6,0,0" AutomationProperties.AutomationId="Learn.Brain.Hint"
+                       Visibility="{Binding Hint, Converter={StaticResource BoolToVis}}"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="320"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- the graph (WebView2 sits in WebHost; WPF cannot draw over it, so the empty state replaces it) -->
+            <Border Grid.Column="0" CornerRadius="6" Background="{DynamicResource Brush.Surface}" ClipToBounds="True">
+                <Grid>
+                    <Grid x:Name="WebHost" AutomationProperties.AutomationId="Learn.Brain.Graph">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PageLoading}" Value="True"><Setter Property="Visibility" Value="Hidden"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding ShowGraph}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+                    </Grid>
+                    <!-- WPF cannot draw over the WebView2, so while it starts it is hidden and this shows instead -->
+                    <TextBlock Text="Loading graph…" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Brain.Loading"/>
+                    <ctl:EmptyState Glyph="&#xE9D9;" Title="The graph is empty" Message="{Binding EmptyText}"
+                                    ActionText="Open Intake" ActionCommand="{Binding ShowIntakeCommand}"
+                                    SecondaryActionText="Add files…" SecondaryActionCommand="{Binding AddFilesCommand}"
+                                    Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Brain.Empty">
+                        <ctl:EmptyState.Extra>
+                            <Button Content="Add folder…" Style="{StaticResource SubtleButton}" Command="{Binding AddFolderCommand}" AutomationProperties.AutomationId="Learn.Brain.Empty.AddFolder"/>
+                        </ctl:EmptyState.Extra>
+                    </ctl:EmptyState>
+                    <StackPanel Visibility="{Binding HasPageProblem, Converter={StaticResource BoolToVis}}" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420"
+                                AutomationProperties.AutomationId="Learn.Brain.Unavailable">
+                        <TextBlock Text="{Binding PageProblem}" Foreground="{DynamicResource Brush.Text}" TextWrapping="Wrap" TextAlignment="Center"/>
+                        <Button Content="Retry" Command="{Binding RetryPageCommand}" HorizontalAlignment="Center" Margin="0,12,0,0" Padding="16,4"
+                                AutomationProperties.AutomationId="Learn.Brain.Retry"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- side panel -->
+            <Border Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource Tile}" AutomationProperties.AutomationId="Learn.Brain.Panel">
+                <Grid>
+                    <TextBlock Text="Click a dot to see what it is and how it connects." Style="{StaticResource Caption}" TextWrapping="Wrap"
+                               Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisInv}}"/>
+                    <DockPanel DataContext="{Binding Selected}"
+                               Visibility="{Binding DataContext.HasSelection, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}">
+                        <StackPanel DockPanel.Dock="Top">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}"
+                                        ToolTip="Close" VerticalAlignment="Top"
+                                        Command="{Binding DataContext.ClearSelectionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        AutomationProperties.Name="Close" AutomationProperties.AutomationId="Learn.Brain.Panel.Close"/>
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap"
+                                           AutomationProperties.AutomationId="Learn.Brain.Panel.Title"/>
+                            </DockPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <Ellipse Width="9" Height="9" Fill="{Binding Color}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding KindOrSource}" Style="{StaticResource Caption}" AutomationProperties.AutomationId="Learn.Brain.Panel.Kind"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,10,0,0" FontStyle="Italic"
+                                       Visibility="{Binding HasSummary, Converter={StaticResource BoolToVis}}"
+                                       AutomationProperties.AutomationId="Learn.Brain.Panel.Summary"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                        Visibility="{Binding HasCategory, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Category: " Style="{StaticResource Caption}"/>
+                                <TextBlock Text="{Binding Category}" Style="{StaticResource Caption}" AutomationProperties.AutomationId="Learn.Brain.Panel.Category"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
+                                        Visibility="{Binding HasType, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Type: " Style="{StaticResource Caption}"/>
+                                <TextBlock Text="{Binding Type}" Style="{StaticResource Caption}" AutomationProperties.AutomationId="Learn.Brain.Panel.Type"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" Margin="0,10,0,0" MaxHeight="220" TextTrimming="CharacterEllipsis"
+                                       AutomationProperties.AutomationId="Learn.Brain.Panel.Preview"/>
+                            <Button Content="Ask Spectre" Style="{StaticResource AccentButton}" HorizontalAlignment="Left" Margin="0,12,0,0"
+                                    Command="{Binding DataContext.AskSpectreCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    ToolTip="Open Spectre with a question about this, and give it these documents"
+                                    AutomationProperties.AutomationId="Learn.Brain.Panel.AskSpectre"/>
+                            <TextBlock Text="Connections" Style="{StaticResource SectionTitle}" Margin="0,14,0,4"/>
+                        </StackPanel>
+                        <ListBox ItemsSource="{Binding Connections}" BorderThickness="0" Background="Transparent"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="Learn.Brain.Panel.Connections">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource SubtleButton}" HorizontalContentAlignment="Stretch" Padding="2,3"
+                                            Command="{Binding DataContext.SelectConnectionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" ToolTip="Show this in the graph" AutomationProperties.Name="{Binding Label}">
+                                        <DockPanel>
+                                            <Ellipse Width="7" Height="7" Fill="{Binding Color}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Reason}" Style="{StaticResource Caption}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

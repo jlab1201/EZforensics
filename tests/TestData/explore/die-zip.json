@@ -1,0 +1,22 @@
+{
+    "detects": [
+        {
+            "filetype": "ZIP",
+            "info": "",
+            "offset": "0",
+            "parentfilepart": "Header",
+            "size": "25197854",
+            "values": [
+                {
+                    "info": "",
+                    "name": "Unknown",
+                    "string": "Unknown: Unknown",
+                    "type": "Unknown",
+                    "version": ""
+                }
+            ]
+        }
+    ]
+}
+
+

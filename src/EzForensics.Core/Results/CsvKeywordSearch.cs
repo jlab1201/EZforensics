@@ -4,8 +4,8 @@ using System.Threading.Channels;
 
 namespace EzForensics.Core.Results;
 
-/// <summary>A file that matched a keyword. <see cref="HitCount"/> counts matching lines, capped at <see cref="CsvKeywordSearch.MaxCount"/>.</summary>
-/// <param name="FirstHitRow">1-based physical line number of the first matching line (the header is line 1); 0 when only the file name matched.</param>
+/// <summary>A file that matched a keyword. <see cref="HitCount"/> counts matching data records (the header is not searched), capped at <see cref="CsvKeywordSearch.MaxCount"/>.</summary>
+/// <param name="FirstHitRow">1-based data row number of the first match, as in the grid and csv_get_rows (the header is not a row); 0 when only the file name matched.</param>
 public sealed record KeywordSearchHit(string Path, int HitCount, long FirstHitRow, bool FileNameMatch, bool CountCapped);
 
 public sealed record KeywordSearchProgress(int FilesDone, int FilesTotal, string CurrentPath);
@@ -15,7 +15,8 @@ public static class CsvKeywordSearch
     public const int MaxCount = 10_000;
 
     /// <summary>
-    /// Case-insensitive ordinal substring search over the raw text of each CSV (line streamed, never fully loaded) and its file name.
+    /// Case-insensitive ordinal substring search over the raw text of each CSV's data records (line streamed, never fully loaded; the header is skipped) and its file name.
+    /// Lines inside a quoted multi-line cell belong to the record that opened the quote, so row numbers stay in step with the grid.
     /// Files are scanned in parallel; hits are yielded as files finish. Files that do not match are not yielded.
     /// Unreadable files are skipped. Throws <see cref="OperationCanceledException"/> on cancellation.
     /// </summary>
@@ -80,7 +81,8 @@ public static class CsvKeywordSearch
         ct.ThrowIfCancellationRequested();
         bool nameMatch = System.IO.Path.GetFileName(path).Contains(keyword, StringComparison.OrdinalIgnoreCase);
         int count = 0;
-        long first = 0, line = 0;
+        long first = 0, line = 0, record = -1, lastHitRecord = -1; // record 0 = header
+        bool inQuotes = false;
         try
         {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 65536, FileOptions.SequentialScan);
@@ -90,9 +92,19 @@ public static class CsvKeywordSearch
             {
                 line++;
                 if ((line & 0x3FF) == 0) ct.ThrowIfCancellationRequested();
+                if (!inQuotes)
+                {
+                    if (l.Length == 0) continue; // blank line: not a record
+                    record++;
+                }
+                int quotes = 0;
+                foreach (var ch in l) if (ch == '"') quotes++;
+                if ((quotes & 1) == 1) inQuotes = !inQuotes;
+                if (record == 0 || record == lastHitRecord) continue;
                 if (l.Contains(keyword, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (count == 0) first = line;
+                    lastHitRecord = record;
+                    if (count == 0) first = record;
                     if (++count >= MaxCount) break;
                 }
             }

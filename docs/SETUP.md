@@ -13,8 +13,8 @@ You need Windows 10 (1809 or later) or Windows 11, 64-bit, and internet access d
 1. **Welcome.** Nothing is installed until you click Install.
 2. **System check.** Shows what your computer already has (disk space, admin rights, internet and so on). Nothing here needs fixing. If it says the internet is not reachable, fix your connection or proxy and click *Check again*.
 3. **Choose what to install.**
-   - **Minimal**: Windows artifacts (Eric Zimmerman's tools) and the super timeline (plaso). No admin rights needed. About 1 GB.
-   - **Everything** (preselected): Minimal plus Network (Zeek, RITA) and Memory (Volatility 3).
+   - **Minimal**: Windows artifacts (Eric Zimmerman's tools), the super timeline (plaso) and file analysis (Explore tools). No admin rights needed. About 1 GB.
+   - **Everything** (preselected): Minimal plus Network (Zeek, RITA) and Memory (Volatility 3). The local AI item is ticked only if your PC can run it.
    - Or tick your own. Click the arrow on a bundle to see its tools and download sizes.
    - Optional: an offline Windows symbol pack for Volatility (large, off by default).
 4. **Summary.** Steps, download size, disk space and a time estimate. Tick the licence box to enable *Install*. *View licences* lists every tool.
@@ -23,7 +23,7 @@ You need Windows 10 (1809 or later) or Windows 11, 64-bit, and internet access d
 
 Setup may ask for admin rights once and a restart, only if you pick Network (Zeek, RITA). After the restart, setup reopens and finishes by itself. If you decline the admin prompt, everything else still installs.
 
-You can open the wizard again any time: **Tools** page, or the *Run setup* button on Ingest.
+You can open the wizard again with the *Open setup* button on Ingest (shown when a tool is missing). **Tools** (and **Options**) are at the bottom of the left menu. It installs and updates tools one by one.
 
 ## What the bundles install
 
@@ -32,9 +32,18 @@ You can open the wizard again any time: **Tools** page, or the *Run setup* butto
 | Windows artifacts | Eric Zimmerman's command-line parsers, the latest event-log maps and batch files. Persistence and Computer details are built in. |
 | Super timeline | log2timeline / plaso. |
 | Network | Zeek (pcap to logs) and RITA (beacon detection). |
-| Memory | Volatility 3. |
+| Memory | Volatility 3. Optional offline Windows symbol pack. |
+| File analysis (Explore) | Detect It Easy, ExifTool and CyberChef. No admin rights. |
+| AI assistant (Spectre) | Local AI: Ollama and a model that suits your PC. |
 
 Setup downloads each tool from its publisher. Nothing is bundled with the app.
+
+## AI assistant (optional)
+
+- Open **Options > AI** to set up Spectre.
+- Local Ollama is the default and keeps your data on the PC.
+- Anthropic, OpenAI and OpenRouter need your own API key. The data you share with Spectre goes to that provider.
+- The AI page's semantic search needs the embedding model (build step in the README). Without it, the page uses text search.
 
 ## Updating
 
@@ -55,11 +64,11 @@ Logs: `%LOCALAPPDATA%\EzForensicsData\logs` (setup logs in the `setup` folder, a
 
 ## Proxy
 
-EZ Forensics uses your Windows proxy settings. To change that, edit `settings.json` in the data folder: set `"proxyMode"` to `System` (default), `None` or `Manual`. For `Manual`, also set `"proxyUrl"` (for example `http://proxy:8080`).
+EZ Forensics uses your Windows proxy settings. To change that, edit `settings.json` in the data folder: set `"proxyMode"` to `"system"` (default), `"none"` or `"manual"`. For `Manual`, also set `"proxyUrl"` (for example `http://proxy:8080`).
 
 ## Uninstall
 
-1. If you installed Zeek or RITA, remove them first with the remove button on the Zeek card in **Tools**.
+1. If you installed Zeek or RITA, remove them first with *Uninstall* on the RITA and Zeek cards in **Tools**.
 2. Open *Windows Settings > Apps > Installed apps*, pick EZ Forensics and uninstall. This removes the app and its shortcuts.
 3. To remove everything, also delete `%LOCALAPPDATA%\EzForensicsData`. Your cases stay in `Documents\EZ Forensics Cases` until you delete them.
 

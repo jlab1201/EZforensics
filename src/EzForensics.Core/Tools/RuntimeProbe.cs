@@ -3,12 +3,15 @@ using System.Diagnostics;
 namespace EzForensics.Core.Tools;
 
 /// <summary>
-/// Is a .NET 9 runtime available for the net9 EZ builds? Either the machine-wide one (Program Files\dotnet) or EZ Forensics'
+/// Are the .NET runtimes (every major in <see cref="RequiredMajors"/>, currently 9 and 10) available for the net9 EZ builds? Either the machine-wide one (Program Files\dotnet) or EZ Forensics'
 /// private copy (<see cref="Settings.AppPaths.PrivateDotnetDir"/>, installed per user with Microsoft's dotnet-install script).
 /// The private copy is used by the EZ tools' apphosts through <c>DOTNET_ROOT</c> (see <see cref="DotnetRootEnvironment"/>).
 /// </summary>
 public static class RuntimeProbe
 {
+    /// <summary>.NET majors the EZ tool builds need (some still 9, the 2026.11 builds need 10). "Net9" in member names means all of these.</summary>
+    public static readonly int[] RequiredMajors = { 9, 10 };
+
     private static Lazy<bool> _net9 = new(Probe);
     private static Lazy<bool> _systemNet9 = new(ProbeSystem);
     private static Task<bool>? _task;
@@ -37,8 +40,8 @@ public static class RuntimeProbe
 
     public static bool HasSystemNet9() => _systemNet9.Value;
 
-    /// <summary>The private runtime holds Microsoft.NETCore.App 9.x (installed by the "dotnet" runtime of dotnet-install.ps1).</summary>
-    public static bool HasPrivateNet9() => HasFramework(PrivateDotnetRoot, "Microsoft.NETCore.App", 9);
+    /// <summary>The private runtime holds Microsoft.NETCore.App for every required major (installed by the "dotnet" runtime of dotnet-install.ps1).</summary>
+    public static bool HasPrivateNet9() => RequiredMajors.All(m => HasFramework(PrivateDotnetRoot, "Microsoft.NETCore.App", m));
 
     /// <summary>True when <paramref name="dotnetRoot"/>\shared\<paramref name="framework"/> has a <paramref name="major"/>.x folder.</summary>
     public static bool HasFramework(string dotnetRoot, string framework, int major)
@@ -53,7 +56,7 @@ public static class RuntimeProbe
 
     /// <summary>
     /// Environment for processes that should use the private runtime: <c>DOTNET_ROOT</c> / <c>DOTNET_ROOT_X64</c> = the private
-    /// folder, but only when the machine has no .NET 9 of its own and the private copy exists (null otherwise). An apphost
+    /// folder, but only when the machine lacks a required .NET major and the private copy exists (null otherwise). An apphost
     /// (MFTECmd.exe, ...) looks at DOTNET_ROOT before the machine-wide install location.
     /// </summary>
     public static IReadOnlyDictionary<string, string>? DotnetRootEnvironment()
@@ -119,7 +122,7 @@ public static class RuntimeProbe
                 if (p.WaitForExit(10000))
                 {
                     var text = outTask.GetAwaiter().GetResult();
-                    if (text.Contains("Microsoft.NETCore.App 9.", StringComparison.Ordinal)) return true;
+                    if (RequiredMajors.All(m => text.Contains($"Microsoft.NETCore.App {m}.", StringComparison.Ordinal))) return true;
                 }
                 else { try { p.Kill(true); } catch { } }
             }
@@ -129,7 +132,7 @@ public static class RuntimeProbe
         try
         {
             var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            if (HasFramework(Path.Combine(pf, "dotnet"), "Microsoft.NETCore.App", 9)) return true;
+            if (RequiredMajors.All(m => HasFramework(Path.Combine(pf, "dotnet"), "Microsoft.NETCore.App", m))) return true;
         }
         catch { }
         return false;

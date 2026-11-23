@@ -35,10 +35,12 @@ public sealed partial class ResultsViewModel
             _combinedPath = null;
             CombinedViewInfo = null;
         }
+        if (value != null) _autoExpandSuppressed = false; // opening a file ends the Collapse-all hold
         // a file opened from elsewhere (saved view, jobs, reveal) moves the tree selection to it, unless the user is multi-selecting
         if (value != null && MultiSelectedCount < 2 && !string.Equals(SelectedNode?.FullPath, value, StringComparison.OrdinalIgnoreCase))
             RevealFile(value);
         UpdateOpenHighlight();
+        NotifyEvidenceBanner();
     }
 
     private CaseFileOperations Ops()
@@ -374,6 +376,7 @@ public sealed partial class ResultsViewModel
     {
         var node = AllNodes().FirstOrDefault(n => string.Equals(n.FullPath, path, StringComparison.OrdinalIgnoreCase));
         if (node == null) return false;
+        _autoExpandSuppressed = false; // explicit navigation
         if (node.IsFile) return RevealFile(path);
         for (var p = node.Parent; p != null; p = p.Parent) p.IsExpanded = true;
         foreach (var n in AllNodes()) if (n != node && n.IsSelected) n.IsSelected = false;

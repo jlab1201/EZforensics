@@ -13,6 +13,16 @@ public partial class EzDialog : Window
     private readonly List<Button> _buttons = new();
     private readonly int _cancelIndex;
 
+    /// <summary>Shows a one-line text box under the message (see <see cref="EzForensics.App.Services.Dialogs.Prompt"/>); read the text in <see cref="InputText"/>.</summary>
+    public void EnableInput(string? initial)
+    {
+        InputBox.Text = initial ?? "";
+        InputBox.Visibility = Visibility.Visible;
+        Loaded += (_, _) => { InputBox.Focus(); InputBox.SelectAll(); };
+    }
+
+    public string InputText => InputBox.Text;
+
     /// <summary>Index of the clicked button; the cancel index (-1 when none) when closed with Esc.</summary>
     public int Result { get; private set; } = -1;
 

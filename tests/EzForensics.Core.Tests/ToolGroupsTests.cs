@@ -31,4 +31,13 @@ public class ToolGroupsTests
         all.Where(d => d.Kind == ToolKind.Cli).Should().OnlyContain(d => ToolGroups.Of(d) != ToolGroup.Gui);
         ToolGroups.All.Last().Group.Should().Be(ToolGroup.Gui);
     }
+
+    [Fact]
+    public void Every_group_maps_to_a_page_and_every_page_is_listed()
+    {
+        foreach (var g in Enum.GetValues<ToolGroup>()) ToolGroups.Pages.Should().Contain(p => p.Page == ToolGroups.PageOf(g));
+        ToolGroups.Pages.Select(p => p.Title).Should().Equal("Analyze", "Explore", "AI", "GUI");
+        ToolGroups.PageOf(ToolGroup.Timeline).Should().Be(ToolPage.Analyze);
+        ToolGroups.PageOf(ToolGroup.Spectre).Should().Be(ToolPage.Ai);
+    }
 }

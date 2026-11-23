@@ -4,7 +4,7 @@ using FluentAssertions;
 
 namespace EzForensics.Core.Tests;
 
-/// <summary>Install / update processes run on a private queue (not the Jobs page queue), with their output streamed and logged.</summary>
+/// <summary>Install / update processes run on a private queue (not the Ingest job list queue), with their output streamed and logged.</summary>
 public class MaintenanceRunnerTests
 {
     [Fact]
@@ -26,7 +26,7 @@ public class MaintenanceRunnerTests
             job.State.Should().Be(JobState.Succeeded);
             lines.Count.Should().BeGreaterThanOrEqualTo(3);
             m.Queue.Jobs.Should().ContainSingle();
-            jobsPage.Jobs.Should().BeEmpty("maintenance never shows on the Jobs page");
+            jobsPage.Jobs.Should().BeEmpty("maintenance never shows in the Jobs list on Ingest");
             job.LogPath.Should().StartWith(Path.Combine(logDir, "logs"));
             File.Exists(job.LogPath).Should().BeTrue();
         }

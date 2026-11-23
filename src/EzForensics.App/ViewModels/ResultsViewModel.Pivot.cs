@@ -66,6 +66,15 @@ public sealed partial class ResultsViewModel
 
     public bool IsGrouped => GroupColumns.Count > 0;
 
+    private bool _showGroupBar;
+    /// <summary>Actions > Show group bar: the group panel is hidden until a column is grouped or the user turns it on (this session).</summary>
+    public bool ShowGroupBar
+    {
+        get => _showGroupBar;
+        set { if (_showGroupBar == value) return; _showGroupBar = value; OnPropertyChanged(); OnPropertyChanged(nameof(GroupBarVisible)); }
+    }
+    public bool GroupBarVisible => HasFile && (IsGrouped || _showGroupBar);
+
     /// <summary>Left padding of data rows in grouped mode (16 px per group level), applied in the flag column.</summary>
     public System.Windows.Thickness PivotRowIndent => new(16 * GroupColumns.Count, 0, 0, 0);
 
@@ -187,6 +196,7 @@ public sealed partial class ResultsViewModel
         if (structural) { _collapsedGroups.Clear(); _collapseAllPending = IsGrouped; }
         if (!IsGrouped) { _pivotRoots = null; _pivotMap = null; _pivotOrder = null; }
         OnPropertyChanged(nameof(IsGrouped));
+        OnPropertyChanged(nameof(GroupBarVisible));
         OnPropertyChanged(nameof(PivotRowIndent));
         MarkSessionDirty();
         _ = ApplyPivotAsync();
@@ -328,6 +338,7 @@ public sealed partial class ResultsViewModel
         _pivotRoots = null; _pivotMap = null; _pivotOrder = null;
         _pivotBase = null; _pivotBaseValid = false;
         OnPropertyChanged(nameof(IsGrouped));
+        OnPropertyChanged(nameof(GroupBarVisible));
         OnPropertyChanged(nameof(PivotRowIndent));
     }
 
@@ -354,6 +365,7 @@ public sealed partial class ResultsViewModel
             if (Headers.Contains(g.Column) && !IsGroupColumn(g.Column)) GroupColumns.Add(new PivotGroupChip(g.Column, g.Sort));
         SeedCollapsed(st.CollapsedGroups);
         OnPropertyChanged(nameof(IsGrouped));
+        OnPropertyChanged(nameof(GroupBarVisible));
         OnPropertyChanged(nameof(PivotRowIndent));
     }
 }

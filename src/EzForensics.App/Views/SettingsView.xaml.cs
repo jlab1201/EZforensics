@@ -12,6 +12,7 @@ public partial class SettingsView : UserControl
     public SettingsView()
     {
         InitializeComponent();
+        Loaded += (_, _) => Reflow();
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is ViewModels.SettingsViewModel o) o.IngestSelectionsFocusRequested -= ScrollToSelections;
@@ -22,25 +23,30 @@ public partial class SettingsView : UserControl
     private const double TwoColumnMinWidth = 1000;
     private bool? _narrow;
 
-    // 2x2 grid of cards; one column below ~1000px.
-    private void CardsGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    // Wide: Install|Display, Flags|Ingest, AI|Hot Keys (Hot Keys under Ingest). Narrow: one column, Hot Keys before AI.
+    private void CardsGrid_SizeChanged(object sender, SizeChangedEventArgs e) => Reflow();
+
+    private void Reflow()
     {
+        if (ActualWidth <= 0) return;   // not laid out yet: the XAML defaults are the wide layout
         bool narrow = ActualWidth < TwoColumnMinWidth;
         if (_narrow == narrow) return;
         _narrow = narrow;
         SecondColumn.Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-        var cards = new[] { CardInstall, CardDisplay, CardFlags, CardIngest };
+        var cards = new[] { CardInstall, CardDisplay, CardFlags, CardIngest, narrow ? CardHotKeys : CardAi, narrow ? CardAi : CardHotKeys };
         for (int i = 0; i < cards.Length; i++)
         {
             Grid.SetColumn(cards[i], narrow ? 0 : i % 2);
             Grid.SetRow(cards[i], narrow ? i : i / 2);
             cards[i].Margin = new Thickness(0, 0, narrow ? 0 : 14, 14);
         }
-        // Hot Keys: one column wide, in the left column below the 2x2 cards
-        Grid.SetRow(CardHotKeys, narrow ? cards.Length : 2);
-        Grid.SetColumn(CardHotKeys, 0);
-        Grid.SetColumnSpan(CardHotKeys, 1);
-        CardHotKeys.Margin = new Thickness(0, 0, narrow ? 0 : 14, 14);
+    }
+
+    private void AiSaveKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        vm.Ai.SaveKey(AiKeyBox.Password);
+        AiKeyBox.Clear();
     }
 
     // ------------------------------------------------------------ Hot Keys: capture the next key chord

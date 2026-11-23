@@ -21,7 +21,7 @@ public static class JobFailureAdvice
         if (Has("Administrator privileges") || Has("requires elevation") || Has("run as administrator") || Has("Access is denied") && Has("administrator"))
             return "Restart EZ Forensics as administrator.";
         if (Has("Timed out"))
-            return "Increase the timeout in Settings or narrow the input.";
+            return "Increase the timeout in Options or narrow the input.";
         if (Has("No space left on device") || Has("not enough space on the disk") || Has("disk full"))
             return "Free disk space on the case drive.";
         if (Has("being used by another process") || Has("Access to the path") || Has("Access is denied") || Has("sharing violation"))

@@ -7,13 +7,48 @@
              xmlns:zeek="clr-namespace:EzForensics.Core.Zeek;assembly=EzForensics.Core"
              xmlns:rita="clr-namespace:EzForensics.Core.Rita;assembly=EzForensics.Core">
     <UserControl.Resources>
-        <!-- one Volatility plugin of the Ingest set (MemoryPluginItem) -->
-        <DataTemplate x:Key="PluginCheck">
-            <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanChange}" Width="280" Margin="0,2,8,2"
-                      ToolTip="{Binding ToolTip}" AutomationProperties.AutomationId="{Binding AutomationId}" AutomationProperties.Name="{Binding Label}">
-                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
-            </CheckBox>
+        <!-- Volatility plugin table: header and rows share these columns (Grid.IsSharedSizeScope on the table) -->
+        <Style x:Key="PluginHeader" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,16,0"/>
+        </Style>
+        <!-- one Volatility plugin of the Ingest set (MemoryPluginItem): Run / Command / Module / Description -->
+        <DataTemplate x:Key="PluginRow">
+            <Border x:Name="Row" Padding="8,5" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1"
+                    Background="Transparent" ToolTip="{Binding ToolTip}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="PluginRun"/>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="PluginCommand"/>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="PluginModule"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanChange}" VerticalAlignment="Center" Margin="0,0,16,0"
+                              AutomationProperties.AutomationId="{Binding AutomationId}" AutomationProperties.Name="{Binding Label}"/>
+                    <TextBlock x:Name="Command" Grid.Column="1" Text="{Binding Id}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                    <TextBlock x:Name="Module" Grid.Column="2" Text="{Binding Plugin}" VerticalAlignment="Center" Margin="0,0,16,0"
+                               FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <TextBlock x:Name="Description" Grid.Column="3" Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource TemplatedParent}}" Value="1">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource Brush.RowAlt}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                    <Setter TargetName="Command" Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+                    <Setter TargetName="Module" Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+                    <Setter TargetName="Description" Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
+        <!-- OS group row of the plugin table (Windows / Linux) -->
+        <Style x:Key="PluginGroup" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
     </UserControl.Resources>
     <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
         <StackPanel x:Name="RootPanel">
@@ -44,7 +79,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <TextBlock Text="{Binding PlasoStatus}" FontWeight="SemiBold" FontSize="12" AutomationProperties.AutomationId="ToolManager.Plaso.Status">
+                            <TextBlock Text="{Binding PlasoStatus}" FontWeight="SemiBold" FontSize="{DynamicResource FontSize.Caption}" AutomationProperties.AutomationId="ToolManager.Plaso.Status">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
@@ -69,7 +104,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="log2timeline / plaso" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="ToolManager.Plaso.Title"/>
                             <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="10,0,0,0">
-                                <TextBlock Text="Timeline" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                <TextBlock Text="Timeline" FontSize="{DynamicResource FontSize.Small}" Foreground="{DynamicResource Brush.TextSecondary}"/>
                             </Border>
                         </StackPanel>
                     </DockPanel>
@@ -175,10 +210,10 @@
                                             <TextBlock Grid.Row="3" Text="Engine" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
                                             <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PlasoEngineType}" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Plaso.Engine"/>
                                             <TextBlock Grid.Row="4" Text="Location" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
-                                            <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding PlasoLocation}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding PlasoLocation}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
                                                        TextTrimming="CharacterEllipsis" ToolTip="{Binding PlasoLocation}" AutomationProperties.AutomationId="ToolManager.Plaso.Location"/>
                                             <TextBlock Grid.Row="5" Text="Path" Style="{StaticResource Caption}" Margin="0,0,16,6" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PlasoConfiguredPath}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PlasoConfiguredPath}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
                                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding PlasoConfiguredPath}"
                                                        AutomationProperties.AutomationId="ToolManager.Plaso.ConfiguredPath"/>
                                             <StackPanel Grid.Row="5" Grid.Column="2" Orientation="Horizontal" Margin="6,0,0,6">
@@ -193,7 +228,7 @@
                                             <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding PythonText}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
                                                        ToolTip="{Binding PythonText}" AutomationProperties.AutomationId="ToolManager.Plaso.Python"/>
                                             <TextBlock Grid.Row="7" Text="Links" Style="{StaticResource Caption}"/>
-                                            <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" FontSize="12" TextWrapping="Wrap"
+                                            <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" FontSize="{DynamicResource FontSize.Caption}" TextWrapping="Wrap"
                                                        AutomationProperties.AutomationId="ToolManager.Plaso.Links">
                                                 <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.Docs}" ToolTip="{x:Static plaso:PlasoLinks.Docs}"
                                                            AutomationProperties.AutomationId="ToolManager.Plaso.LinkDocs">Website / Docs</Hyperlink>
@@ -258,7 +293,7 @@
                                                     <TextBlock Style="{StaticResource InfoGlyph}" Margin="6,0,0,0"
                                                                ToolTip="plaso needs Python 3.10 to 3.13 and none was found. Install fetches python.org's official NuGet package from nuget.org (SHA-512 checked) into %LOCALAPPDATA%\EzForensicsData\plaso\python, used only by EZ Forensics: no installer, no admin rights, no PATH changes. Prefer your own Python? Install it from python.org (tick &quot;Add python.exe to PATH&quot;), then click Detect again. Docker Desktop with the plaso image also works."/>
                                                 </StackPanel>
-                                                <TextBlock FontSize="12" Margin="0,4,0,0">
+                                                <TextBlock FontSize="{DynamicResource FontSize.Caption}" Margin="0,4,0,0">
                                                     <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static plaso:PlasoLinks.PythonDownloads}"
                                                                AutomationProperties.AutomationId="ToolManager.Plaso.LinkPython">python.org downloads</Hyperlink>
                                                     <Run Text="   "/>
@@ -314,7 +349,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <TextBlock Text="{Binding StatusLabel}" FontWeight="SemiBold" FontSize="12" AutomationProperties.AutomationId="ToolManager.Zeek.Status">
+                            <TextBlock Text="{Binding StatusLabel}" FontWeight="SemiBold" FontSize="{DynamicResource FontSize.Caption}" AutomationProperties.AutomationId="ToolManager.Zeek.Status">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
@@ -339,7 +374,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Zeek" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="ToolManager.Zeek.Title"/>
                             <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="10,0,0,0">
-                                <TextBlock Text="Network" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                <TextBlock Text="Network" FontSize="{DynamicResource FontSize.Small}" Foreground="{DynamicResource Brush.TextSecondary}"/>
                             </Border>
                         </StackPanel>
                     </DockPanel>
@@ -386,7 +421,7 @@
                                             <TextBlock Grid.Row="2" Text="Engine" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
                                             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding EngineText}" Margin="0,0,0,6" AutomationProperties.AutomationId="ToolManager.Zeek.Engine"/>
                                             <TextBlock Grid.Row="3" Text="Location" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LocationText}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LocationText}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
                                                        TextTrimming="CharacterEllipsis" ToolTip="{Binding LocationText}" AutomationProperties.AutomationId="ToolManager.Zeek.Location"/>
                                             <TextBlock Grid.Row="4" Text="Docker" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
                                             <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding DockerText}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
@@ -395,12 +430,12 @@
                                             <TextBlock Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding WslText}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
                                                        ToolTip="{Binding WslText}" AutomationProperties.AutomationId="ToolManager.Zeek.Wsl"/>
                                             <TextBlock Grid.Row="6" Text="Path" Style="{StaticResource Caption}" Margin="0,0,16,6" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ConfiguredPath}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                            <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ConfiguredPath}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
                                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding ConfiguredPath}" AutomationProperties.AutomationId="ToolManager.Zeek.ConfiguredPath"/>
                                             <Button Grid.Row="6" Grid.Column="2" Content="Automatic" Command="{Binding ClearPathCommand}" MinHeight="24" Padding="8,2" Margin="6,0,0,6"
                                                     ToolTip="Clear the configured zeek.exe (PATH, Docker, WSL)" AutomationProperties.AutomationId="ToolManager.Zeek.ClearPath"/>
                                             <TextBlock Grid.Row="7" Text="Links" Style="{StaticResource Caption}"/>
-                                            <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" FontSize="12" TextWrapping="Wrap"
+                                            <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" FontSize="{DynamicResource FontSize.Caption}" TextWrapping="Wrap"
                                                        AutomationProperties.AutomationId="ToolManager.Zeek.Links">
                                                 <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.Docs}"
                                                            ToolTip="{x:Static zeek:ZeekLinks.Docs}" AutomationProperties.AutomationId="ToolManager.Zeek.LinkDocs">Docs</Hyperlink>
@@ -471,7 +506,7 @@
                                                     <TextBlock Style="{StaticResource InfoGlyph}" Margin="6,0,0,0"
                                                                ToolTip="Both need administrator rights and your consent, so EZ Forensics does not install them for you. Afterwards a single click on Install sets Zeek up: with Docker it downloads the official zeek/zeek image (about 180 MB); with WSL it installs the official Zeek packages inside your Ubuntu or Debian distro."/>
                                                 </StackPanel>
-                                                <TextBlock FontSize="12" Margin="0,4,0,0">
+                                                <TextBlock FontSize="{DynamicResource FontSize.Caption}" Margin="0,4,0,0">
                                                     <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static zeek:ZeekLinks.DockerDesktopDocs}"
                                                                AutomationProperties.AutomationId="ToolManager.Zeek.LinkDockerDesktop">Install Docker Desktop</Hyperlink>
                                                     <Run Text="   "/>
@@ -523,7 +558,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <TextBlock Text="{Binding StatusLabel}" FontWeight="SemiBold" FontSize="12" AutomationProperties.AutomationId="ToolManager.Rita.Status">
+                            <TextBlock Text="{Binding StatusLabel}" FontWeight="SemiBold" FontSize="{DynamicResource FontSize.Caption}" AutomationProperties.AutomationId="ToolManager.Rita.Status">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
@@ -548,7 +583,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="RITA" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="ToolManager.Rita.Title"/>
                             <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="10,0,0,0">
-                                <TextBlock Text="Network" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                <TextBlock Text="Network" FontSize="{DynamicResource FontSize.Small}" Foreground="{DynamicResource Brush.TextSecondary}"/>
                             </Border>
                         </StackPanel>
                     </DockPanel>
@@ -589,7 +624,7 @@
                                     <StackPanel>
                                         <Border Padding="10,8" CornerRadius="4" Background="{DynamicResource Brush.WarningBg}" Margin="0,0,0,8" AutomationProperties.AutomationId="ToolManager.Rita.InternalNote">
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Warning}" Text="Internal-to-internal traffic is filtered out."/>
+                                                <TextBlock FontSize="{DynamicResource FontSize.Caption}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Warning}" Text="Internal-to-internal traffic is filtered out."/>
                                                 <TextBlock Style="{StaticResource InfoGlyph}" Margin="6,0,0,0"
                                                            ToolTip="If the command-and-control server is itself on a private range (a lab, or an attacker inside the network), narrow the list to the victim's subnet. Example: in a test capture the backdoor's C2 at 10.0.2.15 only appeared after the internal subnets were set to 192.168.227.0/24 (the victim network) instead of all private ranges."/>
                                             </StackPanel>
@@ -603,10 +638,10 @@
                                                         AutomationProperties.AutomationId="ToolManager.Rita.ResetSubnets"/>
                                             </StackPanel>
                                             <TextBox Text="{Binding SubnetsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="80" MaxHeight="160"
-                                                     VerticalScrollBarVisibility="Auto" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                                     VerticalScrollBarVisibility="Auto" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
                                                      AutomationProperties.AutomationId="ToolManager.Rita.Subnets" AutomationProperties.Name="RITA internal subnets"/>
                                         </DockPanel>
-                                        <TextBlock Text="{Binding SubnetsValidation}" Margin="0,4,0,0" TextWrapping="Wrap" FontSize="12" AutomationProperties.AutomationId="ToolManager.Rita.SubnetsValidation">
+                                        <TextBlock Text="{Binding SubnetsValidation}" Margin="0,4,0,0" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Caption}" AutomationProperties.AutomationId="ToolManager.Rita.SubnetsValidation">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
@@ -652,12 +687,12 @@
                                             <TextBlock Grid.Row="2" Text="Engine" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
                                             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding EngineText}" Margin="0,0,0,6" TextWrapping="Wrap" AutomationProperties.AutomationId="ToolManager.Rita.Engine"/>
                                             <TextBlock Grid.Row="3" Text="Location" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding LocationText, Mode=OneWay}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding LocationText, Mode=OneWay}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
                                                        TextTrimming="CharacterEllipsis" ToolTip="{Binding LocationText, Mode=OneWay}" AutomationProperties.AutomationId="ToolManager.Rita.Location"/>
                                             <TextBlock Grid.Row="4" Text="Data" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
                                             <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding DataText}" Margin="0,0,0,6" TextWrapping="Wrap" AutomationProperties.AutomationId="ToolManager.Rita.Data"/>
                                             <TextBlock Grid.Row="5" Text="Links" Style="{StaticResource Caption}"/>
-                                            <TextBlock Grid.Row="5" Grid.Column="1" FontSize="12" TextWrapping="Wrap" AutomationProperties.AutomationId="ToolManager.Rita.Links">
+                                            <TextBlock Grid.Row="5" Grid.Column="1" FontSize="{DynamicResource FontSize.Caption}" TextWrapping="Wrap" AutomationProperties.AutomationId="ToolManager.Rita.Links">
                                                 <Hyperlink Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static rita:RitaLinks.SourceAtTag}"
                                                            ToolTip="{x:Static rita:RitaLinks.SourceAtTag}" AutomationProperties.AutomationId="ToolManager.Rita.LinkSource">Source code (v5.1.2)</Hyperlink>
                                                 <Run Text="  ·  "/>
@@ -752,7 +787,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <TextBlock Text="{Binding StatusLabel}" FontWeight="SemiBold" FontSize="12" AutomationProperties.AutomationId="ToolManager.Volatility.Status">
+                            <TextBlock Text="{Binding StatusLabel}" FontWeight="SemiBold" FontSize="{DynamicResource FontSize.Caption}" AutomationProperties.AutomationId="ToolManager.Volatility.Status">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
@@ -774,7 +809,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Volatility 3" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="ToolManager.Volatility.Title"/>
                             <Border Style="{StaticResource Chip}" Background="{DynamicResource Brush.Control}" Margin="10,0,0,0">
-                                <TextBlock Text="Memory" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                <TextBlock Text="Memory" FontSize="{DynamicResource FontSize.Small}" Foreground="{DynamicResource Brush.TextSecondary}"/>
                             </Border>
                         </StackPanel>
                     </DockPanel>
@@ -799,25 +834,40 @@
                                 <Border Style="{StaticResource Tile}" AutomationProperties.AutomationId="ToolManager.Volatility.Plugins">
                                     <StackPanel>
                                         <DockPanel Margin="0,0,0,6">
-                                            <TextBlock DockPanel.Dock="Right" FontSize="12">
+                                            <TextBlock DockPanel.Dock="Right" FontSize="{DynamicResource FontSize.Caption}">
                                                 <Hyperlink Command="{Binding PluginDefaultsCommand}" AutomationProperties.AutomationId="ToolManager.Volatility.PluginDefaults">Defaults</Hyperlink>
                                                 <Run Text="  "/>
                                                 <Hyperlink Command="{Binding PluginsAllCommand}" AutomationProperties.AutomationId="ToolManager.Volatility.PluginsAll">All</Hyperlink>
                                             </TextBlock>
                                             <TextBlock Text="{Binding PluginsSummary, Mode=OneWay}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
                                         </DockPanel>
-                                        <TextBlock Text="Windows" FontWeight="SemiBold" FontSize="12"/>
-                                        <ItemsControl ItemsSource="{Binding WindowsPlugins}" Focusable="False" ItemTemplate="{StaticResource PluginCheck}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                        </ItemsControl>
-                                        <TextBlock Text="Linux" FontWeight="SemiBold" FontSize="12" Margin="0,8,0,0"/>
-                                        <ItemsControl ItemsSource="{Binding LinuxPlugins}" Focusable="False" ItemTemplate="{StaticResource PluginCheck}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                        </ItemsControl>
+                                        <Border BorderBrush="{DynamicResource Brush.BorderStrong}" BorderThickness="1" CornerRadius="4" ClipToBounds="True"
+                                                AutomationProperties.AutomationId="ToolManager.Volatility.PluginTable">
+                                            <StackPanel Grid.IsSharedSizeScope="True">
+                                                <Border Padding="8,5" Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.BorderStrong}" BorderThickness="0,0,0,1">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PluginRun"/>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PluginCommand"/>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PluginModule"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Run" Style="{StaticResource PluginHeader}"/>
+                                                        <TextBlock Grid.Column="1" Text="Command" Style="{StaticResource PluginHeader}"/>
+                                                        <TextBlock Grid.Column="2" Text="Module" Style="{StaticResource PluginHeader}"/>
+                                                        <TextBlock Grid.Column="3" Text="Description" Style="{StaticResource PluginHeader}"/>
+                                                    </Grid>
+                                                </Border>
+                                                <Border Style="{StaticResource PluginGroup}">
+                                                    <TextBlock Text="Windows" FontWeight="SemiBold" FontSize="{DynamicResource FontSize.Caption}"/>
+                                                </Border>
+                                                <ItemsControl ItemsSource="{Binding WindowsPlugins}" Focusable="False" AlternationCount="2" ItemTemplate="{StaticResource PluginRow}"/>
+                                                <Border Style="{StaticResource PluginGroup}">
+                                                    <TextBlock Text="Linux" FontWeight="SemiBold" FontSize="{DynamicResource FontSize.Caption}"/>
+                                                </Border>
+                                                <ItemsControl ItemsSource="{Binding LinuxPlugins}" Focusable="False" AlternationCount="2" ItemTemplate="{StaticResource PluginRow}"/>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
 
@@ -882,10 +932,10 @@
                                         <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LatestText}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
                                                    AutomationProperties.AutomationId="ToolManager.Volatility.Latest"/>
                                         <TextBlock Grid.Row="3" Text="Location" Style="{StaticResource Caption}" Margin="0,0,16,6"/>
-                                        <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LocationText}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LocationText}" Margin="0,0,0,6" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
                                                    TextTrimming="CharacterEllipsis" ToolTip="{Binding LocationText}" AutomationProperties.AutomationId="ToolManager.Volatility.Location"/>
                                         <TextBlock Grid.Row="4" Text="Path" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ConfiguredPath}" FontFamily="{DynamicResource Font.Mono}" FontSize="12"
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ConfiguredPath}" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding ConfiguredPath}"
                                                    AutomationProperties.AutomationId="ToolManager.Volatility.ConfiguredPath"/>
                                         <Button Grid.Row="4" Grid.Column="2" Content="Automatic" Command="{Binding ClearPathCommand}" MinHeight="24" Padding="8,2" Margin="6,0,0,0"

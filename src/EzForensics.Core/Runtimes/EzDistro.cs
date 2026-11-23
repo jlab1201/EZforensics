@@ -14,7 +14,7 @@ public sealed record EzRootfsPin(string Os, string Version, string Architecture,
     public string Display => $"{Os} {Version} ({Architecture})";
 }
 
-/// <summary>One maintenance process run as a JobQueue job (logged, on the Jobs page). Generic counterpart of ZeekSetupStep.</summary>
+/// <summary>One maintenance process run as a JobQueue job (logged, in the Jobs list on Ingest). Generic counterpart of ZeekSetupStep.</summary>
 public sealed record RuntimeStep(string ToolId, string Exe, IReadOnlyList<string> Args, string Label, TimeSpan Timeout,
     IReadOnlyDictionary<string, string>? Environment = null)
 {

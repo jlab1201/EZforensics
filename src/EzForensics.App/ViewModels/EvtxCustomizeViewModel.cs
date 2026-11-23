@@ -29,6 +29,12 @@ public sealed partial class EvtxEventViewModel : ObservableObject
 
     public void Raise() => OnPropertyChanged(nameof(IsSelected));
 
+    /// <summary>A custom map (map editor) is used for this event instead of the stock map.</summary>
+    [ObservableProperty] private bool _hasCustomMap;
+
+    [RelayCommand] private void EditFields() => _group.Owner.EditFields(this);
+    [RelayCommand] private void ResetMap() => _group.Owner.ResetMap(this);
+
     public bool Matches(string q) =>
         q.Length == 0 || Entry.EventId.ToString().Contains(q) || Entry.Channel.Contains(q, StringComparison.OrdinalIgnoreCase)
         || Entry.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || Entry.Provider.Contains(q, StringComparison.OrdinalIgnoreCase)
@@ -49,6 +55,7 @@ public sealed partial class EvtxGroupViewModel : ObservableObject
     }
 
     public EvtxEventGroup Group { get; }
+    public EvtxCustomizeViewModel Owner => _owner;
     public ObservableCollection<EvtxEventViewModel> Events { get; }
     public string Title => Group.Title;
     public string CountText => $"{Events.Count(e => e.IsSelected)} / {Events.Count}";
@@ -92,6 +99,8 @@ public sealed partial class EvtxCustomizeViewModel : ObservableObject
     private readonly AppServices _s;
     private readonly Dictionary<EvtxEventKey, bool> _snapshot;
     private CancellationTokenSource? _scanCts;
+    private readonly EvtxCustomMaps _maps = new();
+    private string? _lastScanDir;
 
     [ObservableProperty] private string _search = "";
     [ObservableProperty] private bool _isScanning;
@@ -123,6 +132,43 @@ public sealed partial class EvtxCustomizeViewModel : ObservableObject
         }
         ApplySearch();
         RaiseSummary();
+        RefreshCustomMaps();
+    }
+
+    private void RefreshCustomMaps()
+    {
+        var keys = _maps.Keys();
+        foreach (var g in Groups)
+            foreach (var e in g.Events)
+                e.HasCustomMap = keys.Any(k => EvtxMapFiles.KeyMatches(k, e.Entry.Key));
+    }
+
+    /// <summary>Opens the map editor for an event (sample records from the last scanned folder, else picked in the editor).</summary>
+    public void EditFields(EvtxEventViewModel e)
+    {
+        var key = e.Entry.Key;
+        var vm = new EvtxMapEditorViewModel(_s, key, e.Title, _lastScanDir);
+        var app = System.Windows.Application.Current;
+        var owner = app?.Windows.OfType<Views.EvtxCustomizeWindow>().FirstOrDefault() ?? app?.MainWindow;
+        var win = new Views.EvtxMapEditorWindow { DataContext = vm, Owner = owner, Title = $"Edit fields: {key.EventId} {e.Title}" };
+        if (win.ShowDialog() == true) ScanStatus = $"Saved a custom map for event {key.EventId} ({key.Channel}). EvtxECmd uses it from the next run.";
+        RefreshCustomMaps();
+    }
+
+    /// <summary>Deletes the custom map of an event: EvtxECmd goes back to the stock map.</summary>
+    public void ResetMap(EvtxEventViewModel e)
+    {
+        var key = e.Entry.Key;
+        if (!Dialogs.Confirm("Reset to stock map", $"Delete your custom map for event {key.EventId} ({key.Channel})? EvtxECmd then uses the stock map again.", "Reset", "Cancel")) return;
+        try
+        {
+            var exe = _s.ResolveNonBlocking("EvtxECmd.exe")?.Path;
+            var mapsDir = exe != null ? System.IO.Path.Combine(System.IO.Path.GetDirectoryName(exe)!, "Maps") : null;
+            while (_maps.Delete(key, mapsDir)) { }
+            ScanStatus = $"Event {key.EventId} ({key.Channel}) uses the stock map again.";
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { ScanStatus = "Could not delete the custom map: " + ex.Message; }
+        RefreshCustomMaps();
     }
 
     partial void OnSearchChanged(string value) => ApplySearch();
@@ -150,6 +196,7 @@ public sealed partial class EvtxCustomizeViewModel : ObservableObject
     {
         var dir = Dialogs.PickFolder("Select the folder with the .evtx files (searched recursively)", _s.LastCaseDir ?? _s.Settings.CaseRoot);
         if (string.IsNullOrEmpty(dir)) return;
+        _lastScanDir = dir;
         _scanCts?.Dispose();
         _scanCts = new CancellationTokenSource();
         var ct = _scanCts.Token;

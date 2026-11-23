@@ -132,7 +132,7 @@ public sealed class CaseIndex
 
     /// <summary>Folders that are case-level (never host folders).</summary>
     public static readonly IReadOnlySet<string> CaseLevelFolders =
-        new HashSet<string>(new[] { "Timeline", "logs", "SystemInfo", OutputPlan.StagingFolderName }, StringComparer.OrdinalIgnoreCase);
+        new HashSet<string>(new[] { "Timeline", "logs", "SystemInfo", OutputPlan.StagingFolderName, Assistant.AssistantConsent.FolderName }, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Case-level folder for results whose source host could not be identified (captures, their RITA analysis, a super timeline of evidence of no
@@ -168,7 +168,11 @@ public sealed class CaseIndex
         if (!Directory.Exists(CaseDir)) return;
         List<string> files;
         try { files = ManifestFiles(CaseDir); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            EzForensics.Core.Diagnostics.CoreLog.Warn("Could not list case manifests in " + CaseDir, ex);
+            return;
+        }
         var events = new List<Event>();
         var origCases = new List<string>();
         foreach (var mf in files)
@@ -217,7 +221,11 @@ public sealed class CaseIndex
             using var r = new StreamReader(fs);
             lines = r.ReadToEnd().Split('\n');
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
+        catch (Exception ex)  when (ex is IOException or UnauthorizedAccessException)
+        {
+            EzForensics.Core.Diagnostics.CoreLog.Warn("Could not read the case log " + log, ex);
+            return;
+        }
         foreach (var raw in lines)
         {
             var parts = raw.TrimEnd('\r').Split('\t');

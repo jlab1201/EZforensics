@@ -106,6 +106,21 @@ internal sealed class LogProcessRecord
     public int Pid;
     public int? Ppid;
     public string Guid = "", ParentGuid = "", Image = "", Cmd = "", User = "", ParentImage = "", Hash = "";
+    /// <summary>From the event's payload: Sysmon IntegrityLevel or 4688 MandatoryLabel (a S-1-16-* SID), Sysmon TerminalSessionId and PE version info.</summary>
+    public string Integrity = "", Company = "", Product = "";
+    public int? SessionId;
+
+    /// <summary>Reads the payload fields the CSV's PayloadData columns leave out.</summary>
+    public void ReadPayload(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload)) return;
+        var f = ProcessLogText.PayloadFields(payload);
+        string Get(string k) => f.TryGetValue(k, out var v) && v.Trim() is { Length: > 0 } t && t != "-" ? t : "";
+        Integrity = Get("integritylevel") is { Length: > 0 } il ? il : Get("mandatorylabel");
+        if (int.TryParse(Get("terminalsessionid"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var s)) SessionId = s;
+        Company = Get("company");
+        Product = Get("product");
+    }
 }
 
 /// <summary>A process end seen in the logs (Security 4689 or Sysmon 5).</summary>
@@ -328,6 +343,7 @@ internal static class EventLogProcessReader
                         Source = ProcessSources.Evtx4688, Time = time, Pid = pid.Value, Ppid = ProcessLogText.ParsePid(cells[2]),
                         Image = ProcessLogText.ExePath(exe), Cmd = exe, ParentImage = ProcessLogText.StripLabel(cells[0]), User = u,
                     };
+                    rec.ReadPayload(Str(r, cPayload));
                     res.Creations.Add(rec);
                     AddEvent(res, new ProcessEventRecord
                     {
@@ -387,6 +403,7 @@ internal static class EventLogProcessReader
                             Guid = guid, ParentGuid = ProcessLogText.NormGuid(ProcessLogText.Get(kv, "parentprocessguid")), Image = image, Cmd = cmd, User = u,
                             ParentImage = parentImage, Hash = hash,
                         };
+                        rec.ReadPayload(Str(r, cPayload));
                         if (pidVal == null) rec.Pid = -1;   // GUID only: matched through the GUID
                         res.Creations.Add(rec);
                         AddEvent(res, new ProcessEventRecord
@@ -407,6 +424,5 @@ internal static class EventLogProcessReader
 
     private static string Str(CsvDataReader r, int col) => col < 0 ? "" : (r.GetString(col) ?? "").Trim();
 
-    private static DateTime? ParseTime(string s) =>
-        s.Length > 0 && DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var t) ? t : null;
+    private static DateTime? ParseTime(string s) => EzForensics.Core.Time.TimeParse.Lenient(s);
 }

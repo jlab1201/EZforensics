@@ -90,13 +90,62 @@ public sealed partial class BuilderConditionViewModel : BuilderNodeViewModel
     public bool NeedsValue => Op.NeedsValue;
     public bool IsBetween => Op.Op == ColumnFilterMode.Between;
 
-    partial void OnColumnChanged(string value) => Root.Changed();
-    partial void OnOpChanged(FilterOpInfo value) => Root.Changed();
+    /// <summary>The "Flag" field (row flags, not a CSV column): operators are Is / Is flagged / Is not flagged, the value is a flag.</summary>
+    public bool IsFlag => FilterBuilderViewModel.IsFlagField(Column);
+    public bool ShowFlagValue => IsFlag && NeedsValue;
+    public bool ShowTextValue => !IsFlag;
+    public IReadOnlyList<FilterOpInfo> AvailableOps => IsFlag ? FilterOps.Flag : FilterOps.All;
+
+    /// <summary>What the field box shows: "Any field" for the any-column choice, else the name.</summary>
+    public string ColumnText => FilterBuilderViewModel.ColumnDisplay(Column);
+
+    /// <summary>Drop-down list of the field box: the fields matching what was typed (see <see cref="FieldSearch"/>).</summary>
+    public ObservableCollection<string> ColumnChoices { get; } = new();
+
+    public void RefreshChoices(string? typed)
+    {
+        var list = FieldSearch.Filter(Root.ColumnNames, typed);
+        if (ColumnChoices.SequenceEqual(list)) return;
+        ColumnChoices.Clear();
+        foreach (var x in list) ColumnChoices.Add(x);
+    }
+
+    /// <summary>Commits typed/selected field text: true (and <see cref="Column"/> set) when it names a valid field, false when it must be reverted.</summary>
+    public bool CommitColumnText(string? text)
+    {
+        if (!Root.TryResolveColumn(text, out var col)) return false;
+        if (!string.Equals(Column, col, StringComparison.Ordinal)) Column = col;
+        return true;
+    }
+
+    partial void OnColumnChanged(string value)
+    {
+        OnPropertyChanged(nameof(ColumnText));
+        OnPropertyChanged(nameof(IsFlag));
+        OnPropertyChanged(nameof(ShowFlagValue));
+        OnPropertyChanged(nameof(ShowTextValue));
+        OnPropertyChanged(nameof(AvailableOps));
+        // keep the operator valid for the field kind (the flag field has its own operators)
+        var wanted = IsFlag ? FilterOps.Flag : FilterOps.All;
+        if (!wanted.Contains(Op))
+            Op = IsFlag ? FilterOps.Flag[0] : FilterOps.Get(Op.Op);
+        Root.Changed();
+    }
+    partial void OnOpChanged(FilterOpInfo value) { OnPropertyChanged(nameof(ShowFlagValue)); Root.Changed(); }
     partial void OnValueChanged(string value) => Root.Changed();
     partial void OnValue2Changed(string value) => Root.Changed();
 
     public override FilterNode? Build()
     {
+        if (IsFlag)
+        {
+            return Op.Op switch
+            {
+                ColumnFilterMode.IsEmpty => new FilterFlag(false),
+                ColumnFilterMode.IsNotEmpty => new FilterFlag(true),
+                _ => string.IsNullOrEmpty(Value) ? null : new FilterFlag(true, new[] { Value }),
+            };
+        }
         var c = new FilterCondition(Column, Op.Op, Value, IsBetween ? Value2 : null);
         return c.IsEmpty ? null : c;
     }
@@ -146,10 +195,12 @@ public sealed partial class FilterBuilderViewModel : ObservableObject, IDisposab
     private bool _globalTouched;
 
     public FilterBuilderViewModel(IReadOnlyList<string> columns, FilterGroup current, string globalText = "", string? savedName = null,
-        string categorySignature = "", string categoryName = "", ResultsViewModel? results = null)
+        string categorySignature = "", string categoryName = "", ResultsViewModel? results = null,
+        IReadOnlyList<(string Id, string Label)>? flagChoices = null)
     {
         _headers = columns;
-        Columns = new ObservableCollection<string>(new[] { FilterNode.AnyColumn }.Concat(columns));
+        FlagChoices = (flagChoices ?? Array.Empty<(string, string)>()).Select(f => new FlagChoice(f.Id, f.Label)).ToList();
+        Columns = new ObservableCollection<string>(BuildColumns(columns));
         _categorySignature = categorySignature;
         _categoryName = categoryName;
         _globalText = globalText ?? "";
@@ -183,6 +234,32 @@ public sealed partial class FilterBuilderViewModel : ObservableObject, IDisposab
     [ObservableProperty] private IReadOnlyList<string> _headers;
     /// <summary>Choices of the column box: "*" (shown as "Any field") followed by the real columns.</summary>
     public ObservableCollection<string> Columns { get; }
+    /// <summary>Flags the Flag field can pick (id stored, label shown).</summary>
+    public IReadOnlyList<FlagChoice> FlagChoices { get; }
+
+    /// <summary>"*", the row-flag field, then the CSV columns (a CSV column named "Flag" is shadowed by the flag field).</summary>
+    private static IEnumerable<string> BuildColumns(IEnumerable<string> headers) =>
+        new[] { FilterNode.AnyColumn, FilterFlag.FieldName }.Concat(headers.Where(h => !IsFlagField(h)));
+
+    public static bool IsFlagField(string? column) => string.Equals(column, FilterFlag.FieldName, StringComparison.OrdinalIgnoreCase);
+    public static string ColumnDisplay(string? column) => column == FilterNode.AnyColumn ? AnyFieldText : column ?? "";
+    public const string AnyFieldText = "Any field";
+
+    /// <summary>The field box choices as shown ("Any field" instead of "*").</summary>
+    public IReadOnlyList<string> ColumnNames => Columns.Select(ColumnDisplay).ToList();
+
+    /// <summary>Maps typed field text to a valid column ("*" for "Any field"); false when it names no field.</summary>
+    public bool TryResolveColumn(string? text, out string column)
+    {
+        column = "";
+        var t = text?.Trim();
+        if (string.IsNullOrEmpty(t)) return false;
+        if (t == FilterNode.AnyColumn || string.Equals(t, AnyFieldText, StringComparison.OrdinalIgnoreCase)) { column = FilterNode.AnyColumn; return true; }
+        var hit = Columns.FirstOrDefault(c => string.Equals(c, t, StringComparison.OrdinalIgnoreCase));
+        if (hit == null) return false;
+        column = hit;
+        return true;
+    }
     public IReadOnlyList<FilterOpInfo> Ops => FilterOps.All;
     [ObservableProperty][NotifyPropertyChangedFor(nameof(CanSave))] private string _categorySignature;
     [ObservableProperty] private string _categoryName;
@@ -249,8 +326,7 @@ public sealed partial class FilterBuilderViewModel : ObservableObject, IDisposab
                 var saved = AllConditions(RootGroup).Select(c => (c, c.Column)).ToList();
                 Headers = headers;
                 Columns.Clear();
-                Columns.Add(FilterNode.AnyColumn);
-                foreach (var h in headers) Columns.Add(h);
+                foreach (var h in BuildColumns(headers)) Columns.Add(h);
                 foreach (var (c, col) in saved) c.Column = col;
             }
             finally { _retargeting = false; }
@@ -298,7 +374,7 @@ public sealed partial class FilterBuilderViewModel : ObservableObject, IDisposab
             case FilterGroup g:
             {
                 var vm = new BuilderGroupViewModel(this, parent) { IsOr = g.Kind == FilterGroupKind.Or, Negate = g.Negate };
-                foreach (var c in g.Children) if (!c.IsEmpty) vm.Children.Add(FromNode(c, vm));
+                foreach (var c in g.Children) if (!c.IsEmpty) AddNode(vm, c);
                 return vm;
             }
             case FilterCondition c:
@@ -306,9 +382,22 @@ public sealed partial class FilterBuilderViewModel : ObservableObject, IDisposab
                 {
                     Column = c.Column, Op = FilterOps.Get(c.Op), Value = c.Value, Value2 = c.Value2 ?? "",
                 };
+            case FilterFlag f:
+                return FlagCondition(parent, f.Flagged ? (f.Ids.Count == 0 ? ColumnFilterMode.IsNotEmpty : ColumnFilterMode.Equals) : ColumnFilterMode.IsEmpty, f.Ids.FirstOrDefault() ?? "");
             default:
                 return new BuilderFixedViewModel(this, parent, n);
         }
+    }
+
+    private BuilderConditionViewModel FlagCondition(BuilderGroupViewModel? parent, ColumnFilterMode op, string id) =>
+        new(this, parent) { Column = FilterFlag.FieldName, Op = FilterOps.Flag.First(o => o.Op == op), Value = id };
+
+    /// <summary>Adds a node to a group; a flag set with several flags becomes one "Flag is X" row per flag (merged back by <see cref="Build"/>).</summary>
+    private void AddNode(BuilderGroupViewModel vm, FilterNode c)
+    {
+        if (c is FilterFlag { Flagged: true, Ids.Count: > 1 } f)
+            foreach (var id in f.Ids.OrderBy(x => x, StringComparer.Ordinal)) vm.Children.Add(FlagCondition(vm, ColumnFilterMode.Equals, id));
+        else vm.Children.Add(FromNode(c, vm));
     }
 
     internal void Changed()
@@ -352,7 +441,22 @@ public sealed partial class FilterBuilderViewModel : ObservableObject, IDisposab
         if (SyntaxError == null) SyntaxText = Build().ToDisplayString();
     }
 
-    public FilterGroup Build() => RootGroup.Build() as FilterGroup ?? new FilterGroup();
+    public FilterGroup Build() => MergeFlags(RootGroup.Build() as FilterGroup ?? new FilterGroup());
+
+    /// <summary>Top-level flag conditions are one flag filter: several "Flag is X" rows become one <c>[Flag] In (...)</c>.</summary>
+    internal static FilterGroup MergeFlags(FilterGroup root)
+    {
+        var flags = root.Children.OfType<FilterFlag>().ToList();
+        if (flags.Count < 2) return root;
+        var flagged = flags.Where(f => f.Flagged).ToList();
+        FilterFlag merged = flagged.Count == 0 ? new FilterFlag(false)
+            : flagged.Any(f => f.Ids.Count == 0) ? new FilterFlag(true)
+            : new FilterFlag(true, flagged.SelectMany(f => f.Ids));
+        int at = root.Children.IndexOf(flags[0]);
+        root.Children.RemoveAll(c => c is FilterFlag);
+        root.Children.Insert(Math.Min(at, root.Children.Count), merged);
+        return root;
+    }
 
     // ------------------------------------------------------------ saved filters
 
@@ -430,5 +534,22 @@ public sealed partial class FilterBuilderViewModel : ObservableObject, IDisposab
     {
         SavedFilters.Instance.Mutate(l => l.RemoveCategory(cat.Signature));
         if (cat.IsCurrent) SavedName = null;
+    }
+}
+
+public sealed record FlagChoice(string Id, string Label);
+
+/// <summary>Field-box search: the fields matching what was typed.</summary>
+public static class FieldSearch
+{
+    /// <summary>Fields containing <paramref name="typed"/> (case-insensitive), prefix matches first, original order otherwise; blank text = all fields.</summary>
+    public static List<string> Filter(IEnumerable<string> fields, string? typed)
+    {
+        var all = fields.ToList();
+        var t = typed?.Trim();
+        if (string.IsNullOrEmpty(t)) return all;
+        var prefix = all.Where(f => f.StartsWith(t, StringComparison.OrdinalIgnoreCase));
+        var inner = all.Where(f => !f.StartsWith(t, StringComparison.OrdinalIgnoreCase) && f.Contains(t, StringComparison.OrdinalIgnoreCase));
+        return prefix.Concat(inner).ToList();
     }
 }

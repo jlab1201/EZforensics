@@ -115,7 +115,8 @@ public sealed partial class SettingsViewModel
     private async void OnRuleCheckChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (_loadingChecks || e.PropertyName != nameof(IngestRuleCheck.IsChecked) || SelectedRow == null) return;
-        await SaveCheckedAsync();
+        try { await SaveCheckedAsync(); }
+        catch (Exception ex) { AppLog.Warn("Settings: could not save the ingest selection: " + ex.Message); }
     }
 
     private async Task SaveCheckedAsync()

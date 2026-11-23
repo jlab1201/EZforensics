@@ -303,13 +303,22 @@ public sealed class PlasoLocator
 
     /// <summary>
     /// The two jobs' argv of "Install plaso": <c>python -m venv &lt;venv&gt;</c>, then
-    /// <c>&lt;venv&gt;\Scripts\python.exe -m pip install --upgrade plaso</c>.
+    /// <c>&lt;venv&gt;\Scripts\python.exe -m pip install --upgrade plaso==&lt;PlasoSetup.PinnedVersion&gt;</c>.
     /// </summary>
     public (IReadOnlyList<string> CreateVenv, string VenvPython, IReadOnlyList<string> PipInstall) InstallCommands() =>
-        (new[] { "-m", "venv", ManagedVenv }, ManagedPython, new[] { "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "plaso" });
+        (new[] { "-m", "venv", ManagedVenv }, ManagedPython, PipArgs(PlasoSetup.PinnedVersion));
 
-    /// <summary>"Update": <c>&lt;venv&gt;\Scripts\python.exe -m pip install --upgrade plaso</c> (same argv as the install step).</summary>
-    public (string VenvPython, IReadOnlyList<string> PipUpgrade) UpdateCommand() => (ManagedPython, InstallCommands().PipInstall);
+    /// <summary>
+    /// "Update": <c>&lt;venv&gt;\Scripts\python.exe -m pip install --upgrade plaso==&lt;version&gt;</c>. <paramref name="version"/> is the
+    /// exact release the user chose to update to (the PyPI latest shown on the button); null or not a plain version = the pinned one.
+    /// </summary>
+    public (string VenvPython, IReadOnlyList<string> PipUpgrade) UpdateCommand(string? version = null) =>
+        (ManagedPython, PipArgs(version != null && PlainVersionRx.IsMatch(version) ? version : PlasoSetup.PinnedVersion));
+
+    private static readonly Regex PlainVersionRx = new(@"^[0-9]+(\.[0-9A-Za-z]+)*$", RegexOptions.Compiled);
+
+    private static string[] PipArgs(string version) =>
+        new[] { "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "plaso==" + version };
 
     /// <summary>True when <paramref name="install"/> lives in the managed venv (so pip can update it).</summary>
     public bool IsManaged(PlasoInstall? install) =>

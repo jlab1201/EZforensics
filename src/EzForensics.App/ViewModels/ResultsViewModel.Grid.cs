@@ -17,6 +17,33 @@ public sealed partial class ResultsViewModel
     // ------------------------------------------------------------ open / index
 
     /// <summary>Shows <paramref name="caseDir"/> in the tree and opens <paramref name="csvPath"/> (used by other pages).</summary>
+    /// <summary>
+    /// "Open in Analyze" from a Spectre finding: opens the file, waits for it to be indexed, and selects the row whose record-id column
+    /// (EventRecordId, RecordNumber, EntryNumber...) equals <paramref name="recordId"/>. The status line says when the record was not found.
+    /// </summary>
+    public async Task ShowRecordAsync(string caseDir, string csvPath, string recordId)
+    {
+        try
+        {
+            await ShowCsvAsync(caseDir, csvPath);
+            var idx = _index;
+            if (idx == null || !string.Equals(CurrentFile, csvPath, StringComparison.OrdinalIgnoreCase)) return;
+            try { await idx.IndexingCompleted.WaitAsync(TimeSpan.FromMinutes(2)); }
+            catch (TimeoutException) { StatusText = $"The file is still being indexed; record {recordId} was not looked up."; return; }
+            catch (OperationCanceledException) { return; }
+            if (!ReferenceEquals(idx, _index)) return;
+            long? row;
+            try { row = await Task.Run(() => Core.Spectre.FindingsEvidence.FindRecordRow(idx, recordId)); }
+            catch (ObjectDisposedException) { return; }   // another file was opened meanwhile
+            if (!ReferenceEquals(idx, _index)) return;
+            var name = Path.GetFileName(csvPath);
+            if (row == null) { StatusText = $"Record {recordId} was not found in {name} (no matching record-id column value); the file is open."; return; }
+            var err = ((IAssistantGridTarget)this).GoToRow(row.Value);
+            StatusText = err == null ? $"Record {recordId} of {name} (row {row.Value}), from a Spectre finding." : $"Record {recordId} is row {row.Value} of {name}: {err}";
+        }
+        catch (Exception ex) { ShowError("Could not open the finding's record", ex); }
+    }
+
     public async Task ShowCsvAsync(string caseDir, string csvPath)
     {
         _treeLoadedOnce = true;
@@ -55,6 +82,7 @@ public sealed partial class ResultsViewModel
             UpdateFlagFilterText();
         }
         finally { _suspendApply = false; }
+        _evidenceRows = null; _keyEventRows = null; ActiveFindingId = null; NotifyEvidenceRows();
         _pendingView = null;
         _viewOrder = Array.Empty<int>(); _viewSelPos = -1; _viewSelSource = -1; _viewScroll = 0;
         _fileFp = null;
@@ -97,6 +125,7 @@ public sealed partial class ResultsViewModel
             if (cts.IsCancellationRequested) { idx.Dispose(); flags?.Dispose(); return; }
             _index = idx;
             AttachFlags(flags);
+            RefreshFindings();
             SortColumn = null;
             SortDescending = false;
             ActiveSavedFilter = null;
@@ -112,7 +141,7 @@ public sealed partial class ResultsViewModel
                 catch (Exception ex) { AppLog.Warn("Analyze session: could not restore the view of " + Path.GetFileName(path) + ": " + ex.Message); }
             }
             _lastShownCount = idx.RowCount;
-            Rows = new VirtualRowList(idx) { IsFlagged = r => _flags?.IsFlagged(r) == true, FlagIdOf = r => _flags?.GetFlagId(r) };
+            Rows = new VirtualRowList(idx) { IsFlagged = r => _flags?.IsFlagged(r) == true, FlagIdOf = r => _flags?.GetFlagId(r), KeyEventOf = KeyEventTextOf, SpectreOf = r => _spectreRowTitles.ContainsKey(r) ? SpectreMarkerTip(r) : null };
             StartAdvisories(path, idx.Headers);
             UpdatePidLinks(path, idx.Headers);
             ColumnsChanged?.Invoke();
@@ -199,10 +228,11 @@ public sealed partial class ResultsViewModel
         try { f.Dispose(); } catch (Exception ex) { AppLog.Error("Could not save row flags", ex); }
     }
 
-    /// <summary>Writes pending flag changes (app exit).</summary>
-    public void FlushFlags()
+    /// <summary>Writes pending flag changes (app exit). False when the save failed (already logged).</summary>
+    public bool FlushFlags()
     {
-        try { _flags?.Flush(); } catch (Exception ex) { AppLog.Error("Could not save row flags", ex); }
+        try { _flags?.Flush(); return true; }
+        catch (Exception ex) { AppLog.Error("Could not save row flags", ex); return false; }
     }
 
     private void OnFlagStoreChanged() => AppServices.OnUi(() =>
@@ -239,6 +269,7 @@ public sealed partial class ResultsViewModel
     public void SetFlagId(IReadOnlyCollection<RowItem> rows, string? flagId)
     {
         if (_flags == null || rows.Count == 0) return;
+        if (flagId == null && !ConfirmUnflag(rows.Select(r => r.Source).ToList())) return;
         if (flagId is { } c && S.Settings.FlagLastId != c)
         {
             S.Settings.FlagLastId = c;
@@ -351,6 +382,7 @@ public sealed partial class ResultsViewModel
         if (_flags == null || rows.Count == 0) return;
         var src = rows.Select(r => r.Source).Distinct().ToList();
         bool value = flag ?? !src.All(_flags.IsFlagged);
+        if (!value && !ConfirmUnflag(src)) return;
         _flags.DefaultFlagId = EffectiveLastFlagId();
         _flags.SetMany(src, value);
         AfterFlagEdit(src);
@@ -367,6 +399,7 @@ public sealed partial class ResultsViewModel
         var a = anchor != null && rows.Any(r => r.Source == anchor.Source) ? anchor : rows.First();
         var next = FlagCatalog.RotateNext(S.Settings.Flags, _flags.GetFlagId(a.Source), EffectiveLastFlagId());
         var src = rows.Select(r => r.Source).Distinct().ToList();
+        if (next == null && !ConfirmUnflag(src)) return;
         _flags.SetFlag(src, next);
         AfterFlagEdit(src);
     }
@@ -399,6 +432,7 @@ public sealed partial class ResultsViewModel
     [RelayCommand]
     private async Task ExportAsync()
     {
+        if (!await WaitForIndexingBeforeExportAsync()) return;
         var rows = Rows;
         if (rows == null) return;
         await ExportRowsAsync(rows.CurrentIndices(), "_filtered", "Export filtered rows");
@@ -407,6 +441,7 @@ public sealed partial class ResultsViewModel
     [RelayCommand]
     private async Task ExportFlaggedAsync()
     {
+        if (!await WaitForIndexingBeforeExportAsync()) return;
         var idx = _index;
         if (idx == null || _flags == null) return;
         var indices = _flags.ToSortedArray().Where(r => r < idx.RowCount).Select(r => (int)r).ToArray();
@@ -416,6 +451,27 @@ public sealed partial class ResultsViewModel
             return;
         }
         await ExportRowsAsync(indices, "_flagged", "Export flagged rows");
+    }
+
+    /// <summary>
+    /// While the file is still being indexed the grid only covers the rows read so far, so an export would silently be partial.
+    /// Waits for indexing to finish, then re-runs the filter/sort over the complete index. False = do not export.
+    /// </summary>
+    private async Task<bool> WaitForIndexingBeforeExportAsync()
+    {
+        var idx = _index;
+        if (idx == null) return false;
+        if (!IsIndexing && idx.IndexingCompleted.IsCompleted) return true;
+        StatusText = "Waiting for indexing to finish…";
+        try { await idx.IndexingCompleted; }
+        catch (Exception)
+        {
+            if (idx == _index) ShowMessage("Indexing did not finish, so the export was cancelled (it would have been missing rows).", InfoSeverity.Warning);
+            return false;
+        }
+        if (idx != _index) return false;
+        await ApplyFilterAsync(); // filter/sort/group results cover only the rows indexed so far
+        return idx == _index;
     }
 
     private async Task ExportRowsAsync(int[] indices, string suffix, string title)
@@ -462,6 +518,14 @@ public sealed partial class ResultsViewModel
     public const int CopyWarnRows = 100_000;
     /// <summary>Clipboard text cap (characters); a larger copy stops at the last row that fits.</summary>
     public const int CopyMaxChars = 64_000_000;
+
+    /// <summary>Grid Ctrl+C: the selected cells as tab-separated rows (no header), cleaned like the row copy.</summary>
+    public void CopySelectedCells(IReadOnlyList<RowItem> rows, IReadOnlyList<int> columns)
+    {
+        int n = TsvFormatter.BuildCells(rows.Select(r => (Func<int, string?>)(i => r[i])), columns, CopyWarnRows, out var text, S.Settings.EscapeFormulasOnCopy);
+        System.Windows.Clipboard.SetDataObject(text, true);
+        if (n < rows.Count) ShowMessage($"Copied the first {n:N0} of {rows.Count:N0} selected rows (limit). Use Export for the rest.", InfoSeverity.Warning);
+    }
 
     public Task CopySelectedRowsAsync(IReadOnlyCollection<RowItem> rows, IReadOnlyList<int> columns) =>
         CopyRowsAsync(rows.OrderBy(r => r.Position).Select(r => r.Source).Distinct().ToArray(), columns, "selected");

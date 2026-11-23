@@ -28,6 +28,14 @@ public static class FilterOps
         new FilterOpInfo(ColumnFilterMode.Between, "Between (a..b)", "↔", true, true),
     };
 
+    /// <summary>Operators of the "Flag" field: Is (a chosen flag), Is flagged (any flag), Is not flagged.</summary>
+    public static IReadOnlyList<FilterOpInfo> Flag { get; } = new[]
+    {
+        new FilterOpInfo(ColumnFilterMode.Equals, "Is", "=", true),
+        new FilterOpInfo(ColumnFilterMode.IsNotEmpty, "Is flagged", "⚑", false),
+        new FilterOpInfo(ColumnFilterMode.IsEmpty, "Is not flagged", "⚐", false),
+    };
+
     public static FilterOpInfo Get(ColumnFilterMode op) => All.FirstOrDefault(o => o.Op == op) ?? All[0];
 
     /// <summary>Splits a filter-row "a..b" value into Between bounds.</summary>

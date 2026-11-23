@@ -1,0 +1,37 @@
+<UserControl x:Class="EzForensics.App.Views.Learn.LearnView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:EzForensics.App.Controls"
+             xmlns:svc="clr-namespace:EzForensics.App.Services"
+             xmlns:lv="clr-namespace:EzForensics.App.Views.Learn"
+             AllowDrop="True" PreviewDragOver="Page_PreviewDragOver" PreviewDrop="Page_PreviewDrop"
+             AutomationProperties.AutomationId="Learn">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top">
+            <c:PageHeader Title="{x:Static svc:PageNames.Learn}"/>
+            <ContentControl Content="{Binding Banner}" ContentTemplate="{StaticResource InfoBarTemplate}"
+                            Visibility="{Binding Banner, Converter={StaticResource BoolToVis}}" Margin="0,6,0,0"/>
+            <TabControl Style="{DynamicResource FlatTabs}" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}" Margin="0,4,0,8" AutomationProperties.AutomationId="Learn.Tabs">
+                <TabItem Header="Graph" AutomationProperties.AutomationId="Learn.Tab.Brain" AutomationProperties.Name="Graph"
+                         ToolTip="How your documents connect"/>
+                <TabItem Header="{Binding IntakeHeader}" AutomationProperties.AutomationId="Learn.Tab.Intake" AutomationProperties.Name="Intake"
+                         ToolTip="Pick or drop files, let the AI label them, and send them to To review"/>
+                <TabItem Header="{Binding InboxHeader}" AutomationProperties.AutomationId="Learn.Tab.Inbox" AutomationProperties.Name="To review"
+                         ToolTip="New documents waiting for you to accept or reject them"/>
+                <TabItem Header="Library" AutomationProperties.AutomationId="Learn.Tab.Library" AutomationProperties.Name="Library"
+                         ToolTip="The sources the assistant can search"/>
+            </TabControl>
+        </StackPanel>
+
+        <Grid>
+            <lv:BrainView DataContext="{Binding Brain}" Margin="0,4,0,0"
+                          Visibility="{Binding DataContext.SelectedTabIndex, RelativeSource={RelativeSource AncestorType=lv:LearnView}, Converter={StaticResource EqVis}, ConverterParameter=0}"/>
+            <lv:IntakeView DataContext="{Binding Intake}"
+                           Visibility="{Binding DataContext.SelectedTabIndex, RelativeSource={RelativeSource AncestorType=lv:LearnView}, Converter={StaticResource EqVis}, ConverterParameter=1}"/>
+            <lv:InboxView DataContext="{Binding Inbox}"
+                          Visibility="{Binding DataContext.SelectedTabIndex, RelativeSource={RelativeSource AncestorType=lv:LearnView}, Converter={StaticResource EqVis}, ConverterParameter=2}"/>
+            <lv:LibraryView DataContext="{Binding Library}"
+                            Visibility="{Binding DataContext.SelectedTabIndex, RelativeSource={RelativeSource AncestorType=lv:LearnView}, Converter={StaticResource EqVis}, ConverterParameter=3}"/>
+        </Grid>
+    </DockPanel>
+</UserControl>

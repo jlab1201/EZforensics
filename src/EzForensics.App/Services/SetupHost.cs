@@ -7,7 +7,7 @@ namespace EzForensics.App.Services;
 /// What the setup wizard and the background resume after a restart share: the executor environment, the refresh after each step,
 /// the restart bookkeeping (pending resume + RunOnce) and restarting Windows. Both run the same <see cref="SetupRunner"/> /
 /// <see cref="DefaultSetupExecutor"/>; their processes run on the private maintenance queue (<see cref="AppServices.Maintenance"/>),
-/// never on the Jobs page, with logs under <c>logs\setup\&lt;stamp&gt;</c>.
+/// never in the Jobs list on Ingest, with logs under <c>logs\setup\&lt;stamp&gt;</c>.
 /// </summary>
 public static class SetupHost
 {

@@ -101,6 +101,7 @@ public static class DistinctValueCounter
         {
             int col = idx.ColumnIndex(column);
             if (col < 0) throw new ArgumentException("Unknown column: " + column, nameof(column));
+            bool monthFirst = idx.MonthFirstSlashDates;
             int n = (int)Math.Min(int.MaxValue, idx.RowCount);
             var global = new Dictionary<int, long>();
             var gate = new object();
@@ -115,7 +116,7 @@ public static class DistinctValueCounter
                 foreach (var row in rows)
                 {
                     var v = col < row.Length ? row[col] : "";
-                    if (v.Length == 0 || !CsvValueParser.TryParseDate(v, out var dt)) { b++; continue; }
+                    if (v.Length == 0 || !CsvValueParser.TryParseDate(v, out var dt, monthFirst)) { b++; continue; }
                     int day = DateOnly.FromDateTime(dt).DayNumber;
                     local[day] = local.TryGetValue(day, out var k) ? k + 1 : 1;
                 }
@@ -150,7 +151,7 @@ public static class DistinctValueCounter
                 var v = col < r.Length ? r[col] : "";
                 if (v.Length == 0) continue;
                 seen++;
-                if (v.Length >= 10 && !CsvValueParser.TryParseNumber(v, out _) && CsvValueParser.TryParseDate(v, out _)) dates++;
+                if (v.Length >= 10 && !CsvValueParser.TryParseNumber(v, out _) && CsvValueParser.TryParseDate(v, out _, idx.MonthFirstSlashDates)) dates++;
                 if (seen >= sample) break;
             }
         }

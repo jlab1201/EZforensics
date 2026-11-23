@@ -4,7 +4,7 @@ namespace EzForensics.Core.Execution;
 
 /// <summary>
 /// Runs install / update processes (dotnet-install, --sync, venv, pip, apt in WSL, wsl --import, docker pull) on a PRIVATE
-/// <see cref="JobQueue"/> that no page lists: the Jobs page shows only case work. Each process is still a logged job (its log in
+/// <see cref="JobQueue"/> that no page lists: the Ingest job list shows only case work. Each process is still a logged job (its log in
 /// <c>&lt;logDir&gt;\logs\&lt;id&gt;_&lt;tool&gt;.log</c>, plus a run manifest in <c>&lt;logDir&gt;</c>), and every output line is passed to the caller
 /// (the setup step log, a Tools card log box). Construct it on the UI thread (the queue raises job events on that context).
 /// </summary>
@@ -16,7 +16,7 @@ public sealed class MaintenanceRunner
         LogRoot = logRoot;
     }
 
-    /// <summary>The private queue (never bound to the Jobs page).</summary>
+    /// <summary>The private queue (never bound to the Ingest job list).</summary>
     public JobQueue Queue { get; }
 
     /// <summary>Default folder for maintenance logs (e.g. <c>%LOCALAPPDATA%\EzForensics\logs\maintenance</c>).</summary>

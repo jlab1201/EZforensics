@@ -1,0 +1,303 @@
+<UserControl x:Class="EzForensics.App.Views.Learn.InboxView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:EzForensics.App.Controls"
+             PreviewKeyDown="UserControl_PreviewKeyDown"
+             AutomationProperties.AutomationId="Learn.Inbox">
+    <UserControl.Resources>
+        <!-- neutral chip: source, tags, parent -->
+        <Style x:Key="PlainChip" TargetType="Border" BasedOn="{StaticResource Chip}">
+            <Setter Property="Background" Value="{DynamicResource Brush.Control}"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+        </Style>
+        <Style x:Key="FlagChip" TargetType="Border" BasedOn="{StaticResource Chip}">
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+        </Style>
+        <!-- active filter badge: the accent is only for these and the primary Accept -->
+        <Style x:Key="FilterChip" TargetType="Border" BasedOn="{StaticResource Chip}">
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,0,6,4"/>
+            <Setter Property="Padding" Value="8,1,2,1"/>
+        </Style>
+        <!-- a chip that opens a menu -->
+        <Style x:Key="ChipButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
+            <Setter Property="Padding" Value="6,1"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSize.Small}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style x:Key="EditBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="2,2"/>
+        </Style>
+        <DataTemplate x:Key="FlagTemplate">
+            <Border Style="{StaticResource FlagChip}"><TextBlock Text="{Binding}" FontSize="{DynamicResource FontSize.Small}"/></Border>
+        </DataTemplate>
+        <DataTemplate x:Key="TagTemplate">
+            <Border Style="{StaticResource PlainChip}"><TextBlock Text="{Binding}" FontSize="{DynamicResource FontSize.Small}"/></Border>
+        </DataTemplate>
+    </UserControl.Resources>
+    <DockPanel>
+        <!-- add + progress -->
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="Nothing here is used until you Accept it. Accepted notes go to the Graph, Library and Spectre's answers; Reject keeps them out." Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <WrapPanel>
+                <Button Content="Add documents…" Command="{Binding AddFilesCommand}" Margin="0,0,6,6"
+                        ToolTip="New documents go to Intake" AutomationProperties.AutomationId="Learn.Inbox.AddFiles"/>
+                <Button Content="Add folder…" Command="{Binding AddFolderCommand}" Margin="0,0,6,6"
+                        ToolTip="New documents go to Intake" AutomationProperties.AutomationId="Learn.Inbox.AddFolder"/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,6,6" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
+                        AutomationProperties.AutomationId="Learn.Inbox.Cancel"/>
+                <TextBlock Text="{Binding AiHint}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="6,0,0,6"
+                           Visibility="{Binding HasAi, Converter={StaticResource BoolToVisInv}}" AutomationProperties.AutomationId="Learn.Inbox.AiHint"/>
+            </WrapPanel>
+            <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Caption}" TextWrapping="Wrap" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
+                       AutomationProperties.AutomationId="Learn.Inbox.Progress"/>
+            <TextBlock Text="{Binding Message}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" AutomationProperties.AutomationId="Learn.Inbox.Message"/>
+
+            <!-- find bar: search, two-step filter, removable badges -->
+            <DockPanel Margin="0,0,0,6">
+                <Button x:Name="AddFilterButton" DockPanel.Dock="Right" Content="+ Filter" Margin="6,0,0,0" Click="AddFilter_Click"
+                        ToolTip="Filter by category, type, source, tag or flag" AutomationProperties.AutomationId="Learn.Inbox.AddFilter"/>
+                <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=250}" VerticalAlignment="Center"
+                         ToolTip="Search titles, summaries and the start of the text" AutomationProperties.AutomationId="Learn.Inbox.Search"/>
+            </DockPanel>
+            <WrapPanel Margin="0,0,0,2" Visibility="{Binding HasFilters, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Inbox.Filters">
+                <ItemsControl ItemsSource="{Binding Filters}" Focusable="False">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource FilterChip}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Text}" FontSize="{DynamicResource FontSize.Small}" VerticalAlignment="Center"/>
+                                    <Button Style="{StaticResource SubtleButton}" Padding="4,0" Margin="2,0,0,0" ToolTip="Remove this filter"
+                                            Command="{Binding DataContext.RemoveFilterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
+                                        <TextBlock Text="×" FontSize="{DynamicResource FontSize.Small}"/>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="clear all" Style="{StaticResource LinkButton}" Command="{Binding ClearFiltersCommand}" VerticalAlignment="Top" Margin="2,2,0,0"
+                        AutomationProperties.AutomationId="Learn.Inbox.ClearFilters"/>
+            </WrapPanel>
+
+            <!-- shown only while rows are selected -->
+            <Border Style="{StaticResource Tile}" Margin="0,0,0,8" Padding="10,6" BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="2,1,1,1"
+                    Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Inbox.ActionBar">
+                <WrapPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding SelectedText}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,12,0"/>
+                    <Button Content="Set category ▾" Click="SetCategory_Click" Margin="0,2,6,2" AutomationProperties.AutomationId="Learn.Inbox.SetCategory"/>
+                    <Button Content="Set type ▾" Click="SetType_Click" Margin="0,2,12,2" AutomationProperties.AutomationId="Learn.Inbox.SetType"/>
+                    <TextBox Text="{Binding BulkTags, UpdateSourceTrigger=PropertyChanged}" MinWidth="140" VerticalAlignment="Center" Margin="0,2,6,2"
+                             ToolTip="Tags, comma separated" AutomationProperties.AutomationId="Learn.Inbox.BulkTags"/>
+                    <Button Content="Set tags" Command="{Binding SetTagsCommand}" Margin="0,2,12,2"
+                            ToolTip="Give every selected document these tags (comma separated)" AutomationProperties.AutomationId="Learn.Inbox.SetTags"/>
+                    <Button Content="Label with AI" Command="{Binding LabelWithAiCommand}" Margin="0,2,6,2"
+                            ToolTip="{Binding AiHint}" AutomationProperties.AutomationId="Learn.Inbox.LabelAi"/>
+                    <Button Content="Distill into notes" Command="{Binding DistillCommand}" Margin="0,2,12,2"
+                            ToolTip="{Binding AiHint}" AutomationProperties.AutomationId="Learn.Inbox.Distill"/>
+                    <Button Content="{Binding AcceptText}" Style="{StaticResource AccentButton}" Command="{Binding AcceptCommand}" Margin="0,2,6,2"
+                            AutomationProperties.AutomationId="Learn.Inbox.Accept"/>
+                    <Button Content="{Binding RejectText}" Command="{Binding RejectCommand}" Foreground="{DynamicResource Brush.Error}" Margin="0,2,6,2"
+                            Visibility="{Binding IsConfirmingReject, Converter={StaticResource BoolToVisInv}}" AutomationProperties.AutomationId="Learn.Inbox.Reject"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,2,6,2" VerticalAlignment="Center"
+                                Visibility="{Binding IsConfirmingReject, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Inbox.RejectConfirm">
+                        <TextBlock Text="{Binding RejectAsk}" Foreground="{DynamicResource Brush.Error}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <Button Content="yes" Command="{Binding ConfirmRejectCommand}" Foreground="{DynamicResource Brush.Error}" Margin="0,0,4,0"
+                                AutomationProperties.AutomationId="Learn.Inbox.RejectYes"/>
+                        <Button Content="no" Command="{Binding CancelRejectCommand}" AutomationProperties.AutomationId="Learn.Inbox.RejectNo"/>
+                    </StackPanel>
+                    <Button Content="clear" Style="{StaticResource LinkButton}" Command="{Binding ClearSelectionCommand}" VerticalAlignment="Center" Margin="6,0,0,0"
+                            ToolTip="Clear the selection (Esc)" AutomationProperties.AutomationId="Learn.Inbox.ClearSelection"/>
+                </WrapPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- rejected: Undo puts a document back -->
+        <Expander DockPanel.Dock="Bottom" Header="{Binding RejectedHeader}" IsExpanded="{Binding ShowRejected, Mode=TwoWay}" Margin="0,8,0,0"
+                  Visibility="{Binding HasRejected, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Inbox.Rejected">
+            <ItemsControl ItemsSource="{Binding Rejected}" MaxHeight="200">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Margin="0,2">
+                            <Button DockPanel.Dock="Right" Content="Undo" Command="{Binding DataContext.UndoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}" AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Undo.{0}}"/>
+                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Expander>
+
+        <!-- pager -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0" Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisInv}}" AutomationProperties.AutomationId="Learn.Inbox.Pager">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <TextBlock Text="Rows" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ComboBox ItemsSource="{Binding PageSizes}" DisplayMemberPath="Label" SelectedValuePath="Size" SelectedValue="{Binding PageSize}" MinWidth="64" Margin="0,0,10,0"
+                          AutomationProperties.AutomationId="Learn.Inbox.PageSize"/>
+                <Button Content="‹" Command="{Binding PrevPageCommand}" Margin="0,0,4,0" ToolTip="Previous page" AutomationProperties.AutomationId="Learn.Inbox.Prev"/>
+                <TextBlock Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,4,0">
+                    <Run Text="{Binding Page, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding PageCount, Mode=OneWay}"/>
+                </TextBlock>
+                <Button Content="›" Command="{Binding NextPageCommand}" ToolTip="Next page" AutomationProperties.AutomationId="Learn.Inbox.Next"/>
+            </StackPanel>
+            <TextBlock Text="{Binding RangeText}" Style="{StaticResource Caption}" VerticalAlignment="Center" AutomationProperties.AutomationId="Learn.Inbox.Range"/>
+        </DockPanel>
+
+        <Grid>
+            <ctl:EmptyState Glyph="&#xE73E;" Title="Nothing to review" Message="Nothing to review. Add documents to start."
+                       Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Inbox.Empty"/>
+            <ctl:EmptyState Glyph="&#xE721;" Title="No matches" Message="Nothing matches. Change the search or clear the filters."
+                       Visibility="{Binding NoMatches, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Inbox.NoMatches"/>
+            <ListBox x:Name="RowList" ItemsSource="{Binding PageRows}" SelectionMode="Extended" SelectionChanged="RowList_SelectionChanged" HorizontalContentAlignment="Stretch"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" BorderThickness="0" Background="Transparent"
+                     Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisInv}}" AutomationProperties.AutomationId="Learn.Inbox.List">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,2" AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Row.{0}}">
+                            <!-- the collapsed row: one line to scan -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Style="{StaticResource SubtleButton}" Padding="4,2" Margin="0,0,4,0" ToolTip="Show or hide the details"
+                                        Command="{Binding DataContext.ToggleExpandCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                        AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Expand.{0}}">
+                                    <Grid>
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE76C;" Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisInv}}"/>
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE70D;" Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}"/>
+                                    </Grid>
+                                </Button>
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"
+                                           ToolTip="{Binding Title}"/>
+                                <Border Grid.Column="2" Style="{StaticResource PlainChip}" ToolTip="Source">
+                                    <TextBlock Text="{Binding SourceName}" FontSize="{DynamicResource FontSize.Small}" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
+                                </Border>
+                                <Border Grid.Column="3" Style="{StaticResource PlainChip}" Visibility="{Binding HasParent, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding FromText}" FontSize="{DynamicResource FontSize.Small}" MaxWidth="160" TextTrimming="CharacterEllipsis"/>
+                                </Border>
+                                <StackPanel Grid.Column="4" Orientation="Horizontal">
+                                    <Border Style="{StaticResource FlagChip}" Visibility="{Binding HasAiFailed, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="AI failed" FontSize="{DynamicResource FontSize.Small}"/>
+                                    </Border>
+                                    <Border Style="{StaticResource PlainChip}" Visibility="{Binding NotLabelled, Converter={StaticResource BoolToVis}}"
+                                            AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.NotLabelled.{0}}">
+                                        <TextBlock Text="Not labelled" FontSize="{DynamicResource FontSize.Small}"/>
+                                    </Border>
+                                    <ItemsControl ItemsSource="{Binding FlagKinds}" ItemTemplate="{StaticResource FlagTemplate}" Focusable="False"
+                                                  AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Flags.{0}}">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </StackPanel>
+                                <StackPanel Grid.Column="5" Orientation="Horizontal">
+                                    <ItemsControl ItemsSource="{Binding TagList}" ItemTemplate="{StaticResource TagTemplate}" Focusable="False">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <TextBlock Text="{Binding MoreTags}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,6,0" TextWrapping="NoWrap"/>
+                                </StackPanel>
+                                <Button Grid.Column="6" Style="{StaticResource ChipButton}" Content="{Binding TypeText, StringFormat={}{0} ▾}" Click="TypeChip_Click"
+                                        ToolTip="Change the type" AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Type.{0}}"/>
+                                <Button Grid.Column="7" Style="{StaticResource ChipButton}" Content="{Binding CategoryText, StringFormat={}{0} ▾}" Click="CategoryChip_Click"
+                                        Margin="0,0,8,0" ToolTip="Change the category" AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Category.{0}}"/>
+                                <StackPanel Grid.Column="8" Orientation="Horizontal">
+                                    <Button Style="{StaticResource SubtleButton}" Content="✓" ToolTip="Accept" Padding="8,2"
+                                            Command="{Binding DataContext.AcceptRowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                            AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.AcceptRow.{0}}"/>
+                                    <Button Style="{StaticResource SubtleButton}" Content="×" ToolTip="Reject" Padding="8,2" Foreground="{DynamicResource Brush.Error}"
+                                            Command="{Binding DataContext.RejectRowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                            AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.RejectRow.{0}}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- the expanded row: summary, editing, text -->
+                            <StackPanel Margin="26,4,0,6" Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}">
+                                <DockPanel Visibility="{Binding HasSummary, Converter={StaticResource BoolToVis}}" Margin="0,0,0,4">
+                                    <Button DockPanel.Dock="Right" Content="Retry AI" Margin="8,0,0,0" VerticalAlignment="Top"
+                                            Visibility="{Binding HasAiFailed, Converter={StaticResource BoolToVis}}"
+                                            Command="{Binding DataContext.RetryAiCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                            AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.RetryAi.{0}}"/>
+                                    <TextBlock Text="{Binding SummaryLine}" TextWrapping="Wrap"
+                                               AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Summary.{0}}"/>
+                                </DockPanel>
+                                <DockPanel>
+                                    <TextBlock Text="Title" Style="{StaticResource Caption}" VerticalAlignment="Center" Width="40"/>
+                                    <TextBox Text="{Binding Title}" Style="{StaticResource EditBox}" FontWeight="SemiBold" ToolTip="Click to rename"
+                                             AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Title.{0}}"/>
+                                </DockPanel>
+                                <DockPanel Margin="0,4,0,0">
+                                    <TextBlock Text="Tags" Style="{StaticResource Caption}" VerticalAlignment="Top" Width="40" Margin="0,4,0,0"/>
+                                    <ComboBox DockPanel.Dock="Right" IsEditable="True" ItemsSource="{Binding DataContext.KnownTags, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              MinWidth="130" VerticalAlignment="Top" Margin="6,0,0,0" ToolTip="Type a tag and press Enter" KeyDown="TagBox_KeyDown" SelectionChanged="TagBox_SelectionChanged"
+                                              AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Tags.{0}}"/>
+                                    <ItemsControl ItemsSource="{Binding TagChips}" Focusable="False">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Style="{StaticResource PlainChip}" Padding="8,0,2,0" Margin="0,2,4,2">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Name}" FontSize="{DynamicResource FontSize.Small}" VerticalAlignment="Center"/>
+                                                        <Button Style="{StaticResource SubtleButton}" Padding="4,0" Command="{Binding RemoveCommand}" ToolTip="Remove this tag">
+                                                            <TextBlock Text="×" FontSize="{DynamicResource FontSize.Small}"/>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </DockPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                    <ItemsControl ItemsSource="{Binding FlagTexts}" ItemTemplate="{StaticResource FlagTemplate}" Focusable="False">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <TextBlock Text="Replaces an earlier version" Style="{StaticResource Caption}" VerticalAlignment="Center"
+                                               Visibility="{Binding Replaces, Converter={StaticResource BoolToVis}}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding AddedText}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+
+                                <!-- text preview; for a duplicate the other document sits beside it, with Keep this on each side -->
+                                <Grid Margin="0,6,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="This document" Style="{StaticResource Caption}"/>
+                                        <TextBox Text="{Binding Preview, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="220" VerticalScrollBarVisibility="Auto"
+                                                 AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.Preview.{0}}"/>
+                                        <Button Content="Keep this" Margin="0,6,0,0" HorizontalAlignment="Left"
+                                                Visibility="{Binding IsDuplicate, Converter={StaticResource BoolToVis}}"
+                                                Command="{Binding DataContext.KeepThisCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.KeepThis.{0}}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Margin="12,0,0,0" Visibility="{Binding IsDuplicate, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="{Binding OtherTitle}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBox Text="{Binding OtherPreview, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="220" VerticalScrollBarVisibility="Auto"/>
+                                        <Button Content="Keep this" Margin="0,6,0,0" HorizontalAlignment="Left"
+                                                Command="{Binding DataContext.KeepOtherCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                AutomationProperties.AutomationId="{Binding Id, StringFormat=Learn.Inbox.KeepOther.{0}}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+    </DockPanel>
+</UserControl>

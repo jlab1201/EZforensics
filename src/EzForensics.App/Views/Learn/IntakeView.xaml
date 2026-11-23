@@ -1,0 +1,72 @@
+<UserControl x:Class="EzForensics.App.Views.Learn.IntakeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:EzForensics.App.Controls"
+             AutomationProperties.AutomationId="Learn.Intake">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="Intake → To review → Knowledge base. Pick or drop files or a folder; the AI labels them and they wait in To review until you accept them. You can also drop files on this page."
+                       Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <WrapPanel>
+                <Button Content="Add documents…" Command="{Binding AddFilesCommand}" Margin="0,0,6,6"
+                        ToolTip="PDF, Markdown, TXT, HTML or a .ezkb pack" AutomationProperties.AutomationId="Learn.Intake.AddFiles"/>
+                <Button Content="Add folder…" Command="{Binding AddFolderCommand}" Margin="0,0,16,6"
+                        ToolTip="An Obsidian vault or a folder of documents" AutomationProperties.AutomationId="Learn.Intake.AddFolder"/>
+                <TextBlock Text="Source" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,6,6"/>
+                <ComboBox ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}" DisplayMemberPath="Name" MinWidth="180" Margin="0,0,6,6"
+                          ToolTip="A saved folder to check for new notes" AutomationProperties.AutomationId="Learn.Intake.Sources"/>
+                <Button Content="Add source…" Command="{Binding AddSourceCommand}" Margin="0,0,6,6"
+                        ToolTip="Pick a folder to remember as a source" AutomationProperties.AutomationId="Learn.Intake.AddSource"/>
+                <Button Content="Check for new" Command="{Binding CheckForNewCommand}" Margin="0,0,6,6"
+                        ToolTip="List the new and changed notes of the selected source" AutomationProperties.AutomationId="Learn.Intake.CheckForNew"/>
+            </WrapPanel>
+            <WrapPanel>
+                <Button Content="Send to review" Style="{StaticResource AccentButton}" Command="{Binding SendToReviewCommand}" Margin="0,0,6,6"
+                        ToolTip="Read the ticked files, label them with the AI and send them to To review" AutomationProperties.AutomationId="Learn.Intake.Send"/>
+                <Button Content="Select all new" Command="{Binding SelectAllNewCommand}" Margin="0,0,6,6" AutomationProperties.AutomationId="Learn.Intake.SelectAllNew"/>
+                <Button Content="Clear list" Command="{Binding ClearCommand}" Margin="0,0,6,6" AutomationProperties.AutomationId="Learn.Intake.Clear"/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,6,6" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
+                        AutomationProperties.AutomationId="Learn.Intake.Cancel"/>
+                <TextBlock Text="{Binding AiHint}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="6,0,0,6"
+                           Visibility="{Binding HasAi, Converter={StaticResource BoolToVisInv}}" AutomationProperties.AutomationId="Learn.Intake.AiHint"/>
+            </WrapPanel>
+            <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Caption}" TextWrapping="Wrap" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
+                       AutomationProperties.AutomationId="Learn.Intake.Progress"/>
+            <TextBlock Text="{Binding Message}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" AutomationProperties.AutomationId="Learn.Intake.Message"/>
+        </StackPanel>
+
+        <Grid>
+            <ctl:EmptyState Glyph="&#xE896;" Title="Intake is empty" Message="Nothing waiting here. Add documents, or pick a source and Check for new."
+                       Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Learn.Intake.Empty"/>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisInv}}">
+                <ItemsControl ItemsSource="{Binding Rows}" AutomationProperties.AutomationId="Learn.Intake.List">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="0,3" x:Name="RowRoot">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" VerticalAlignment="Center" Margin="10,0,0,0">
+                                    <TextBlock Text="{Binding StateText}" FontSize="{DynamicResource FontSize.Small}"/>
+                                </Border>
+                                <CheckBox DockPanel.Dock="Left" IsChecked="{Binding IsSelected}" IsEnabled="{Binding IsSelectable}" VerticalAlignment="Center" Margin="0,0,8,0"
+                                          AutomationProperties.AutomationId="{Binding Title, StringFormat=Learn.Intake.Tick.{0}}"/>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding RelPath}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Problem}" Style="{StaticResource Caption}" Foreground="{DynamicResource Brush.Error}" TextWrapping="Wrap"
+                                               Visibility="{Binding HasProblem, Converter={StaticResource BoolToVis}}"
+                                               AutomationProperties.AutomationId="{Binding Title, StringFormat=Learn.Intake.Problem.{0}}"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsSelectable}" Value="False">
+                                    <Setter TargetName="RowRoot" Property="Opacity" Value="0.5"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</UserControl>

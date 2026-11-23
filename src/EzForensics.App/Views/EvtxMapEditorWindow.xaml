@@ -1,0 +1,169 @@
+<Window x:Class="EzForensics.App.Views.EvtxMapEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Edit event fields" Width="1100" Height="760" MinWidth="720" MinHeight="480"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}" TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}"
+        AutomationProperties.AutomationId="EvtxMapEditor" KeyDown="Window_KeyDown" Loaded="Window_Loaded" Closed="Window_Closed">
+    <DockPanel Margin="16">
+        <!-- header -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Text="{Binding Header}" Style="{StaticResource SectionTitle}"/>
+            <TextBlock Text="{Binding MapSource}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" ToolTip="{Binding MapSource}"/>
+        </StackPanel>
+
+        <!-- sample records -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button DockPanel.Dock="Left" Content="Evidence folder…" Command="{Binding PickEvidenceCommand}" Margin="0,0,6,0"
+                    ToolTip="Read sample records of this event from the .evtx files in a folder" AutomationProperties.AutomationId="EvtxMapEditor.PickFolder"/>
+            <Button DockPanel.Dock="Left" Content=".evtx file…" Command="{Binding PickEvidenceFileCommand}" Margin="0,0,10,0"/>
+            <ComboBox DockPanel.Dock="Left" ItemsSource="{Binding SampleLabels}" SelectedIndex="{Binding SelectedSample}" MinWidth="220" Margin="0,0,10,0"
+                      ToolTip="Sample record shown in the field list" AutomationProperties.AutomationId="EvtxMapEditor.Sample"/>
+            <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Width="90" Height="6" Margin="8,0,0,0"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding SampleStatus}" Style="{StaticResource Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding SampleStatus}"/>
+        </DockPanel>
+
+        <!-- footer -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                <Button Content="Check with EvtxECmd" Command="{Binding CheckCommand}" Margin="0,0,8,0"
+                        ToolTip="Run the installed EvtxECmd on the sample with only this map and compare its CSV with the preview"
+                        AutomationProperties.AutomationId="EvtxMapEditor.Check"/>
+                <Button Content="Cancel" MinWidth="80" Margin="0,0,8,0" Click="Cancel_Click" AutomationProperties.AutomationId="EvtxMapEditor.Cancel"/>
+                <Button Content="Save" MinWidth="80" Style="{StaticResource AccentButton}" Click="Save_Click" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}"
+                        ToolTip="Check, then save as a custom map. EvtxECmd then uses it instead of the stock map."
+                        AutomationProperties.AutomationId="EvtxMapEditor.Save"/>
+            </StackPanel>
+            <Grid Margin="0,0,12,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="2*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Author" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Grid.Column="1" Text="{Binding Author, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0"/>
+                <TextBlock Grid.Column="2" Text="Description" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Grid.Column="3" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Grid.Row="1" Grid.ColumnSpan="4" Text="{Binding CheckStatus}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Visibility="{Binding HasCheckStatus, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="EvtxMapEditor.CheckStatus"/>
+            </Grid>
+        </DockPanel>
+
+        <!-- preview -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0" Height="190">
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+                <TextBlock Text="Preview" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                <TextBlock Text="{Binding PreviewNote}" Style="{StaticResource Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding PreviewNote}"/>
+            </DockPanel>
+            <Border Style="{StaticResource Card}" Padding="0">
+                <DataGrid ItemsSource="{Binding Preview}" AutoGenerateColumns="True" IsReadOnly="True" HeadersVisibility="Column"
+                          CanUserAddRows="False" AutomationProperties.AutomationId="EvtxMapEditor.Preview"/>
+            </Border>
+        </DockPanel>
+
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding Problems}" Foreground="{DynamicResource Brush.Warning}" TextWrapping="Wrap" Margin="0,8,0,0"
+                   Visibility="{Binding HasProblems, Converter={StaticResource BoolToVis}}"/>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="5*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="6*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- fields of the sample record -->
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <TextBlock DockPanel.Dock="Left" Text="Fields" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Button DockPanel.Dock="Right" Content="Add" Command="{Binding AssignCommand}" Margin="6,0,0,0"
+                            ToolTip="Add the selected field to this column" AutomationProperties.AutomationId="EvtxMapEditor.Assign"/>
+                    <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding ColumnNames}" SelectedItem="{Binding AssignColumn}" MinWidth="130"
+                              AutomationProperties.AutomationId="EvtxMapEditor.AssignColumn"/>
+                    <TextBlock Text="Pick a field, then a column" Style="{StaticResource Caption}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,6,0"/>
+                </DockPanel>
+                <Border Style="{StaticResource Card}" Padding="0">
+                    <ListBox ItemsSource="{Binding Fields}" SelectedItem="{Binding SelectedField}" BorderThickness="0" Background="Transparent"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" MouseDoubleClick="Fields_DoubleClick"
+                             AutomationProperties.AutomationId="EvtxMapEditor.Fields">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="{Binding Indent}" ToolTip="{Binding Field.XPath}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="150"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="Lbl" Text="{Binding Label}" Margin="0,0,10,0"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
+                                               Foreground="{DynamicResource Brush.TextSecondary}" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsLeaf}" Value="False">
+                                        <Setter TargetName="Lbl" Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </DockPanel>
+
+            <!-- map columns -->
+            <DockPanel Grid.Column="2">
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <TextBlock Text="Columns" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="Format: text with %Name% for each value, e.g. %Domain%\%User%" Style="{StaticResource Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding LookupNote}" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                <Border Style="{StaticResource Card}" Padding="0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Columns}" Margin="8" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1" Padding="0,4,0,8" Margin="0,0,0,6">
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,4">
+                                                <ComboBox DockPanel.Dock="Left" ItemsSource="{Binding ColumnNames}" SelectedItem="{Binding Property}" MinWidth="130" Margin="0,0,8,0"/>
+                                                <Button DockPanel.Dock="Right" Content="Remove" Command="{Binding RemoveCommand}" Style="{StaticResource LinkButton}" Margin="8,0,0,0"
+                                                        VerticalAlignment="Center" ToolTip="Remove this column from the map"/>
+                                                <TextBox Text="{Binding PropertyValue, UpdateSourceTrigger=PropertyChanged}" FontFamily="{DynamicResource Font.Mono}"
+                                                         Tag="Format, e.g. %Name% (%Id%)" ToolTip="Text written to the column; %Name% is replaced by the value of that name"/>
+                                            </DockPanel>
+                                            <ItemsControl ItemsSource="{Binding Values}" Focusable="False" Margin="12,0,0,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,2">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="110"/>
+                                                                <ColumnDefinition Width="3*"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Tag="Name" Margin="0,0,4,0" ToolTip="Name used as %Name% in the format"/>
+                                                            <TextBox Grid.Column="1" Text="{Binding XPath, UpdateSourceTrigger=PropertyChanged}" Tag="XPath" FontFamily="{DynamicResource Font.Mono}"
+                                                                     FontSize="{DynamicResource FontSize.Mono}" Margin="0,0,4,0" ToolTip="XPath into the event XML"/>
+                                                            <TextBox Grid.Column="2" Text="{Binding Refine, UpdateSourceTrigger=PropertyChanged}" Tag="Refine (regex)" FontFamily="{DynamicResource Font.Mono}"
+                                                                     FontSize="{DynamicResource FontSize.Mono}" Margin="0,0,4,0" ToolTip="Optional regex: keep only the matching parts"/>
+                                                            <Button Grid.Column="3" Content="✕" Command="{Binding RemoveCommand}" Style="{StaticResource LinkButton}" VerticalAlignment="Center"
+                                                                    ToolTip="Remove this value"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+</Window>

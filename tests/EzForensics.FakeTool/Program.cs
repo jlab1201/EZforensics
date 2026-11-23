@@ -19,6 +19,14 @@ if (FakeRitaTool.Handles(args))
 if (FakeVolatilityTool.Handles(args))
     return FakeVolatilityTool.Run(args);
 
+// Fake Detect It Easy ("-j -d -u <file>") and ExifTool ("-@ <argfile>") for the Explore runners.
+if (FakeExploreTool.Handles(args))
+    return FakeExploreTool.Run(args);
+
+// Fake MCP server (stdio JSON-RPC) and the "--fake-touch <path>" marker mode.
+if (FakeMcpTool.Handles(args))
+    return FakeMcpTool.Run(args);
+
 int lines = 0, delay = 0, exit = 0;
 bool stderr = false, hang = false, spawnChild = false, unicode = false;
 string? csvDir = null, csvf = null;

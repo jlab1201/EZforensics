@@ -35,6 +35,7 @@ public sealed class AnalyzeFilterNode
             Type = "dates", Column = d.Column, IncludeBlanks = d.IncludeBlanks,
             Days = d.Days.OrderBy(x => x).Select(x => x.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)).ToList(),
         },
+        FilterFlag f => new AnalyzeFilterNode { Type = "flag", Negate = !f.Flagged, Values = f.Ids.OrderBy(x => x, StringComparer.Ordinal).ToList() },
         _ => throw new NotSupportedException(n.GetType().Name),
     };
 
@@ -47,6 +48,7 @@ public sealed class AnalyzeFilterNode
                 return new FilterGroup(Or ? FilterGroupKind.Or : FilterGroupKind.And,
                     (Children ?? new()).Select(c => c.ToNode()).Where(c => c != null).Cast<FilterNode>()) { Negate = Negate };
             case "condition": return new FilterCondition(Column ?? "", Op, Value ?? "", Value2);
+            case "flag": return new FilterFlag(!Negate, Values ?? new());
             case "values": return new FilterValueSet(Column ?? "", Values ?? new(), IncludeBlanks);
             case "dates":
                 var days = new List<DateOnly>();

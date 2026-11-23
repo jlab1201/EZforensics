@@ -1,4 +1,5 @@
 using System.Globalization;
+using EzForensics.Core.Timeline;
 
 namespace EzForensics.Core.Results;
 
@@ -33,10 +34,13 @@ public sealed class FilterSpec
     public IReadOnlyDictionary<long, string>? FlagColorRows { get; set; }
     /// <summary>With <see cref="Flag"/> = Flagged: only rows flagged with one of these flag ids (null or empty = any colour).</summary>
     public IReadOnlySet<string>? FlagColors { get; set; }
+    /// <summary>Only these original row indices pass (ANDed with everything else); null = no row-set filter. A transient set, e.g. the rows behind a Spectre finding.</summary>
+    public IReadOnlySet<long>? RowSet { get; set; }
 
     /// <summary>True when the row passes the flag filter (<see cref="Flag"/>, <see cref="FlagColors"/>).</summary>
     public bool FlagMatches(long row)
     {
+        if (RowSet != null && !RowSet.Contains(row)) return false;
         if (Flag == FlagFilterMode.All) return true;
         bool flagged;
         string? color = null;
@@ -61,7 +65,7 @@ public sealed class FilterSpec
 
     public bool IsEmpty =>
         string.IsNullOrEmpty(GlobalText) && ColumnFilters.Count == 0 && !HasDate &&
-        (Expression == null || Expression.IsEmpty) && Flag == FlagFilterMode.All;
+        (Expression == null || Expression.IsEmpty) && Flag == FlagFilterMode.All && RowSet == null;
 
     /// <summary>The column filters and <see cref="Expression"/> as one And group.</summary>
     public FilterGroup BuildExpression()
@@ -96,6 +100,7 @@ public sealed class FilterSpec
                 ? "[Flag] In (" + string.Join(", ", FlagColors.OrderBy(c => c, StringComparer.Ordinal).Select(c => FilterNode.Quote(c))) + ")"
                 : "[Flag]");
         else if (Flag == FlagFilterMode.Unflagged) parts.Add("Not [Flag]");
+        if (RowSet != null) parts.Add($"Evidence rows ({RowSet.Count:N0})");
         return string.Join(" And ", parts);
     }
 }
@@ -119,10 +124,15 @@ public static class CsvValueParser
         "yyyy-MM-ddTHH:mm:ssK", "yyyy-MM-dd",
     };
 
-    public static bool TryParseDate(string s, out DateTime dt)
+    /// <summary>
+    /// Parses a date, UTC assumed. An ambiguous slash date (<c>01/02/2020</c>) is never guessed: it stays unparsed (text) unless
+    /// <paramref name="monthFirstSlash"/> (a Plaso l2tcsv file, MM/dd/yyyy by spec; see <see cref="CsvIndex.MonthFirstSlashDates"/>).
+    /// </summary>
+    public static bool TryParseDate(string s, out DateTime dt, bool monthFirstSlash = false)
     {
         dt = default;
-        if (s.Length < 8) return false;
+        if (s.Length < 8 || !SlashDates.TryNormalize(s, monthFirstSlash, out var text)) return false;
+        s = text ?? s;
         const DateTimeStyles st = DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal;
         return DateTime.TryParseExact(s, DateFormats, CultureInfo.InvariantCulture, st, out dt)
             || DateTime.TryParse(s, CultureInfo.InvariantCulture, st, out dt);
@@ -177,6 +187,20 @@ public static class FilterEngine
             return hits.ToArray();
         }
 
+        // A row set (evidence rows): evaluate those rows only.
+        if (spec.RowSet != null)
+        {
+            var cand = spec.RowSet.Where(r => r >= 0 && r < n).Select(r => (int)r).OrderBy(r => r).ToArray();
+            var hits = new List<int>(cand.Length);
+            for (int i = 0; i < cand.Length; i++)
+            {
+                if ((i & 255) == 0) { ct.ThrowIfCancellationRequested(); progress?.Report((double)i / Math.Max(1, cand.Length)); }
+                if (matcher.Matches(idx.ReadRow(cand[i]), cand[i])) hits.Add(cand[i]);
+            }
+            progress?.Report(1);
+            return hits.ToArray();
+        }
+
         int chunks = (n + ChunkRows - 1) / ChunkRows;
         var parts = new int[chunks][];
         long done = 0;
@@ -212,12 +236,14 @@ public static class FilterEngine
         private readonly DateTime? _from, _to;
         private readonly bool _impossible;
         private readonly FilterSpec _spec;
+        private readonly bool _monthFirst;
 
         public RowMatcher(CsvIndex idx, FilterSpec spec)
         {
             if (!SearchQuery.TryParse(spec.GlobalText, out var q, out var err)) throw new ArgumentException(err, nameof(spec));
             if (q != null) { if (q.IsSingleTerm) _global = q.SingleTerm; else _globalQuery = q.Compile(); }
-            _expr = spec.BuildExpression().Compile(idx.ColumnIndex);
+            _monthFirst = idx.MonthFirstSlashDates;
+            _expr = spec.BuildExpression().Compile(idx.ColumnIndex, _monthFirst);
             if (spec.DateColumn != null && (spec.DateFrom != null || spec.DateTo != null))
             {
                 _dateCol = idx.ColumnIndex(spec.DateColumn);
@@ -247,7 +273,7 @@ public static class FilterEngine
             if (_dateCol >= 0)
             {
                 var cell = _dateCol < row.Length ? row[_dateCol] : "";
-                if (!CsvValueParser.TryParseDate(cell, out var dt)) return false;
+                if (!CsvValueParser.TryParseDate(cell, out var dt, _monthFirst)) return false;
                 if (_from != null && dt < _from) return false;
                 if (_to != null && dt > _to) return false;
             }
@@ -269,6 +295,7 @@ public static class FilterEngine
     {
         int col = idx.ColumnIndex(column);
         if (col < 0) throw new ArgumentException("Unknown column: " + column, nameof(column));
+        bool monthFirst = idx.MonthFirstSlashDates;
         int n = rows.Length;
         var keys = new string[n];
 
@@ -292,30 +319,41 @@ public static class FilterEngine
             progress?.Report(0.5 * Interlocked.Add(ref done, e - s) / Math.Max(1, n));
         });
 
-        // choose comparison mode
-        bool allNum = true, allDate = true;
+        // Choose the comparison mode: a column is numeric / date when at least 90% of its non-empty cells parse (Volatility writes N/A in numeric
+        // columns), so a few stray cells no longer turn it into a text sort. Cells that do not parse sort together after the parsed ones, as text.
+        int nonEmpty = 0, numOk = 0, dateOk = 0;
         foreach (var k in keys)
         {
             if (k.Length == 0) continue;
-            if (allNum && !CsvValueParser.TryParseNumber(k, out _)) allNum = false;
-            if (allDate && !CsvValueParser.TryParseDate(k, out _)) allDate = false;
-            if (!allNum && !allDate) break;
+            nonEmpty++;
+            if (CsvValueParser.TryParseNumber(k, out _)) numOk++;
+            if (CsvValueParser.TryParseDate(k, out _, monthFirst)) dateOk++;
         }
+        bool allNum = nonEmpty > 0 && numOk * 10 >= nonEmpty * 9 && numOk >= dateOk;
+        bool allDate = !allNum && nonEmpty > 0 && dateOk * 10 >= nonEmpty * 9;
 
         var perm = new int[n];
         for (int i = 0; i < n; i++) perm[i] = i;
         Comparison<int> cmp;
-        if (allNum)
+        if (allNum || allDate)
         {
+            // rank: 0 empty, 1 parsed (ordered by value), 2 unparsed (ordered as text)
+            var rank = new byte[n];
             var d = new double[n];
-            for (int i = 0; i < n; i++) d[i] = keys[i].Length == 0 ? double.NegativeInfinity : (CsvValueParser.TryParseNumber(keys[i], out var v) ? v : double.NegativeInfinity);
-            cmp = (a, b) => d[a].CompareTo(d[b]);
-        }
-        else if (allDate)
-        {
-            var d = new long[n];
-            for (int i = 0; i < n; i++) d[i] = keys[i].Length == 0 ? long.MinValue : (CsvValueParser.TryParseDate(keys[i], out var v) ? v.Ticks : long.MinValue);
-            cmp = (a, b) => d[a].CompareTo(d[b]);
+            var t = new long[n];
+            for (int i = 0; i < n; i++)
+            {
+                if (keys[i].Length == 0) continue;
+                bool ok;
+                if (allNum) { ok = CsvValueParser.TryParseNumber(keys[i], out var v); d[i] = v; }
+                else { ok = CsvValueParser.TryParseDate(keys[i], out var dt, monthFirst); t[i] = dt.Ticks; }
+                rank[i] = (byte)(ok ? 1 : 2);
+            }
+            cmp = (a, b) =>
+            {
+                if (rank[a] != rank[b]) return rank[a].CompareTo(rank[b]);
+                return rank[a] == 2 ? string.CompareOrdinal(keys[a], keys[b]) : allNum ? d[a].CompareTo(d[b]) : t[a].CompareTo(t[b]);
+            };
         }
         else
         {

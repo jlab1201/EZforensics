@@ -1,6 +1,7 @@
 using EzForensics.Core.Execution;
 using EzForensics.Core.Plaso;
 using EzForensics.Core.Results;
+using EzForensics.Core.Timeline;
 using FluentAssertions;
 
 namespace EzForensics.Core.Tests;
@@ -171,7 +172,7 @@ public sealed class PlasoLocatorTests
         var (venv, py, pip) = new PlasoLocator(Probe(), Venv).InstallCommands();
         venv.Should().Equal("-m", "venv", Venv);
         py.Should().Be(Venv + @"\Scripts\python.exe");
-        pip.Should().ContainInOrder("-m", "pip", "install").And.Contain("plaso");
+        pip.Should().ContainInOrder("-m", "pip", "install").And.Contain("plaso==" + PlasoSetup.PinnedVersion);
     }
 }
 
@@ -407,7 +408,10 @@ public sealed class PlasoOutputTests : IDisposable
         // so chronological sort/date filtering in Results needs the dynamic format (EZ Forensics's default).
         var headers = "date,time,timezone,MACB,source,sourcetype,type,user,host,short,desc,version,filename,inode,notes,format,extra".Split(',');
         TimestampColumnGuesser.Guess(headers).Should().Be("time");
-        CsvValueParser.TryParseDate("01/02/2020", out var d).Should().BeTrue();
+        // MM/dd/yyyy is read month-first only because the header says l2tcsv; elsewhere "01/02/2020" is ambiguous and stays unparsed.
+        SlashDates.IsL2tcsvHeader(headers).Should().BeTrue();
+        CsvValueParser.TryParseDate("01/02/2020", out _).Should().BeFalse();
+        CsvValueParser.TryParseDate("01/02/2020", out var d, monthFirstSlash: true).Should().BeTrue();
         d.Month.Should().Be(1);
         headers.Should().Contain("MACB");
     }

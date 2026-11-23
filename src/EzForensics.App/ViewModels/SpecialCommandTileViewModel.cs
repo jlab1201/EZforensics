@@ -8,7 +8,7 @@ namespace EzForensics.App.ViewModels;
 
 /// <summary>
 /// The "Command" tile of plaso, Zeek, RITA and Volatility on the Tools page, in the disk-tool layout: Source (remembered in
-/// <c>AppSettings.ToolSourcePaths</c>), Output folder (auto = a new folder under the case root, or Change…), the app-built command rows
+/// <c>AppSettings.ToolSourcePaths</c>), Output folder (auto = a new folder under the case folder, or Change…), the app-built command rows
 /// (<see cref="SpecialCommandViewModel"/>) and Run, which the owning card supplies.
 /// </summary>
 public sealed partial class SpecialCommandTileViewModel : ObservableObject
@@ -44,7 +44,7 @@ public sealed partial class SpecialCommandTileViewModel : ObservableObject
     public string FileFilter { get; init; } = "All files|*.*";
     public string FileButtonText => AllowFolder ? "File…" : "Browse…";
     public string FolderButtonText => AllowFile ? "Folder…" : "Browse…";
-    public string OutputHelp { get; init; } = "Auto uses a new folder under the case root for every run.";
+    public string OutputHelp { get; init; } = "Auto uses a new folder under the case folder for every run.";
     public string RunText { get; init; } = "Run";
     /// <summary>Optional second button next to Run (Zeek: Open in Analyze).</summary>
     public string? SecondaryText { get; init; }

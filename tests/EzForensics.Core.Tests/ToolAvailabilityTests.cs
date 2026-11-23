@@ -81,8 +81,10 @@ public class ToolAvailabilityTests
         disk.Rows.First(r => r.Key == "Users found").Value.Should().Be("alice, bob");
         ArtifactDetails.Disk("H", "Windows", null, @"E:\C", Array.Empty<string>()).Rows.Select(r => r.Key).Should().NotContain("Build");
 
-        var mem = ArtifactDetails.Memory(new MemoryImage(@"E:\m.raw", 2048, MemoryFormat.Raw, MemoryOs.Unknown, null, null, null), null);
+        var mem = ArtifactDetails.Memory(new MemoryImage(@"E:/m.raw", 2048, MemoryFormat.Raw, MemoryOs.Unknown, null, null, null), null);
         mem.Rows.Select(r => r.Key).Should().Equal("File", "Size");
+        var memTime = ArtifactDetails.Memory(new MemoryImage(@"E:/m.raw", 2048, MemoryFormat.Raw, MemoryOs.Unknown, null, null, null), new DateTime(2024, 3, 1, 22, 5, 0, DateTimeKind.Utc));
+        memTime.Rows.First(r => r.Key == "Modified").Value.Should().Be("2024-03-01 22:05 UTC");
         ArtifactDetails.Network(new PcapFile(@"E:\a.pcapng", 1024, PcapFormat.PcapNg)).Rows.Select(r => r.Key).Should().Equal("File", "Size", "Format");
     }
 }

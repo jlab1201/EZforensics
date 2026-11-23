@@ -8,6 +8,18 @@ namespace EzForensics.App.ViewModels;
 /// <summary>Small marker badge on a process node. <see cref="Kind"/> picks the theme brush in XAML (error / orange / warn / neutral / info).</summary>
 public sealed record ProcessBadge(string Text, string Kind, string Tip);
 
+/// <summary>
+/// One "notification" chip above a node's diamond: a data tab of the details card (same glyph as the rail) with its linked-row count. A click opens the details on
+/// that tab (<see cref="ProcessNodeViewModel.OpenDataTabCommand"/>).
+/// </summary>
+public sealed record ProcessDataChip(ProcessTab Tab, string Glyph, int Count, int Pid)
+{
+    public string Title => ProcessActivity.TabTitle(Tab);
+    public string CountText => Count > 999 ? "999+" : Count.ToString(CultureInfo.InvariantCulture);
+    public string ToolTipText => $"{Title}: {Count.ToString("N0", CultureInfo.InvariantCulture)} linked row{(Count == 1 ? "" : "s")} (click to open the details on this tab)";
+    public string AutomationId => $"Results.ProcessTree.Node.{Pid.ToString(CultureInfo.InvariantCulture)}.Data.{Tab}";
+}
+
 /// <summary>Things the process graph canvas needs from its view model (kept small so the control stays reusable).</summary>
 public interface IProcessGraphSource
 {
@@ -97,6 +109,9 @@ public sealed partial class ProcessNodeViewModel : ObservableObject
 
     /// <summary>Role from roles.json (<see cref="ProcessNode.Role"/>); "Other" when the correlator gave none. Empty for a ghost.</summary>
     public string RoleText => IsGhost ? "" : string.IsNullOrEmpty(Node.Role) ? ProcessRoles.OtherRole : Node.Role;
+    /// <summary>The role as shown (tooltip, card): <see cref="RoleText"/> plus " · unexpected parent" when the roles.json parents rule is broken (<see cref="ProcessRoles.RoleLabel"/>).</summary>
+    public string RoleLabel => ProcessRoles.RoleLabel(Node);
+    public bool HasUnexpectedParent => ProcessRoles.HasUnexpectedParent(Node);
     /// <summary>Stable key of the role for the diamond fill (theme brush <c>Brush.Role.{Key}</c>, see <see cref="RoleKeyOf"/>).</summary>
     public string RoleKey => IsGhost ? "" : RoleKeyOf(Node.Role);
 
@@ -135,7 +150,7 @@ public sealed partial class ProcessNodeViewModel : ObservableObject
         : Name + " · " + PidText
           + (IsExited ? Environment.NewLine + "Exited" + (Node.ExitTime is { } x ? " " + x.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " UTC" : "") : "")
           + (ToolTipCore == Name ? "" : Environment.NewLine + Cap(ToolTipCore, MaxToolTipCommandLine))
-          + Environment.NewLine + "Role: " + RoleText
+          + Environment.NewLine + "Role: " + RoleLabel
           + (Badges.Count == 0 ? "" : Environment.NewLine + string.Join(Environment.NewLine, Badges.Select(b => "• " + b.Text + ": " + b.Tip)));
     private string ToolTipCore => string.IsNullOrEmpty(Node.CmdLine) ? (string.IsNullOrEmpty(Node.Path) ? Name : Node.Path) : Node.CmdLine;
     /// <summary>Longest command line (characters) the node tooltip shows before cutting it with "…".</summary>
@@ -172,6 +187,29 @@ public sealed partial class ProcessNodeViewModel : ObservableObject
     public const int MaxServicesInTip = 20;
 
     [RelayCommand] private void Toggle() => _toggle(this);
+
+    // ------------------------------------------------------------ data chips (linked rows per card tab)
+
+    /// <summary>One chip per rail data tab with linked rows, in rail order; empty until the tree's count pass reached this node (and for ghosts).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDataChips))]
+    private IReadOnlyList<ProcessDataChip> _dataChips = Array.Empty<ProcessDataChip>();
+    public bool HasDataChips => DataChips.Count > 0;
+    /// <summary>Tab counts from the count pass (null until it ran): the details card picks its first tab with data from them without waiting for its own read.</summary>
+    public IReadOnlyDictionary<ProcessTab, int>? DataCounts { get; private set; }
+
+    /// <summary>Chip click: (node, tab) opens the details of the node on that tab. Set by the tree view model.</summary>
+    internal Action<ProcessNodeViewModel, ProcessTab>? OpenTab { get; set; }
+
+    [RelayCommand] private void OpenDataTab(ProcessDataChip? chip) { if (chip != null) OpenTab?.Invoke(this, chip.Tab); }
+
+    /// <summary>Sets the chips from the tab counts (only the rail's data tabs, in <paramref name="rail"/> order with their glyphs).</summary>
+    internal void SetDataCounts(IReadOnlyDictionary<ProcessTab, int> counts, IReadOnlyList<(ProcessTab Tab, string Glyph)> rail)
+    {
+        DataCounts = counts;
+        DataChips = IsGhost ? Array.Empty<ProcessDataChip>()
+            : rail.Where(r => r.Tab != ProcessTab.Overview && counts.GetValueOrDefault(r.Tab) > 0).Select(r => new ProcessDataChip(r.Tab, r.Glyph, counts[r.Tab], Pid)).ToList();
+    }
 
     internal void SetVisibleChildren(IReadOnlyList<ProcessNodeViewModel> kids)
     {

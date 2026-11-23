@@ -11,7 +11,7 @@ public static class IngestDefaults
     /// SANS fast-forensics triage set (the artifact categories of SANS FOR498 / FOR508 triage and the KAPE <c>!SANS_Triage</c> target /
     /// <c>!EZParser</c> module approach): computer details, $MFT + $UsnJrnl:$J (MFTECmd), the filesystem MACB timeline (built from the $MFT), Prefetch (PECmd), Amcache (AmcacheParser),
     /// Shimcache (AppCompatCacheParser), event logs (EvtxECmd, recommended event IDs), registry (RECmd batch), LNK (LECmd), jump lists
-    /// (JLECmd) and ShellBags (SBECmd). Values are planned-job rule ids (<c>Resources/triage/rules.json</c> and <see cref="IngestSteps"/>).
+    /// (JLECmd), ShellBags (SBECmd) and the process tree data built from the event logs / memory output. Values are planned-job rule ids (<c>Resources/triage/rules.json</c> and <see cref="IngestSteps"/>).
     /// </summary>
     public static readonly IReadOnlyList<string> FastForensicsRuleIds = new[]
     {
@@ -25,6 +25,7 @@ public static class IngestDefaults
         "lnk",
         "jumplists",
         "shellbags",
+        IngestSteps.ProcessTreeRuleId,
     };
 
     private static readonly HashSet<string> BuiltInSet = new(FastForensicsRuleIds, StringComparer.OrdinalIgnoreCase);

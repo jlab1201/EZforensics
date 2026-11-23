@@ -124,20 +124,33 @@ public sealed class RowFlagStore : IDisposable
                 if (!File.Exists(path)) continue;
                 f = JsonSerializer.Deserialize<RowFlagFile>(File.ReadAllText(path), Json);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { continue; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                EzForensics.Core.Diagnostics.CoreLog.Warn("Could not read row flags " + path, ex);
+                continue;
+            }
             if (f == null) continue;
             if (fallback) { SidecarPath = path; UsingFallback = true; }
             if (_fingerprint.Matches(f.CsvSize, f.CsvLastWriteUtc, f.CsvHeadSha256))
             {
                 bool legacy = f.Version < 3;
                 foreach (var r in f.Rows) if (r >= 0) _rows[r] = FlagCatalog.LegacyDefaultId;
+                // Row flags of the retired "Spectre evidence" flag (older builds wrote it from Findings) are dropped; the examiner's own flags stay.
+                HashSet<long>? dropped = null, colored = null;
                 if (f.Colors != null)
                     foreach (var (name, rows) in f.Colors)
                     {
                         if (rows == null || string.IsNullOrWhiteSpace(name)) continue;
                         var id = FlagCatalog.IdFromStored(name, legacy);
-                        foreach (var r in rows) if (r >= 0) _rows[r] = id;
+                        if (id == FlagCatalog.RetiredSpectreEvidenceId) { dropped ??= new(); foreach (var r in rows) if (r >= 0) dropped.Add(r); continue; }
+                        colored ??= new();
+                        foreach (var r in rows) if (r >= 0) { _rows[r] = id; colored.Add(r); }
                     }
+                if (dropped != null)
+                {
+                    foreach (var r in dropped) if (colored == null || !colored.Contains(r)) _rows.Remove(r);   // the flat Rows list held them too
+                    _dirty = true; ScheduleSave();
+                }
                 if (legacy && _rows.Count > 0) { _dirty = true; ScheduleSave(); } // rewrite as version 3 (ids)
             }
             else if (f.Rows.Count > 0)

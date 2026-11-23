@@ -78,7 +78,7 @@ public class ResultsFilterExpressionTests : IDisposable
         (await Run(new FilterDateSet("Time", new[] { new DateOnly(2024, 1, 2), new DateOnly(2024, 1, 3) }))).Should().Equal(1, 2);
         (await Run(new FilterDateSet("Time", new[] { new DateOnly(2024, 1, 1) }, includeBlanks: true))).Should().Equal(0, 3, 4);
 
-        // empty groups and unknown columns place no constraint
+        // empty groups place no constraint; an unknown column matches nothing (Or drops it, And / Not(...) see false)
         (await Run(new FilterGroup())).Should().Equal(0, 1, 2, 3, 4);
         (await Run(FilterGroup.Or(new FilterCondition("Nope", ColumnFilterMode.Equals, "x"), new FilterCondition("Source", ColumnFilterMode.Equals, "MFT")))).Should().Equal(0, 2);
     }

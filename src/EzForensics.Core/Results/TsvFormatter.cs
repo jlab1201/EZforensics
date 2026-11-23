@@ -39,6 +39,27 @@ public static class TsvFormatter
         sb.Append("\r\n");
     }
 
+    /// <summary>Rows of the chosen columns without a header (grid Ctrl+C), each cell cleaned like <see cref="Build"/>.</summary>
+    /// <returns>Rows written; stops after <paramref name="maxRows"/>.</returns>
+    public static int BuildCells(IEnumerable<Func<int, string?>> rows, IReadOnlyList<int> columns, int maxRows, out string text, bool escapeFormulas = false)
+    {
+        var sb = new StringBuilder();
+        int n = 0;
+        foreach (var cell in rows)
+        {
+            if (n >= maxRows) break;
+            for (int k = 0; k < columns.Count; k++)
+            {
+                if (k > 0) sb.Append('\t');
+                sb.Append(Clean(cell(columns[k]), escapeFormulas));
+            }
+            sb.Append("\r\n");
+            n++;
+        }
+        text = sb.ToString();
+        return n;
+    }
+
     /// <summary>Header row of the chosen columns followed by the rows, stopping before <paramref name="maxChars"/> is exceeded.</summary>
     /// <param name="rowsWritten">Rows written (the header is not counted).</param>
     /// <returns>True when every row fitted.</returns>

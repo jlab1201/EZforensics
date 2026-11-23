@@ -668,8 +668,7 @@ public sealed class ProcessActivity : IProcessDetailSource
 
     public static string FormatTime(DateTime? t) => t == null ? "" : t.Value.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
-    private static DateTime? ParseTime(string s) =>
-        s.Length > 0 && DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var t) ? t : null;
+    private static DateTime? ParseTime(string s) => EzForensics.Core.Time.TimeParse.Lenient(s);
 
     private static string Cell(string[] r, int i) => i >= 0 && i < r.Length ? (r[i] ?? "").Trim() : "";
 

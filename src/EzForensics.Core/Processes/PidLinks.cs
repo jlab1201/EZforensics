@@ -103,7 +103,7 @@ public static class PidLinks
     /// Row time a PID is resolved against: the <see cref="TimeColumnIndex"/> cell parsed like the grid parses dates (invariant culture, UTC assumed,
     /// <see cref="Results.CsvValueParser.TryParseDate"/>); null without a time column or with a blank / unparsable cell.
     /// </summary>
-    public static DateTime? RowTime(IReadOnlyList<string> headers, IReadOnlyList<string> cells) => ParseCell(cells, TimeColumnIndex(headers));
+    public static DateTime? RowTime(IReadOnlyList<string> headers, IReadOnlyList<string> cells) => ParseCell(cells, TimeColumnIndex(headers), Timeline.SlashDates.IsL2tcsvHeader(headers));
 
     /// <summary>The row's <c>CreateTime</c> cell (a Volatility process list row: tells several instances with one PID apart); null when there is none.</summary>
     public static DateTime? RowCreateTime(IReadOnlyList<string> headers, IReadOnlyList<string> cells)
@@ -113,8 +113,32 @@ public static class PidLinks
         return null;
     }
 
-    private static DateTime? ParseCell(IReadOnlyList<string> cells, int i) =>
-        i >= 0 && i < cells.Count && cells[i] is { } s && Results.CsvValueParser.TryParseDate(s.Trim(), out var t) ? t : null;
+    /// <summary>
+    /// For a row with both a parent column (PPID / ParentProcessId / ParentPID) holding <paramref name="parentPid"/> and a different own-PID column: the row's own PID
+    /// (the child whose PPID was clicked); null when the row has no such pair.
+    /// </summary>
+    public static int? RowChildPid(IReadOnlyList<string> headers, IReadOnlyList<string> cells, int parentPid)
+    {
+        int parentCol = -1;
+        for (int i = 0; i < headers.Count && i < cells.Count; i++)
+        {
+            var h = headers[i]?.Trim();
+            if (h != null && (h.Equals("PPID", StringComparison.OrdinalIgnoreCase) || h.Equals("ParentProcessId", StringComparison.OrdinalIgnoreCase) || h.Equals("ParentPID", StringComparison.OrdinalIgnoreCase)))
+            { if (TryParsePid(cells[i], out var pp) && pp == parentPid) parentCol = i; break; }
+        }
+        if (parentCol < 0) return null;
+        for (int i = 0; i < headers.Count && i < cells.Count; i++)
+        {
+            if (i == parentCol) continue;
+            var h = headers[i]?.Trim();
+            if (h != null && (h.Equals("PID", StringComparison.OrdinalIgnoreCase) || h.Equals("ProcessId", StringComparison.OrdinalIgnoreCase) || h.Equals("NewProcessId", StringComparison.OrdinalIgnoreCase))
+                && TryParsePid(cells[i], out var pid)) return pid;
+        }
+        return null;
+    }
+
+    private static DateTime? ParseCell(IReadOnlyList<string> cells, int i, bool monthFirst = false) =>
+        i >= 0 && i < cells.Count && cells[i] is { } s && Results.CsvValueParser.TryParseDate(s.Trim(), out var t, monthFirst) ? t : null;
 
     /// <summary>
     /// Host folder whose process tree a CSV's PIDs open: the top folder under <paramref name="caseRoot"/> that contains the CSV (<c>case\HOST\Category\x.csv</c>,

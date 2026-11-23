@@ -30,6 +30,27 @@ public class MacbTimelineTests : IDisposable
         return lines.Skip(1).ToArray();
     }
 
+    [Fact]
+    public void Keeps_pre_1970_times_and_drops_zero_and_filetime_zero()
+    {
+        // -86400 = 1969-12-31, -1.5 = 1969-12-31 23:59:58.5, -11644473600 = 1601-01-01 (unset NTFS time)
+        var rows = Convert(1000, Body("0|old.txt|1-128-1|r|0|0|1|-86400|-1.5|0|-11644473600"));
+        rows.Should().Equal(
+            "1969-12-31 00:00:00.0000000,.a..,1,1-128-1,old.txt,SI",
+            "1969-12-31 23:59:58.5000000,m...,1,1-128-1,old.txt,SI");
+    }
+
+    [Fact]
+    public void Counts_lines_with_fewer_than_11_fields_but_not_blanks_or_comments()
+    {
+        var csv = Path.Combine(_dir, "out.csv");
+        var stats = MactimeConverter.ConvertWithStats(new[] { Body("# c", "", "0|short|1|r|0|0|1|1700000000", "0|a|1|r|0|0|1|0|1700000000|0|0") }, csv);
+        stats.Rows.Should().Be(1);
+        stats.ShortLines.Should().Be(1);
+        MacbTimelineSummary.Describe(new[] { new MacbTimelineOutcome("WS01", MacbTimelineState.Built, 1, csv, SkippedLines: 1) }).Text
+            .Should().Contain("1 malformed bodyfile line");
+    }
+
     // 1700000000 = 2023-11-14 22:13:20 UTC
     [Fact]
     public void Merges_flags_of_equal_timestamps_in_macb_order_and_skips_zero_times()

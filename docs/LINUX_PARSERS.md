@@ -234,9 +234,9 @@ Shown on the Ingest page and recorded in the manifest, the same way as the Windo
   `ArtifactParserMatch`. Jobs run like the persistence collector: a headless built-in command
   (`ezforensics parse --parser <id> --root <root> --out <dir> [--host <name>]`), so the job queue, logs, cancel and the run
   manifest (argv, SHA-256 of outputs, `Details`: parser id, OS detection, warnings count) work unchanged.
-- **CLI** (`EzForensics.Cli`, net8.0): `ezforensics triage --source <dir|archive> --case <dir> [--platform linux] [--parsers a,b]
+- **CLI** (planned, P3; not in the repo yet) (`EzForensics.Cli`, net8.0): `ezforensics triage --source <dir|archive> --case <dir> [--platform linux] [--parsers a,b]
   [--tz <zone>] [--year <yyyy>]` = detect -> discover -> run -> optional timeline, plus `ezforensics parse` for one parser.
-- **Avalonia app**: the same view models over Core; only Windows-specific services (WSL, Authenticode, `RegLoadKey`)
+- **Avalonia app** (planned, P3): the same view models over Core; only Windows-specific services (WSL, Authenticode, `RegLoadKey`)
   are hidden behind the existing OS checks. On a Linux host, `journalctl` / `rpm` run natively instead of through WSL
   (a `ILinuxToolRunner` with WSL / Docker / native implementations, built on `Core/Runtimes`).
 

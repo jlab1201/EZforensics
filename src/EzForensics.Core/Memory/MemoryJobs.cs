@@ -225,17 +225,21 @@ public static class MemoryJobs
 
     /// <summary>
     /// A cancelled / timed-out job is about to publish its raw stdout as <c>_PARTIAL.csv</c>: deletes the files that hold no data row (only the
-    /// banner and/or header, e.g. a psscan cancelled before its first hit) and logs why. Returns the deleted paths.
+    /// banner and/or header, e.g. a psscan cancelled before its first hit) and logs why. Returns the deleted paths. Does not rewrite the kept files.
     /// </summary>
     public static IReadOnlyList<string> DropEmptyPartialCsvs(IEnumerable<string> stagedCsvs, Action<string> log)
     {
         var dropped = new List<string>();
         foreach (var f in stagedCsvs)
         {
+            // Count rows via a scratch copy: the file itself stays raw, because FinallyStep normalises the published _PARTIAL.csv
+            // (a second in-place pass would eat the backslash escapes of Volatility's "C:\Windows").
             bool empty;
-            try { empty = VolatilityCsv.Normalize(f, f).Rows == 0; }
+            var scratch = f + ".rows";
+            try { empty = VolatilityCsv.Normalize(f, scratch).Rows == 0; }
             catch (InvalidDataException) { empty = true; }          // not even a header
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+            finally { TryDelete(scratch); }
             if (!empty) continue;
             TryDelete(f);
             dropped.Add(f);

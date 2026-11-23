@@ -1,11 +1,12 @@
-﻿<UserControl x:Class="EzForensics.App.Views.Analyze.EventsPane"
+<UserControl x:Class="EzForensics.App.Views.Analyze.EventsPane"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
              xmlns:c="clr-namespace:EzForensics.App.Controls"
              xmlns:local="clr-namespace:EzForensics.App"
              xmlns:svc="clr-namespace:EzForensics.App.Services"
-             xmlns:an="clr-namespace:EzForensics.App.Views.Analyze">
+             xmlns:an="clr-namespace:EzForensics.App.Views.Analyze"
+             xmlns:vc="clr-namespace:EzForensics.App.Views.Controls">
     <UserControl.Resources>
         <Style x:Key="SearchHelpToggle" TargetType="ToggleButton" BasedOn="{StaticResource HelpCircleToggle}">
             <Style.Triggers>
@@ -22,6 +23,44 @@
         </Style>
 
         <!-- grid rows: light tint in the flag colour (Settings: Tint flagged rows) -->
+        <!-- Excel-style gutter: header-like background, right + bottom hairline, muted right-aligned view row number (not data; never copied) -->
+        <Style x:Key="RowNumberHeaderStyle" TargetType="DataGridRowHeader">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+            <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsHitTestVisible" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridRowHeader">
+                        <Border x:Name="gutter" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource Brush.Border}"
+                                BorderThickness="0,0,1,1" Padding="4,0,8,0" SnapsToDevicePixels="True">
+                            <Grid>
+                                <TextBlock x:Name="keyMark" Text="&#xE8EC;" FontFamily="{StaticResource Font.Icon}" FontSize="11" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Brush.Warning}" Visibility="Collapsed" ToolTip="{Binding KeyEventText, StringFormat=Finding: {0}}"
+                                           AutomationProperties.AutomationId="Results.Grid.KeyEventMark" AutomationProperties.Name="In a finding"/>
+                                <TextBlock x:Name="spectreMark" Text="&#xE945;" FontFamily="{StaticResource Font.Icon}" FontSize="11" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,0,0"
+                                           Foreground="{DynamicResource Brush.Accent}" Visibility="Collapsed" ToolTip="{Binding SpectreText, StringFormat=Spectre flagged: {0}}"
+                                           AutomationProperties.AutomationId="Results.Grid.SpectreMark" AutomationProperties.Name="Spectre flagged"/>
+                                <TextBlock Text="{Binding ViewRowNumber, FallbackValue=''}" Foreground="{TemplateBinding Foreground}" TextAlignment="Right" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" FontSize="{DynamicResource FontSize.Small}" FontWeight="Normal" AutomationProperties.AutomationId="Results.Grid.RowNumber"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding InKeyEvent, FallbackValue=False}" Value="True">
+                                <Setter TargetName="keyMark" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsSpectreFlagged, FallbackValue=False}" Value="True">
+                                <Setter TargetName="spectreMark" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                            <Trigger Property="IsRowSelected" Value="True">
+                                <Setter TargetName="gutter" Property="Background" Value="{DynamicResource Brush.Control}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="FlagRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
             <Style.Triggers>
                 <MultiDataTrigger>
@@ -47,7 +86,7 @@
                                         BorderThickness="0,0,0,1" ToolTip="{Binding Text}">
                                     <StackPanel Orientation="Horizontal" Margin="{Binding Indent}" VerticalAlignment="Center">
                                         <Button Style="{StaticResource HeaderMiniButton}" Tag="PivotToggle" Focusable="False"
-                                                Content="{Binding Chevron}" FontFamily="{StaticResource Font.Icon}" FontSize="10" VerticalAlignment="Center"
+                                                Content="{Binding Chevron}" FontFamily="{StaticResource Font.Icon}" FontSize="11" VerticalAlignment="Center"
                                                 ToolTip="Collapse / expand (double-click, Left / Right)"
                                                 AutomationProperties.AutomationId="Results.Pivot.Header.Toggle" AutomationProperties.Name="Collapse or expand"/>
                                         <TextBlock Text="{Binding Column, StringFormat={}{0}:}" Foreground="{DynamicResource Brush.TextSecondary}"
@@ -75,7 +114,7 @@
         <!-- pivot group panel chip: column name + sort glyph; click flips the order, drag reorders / drags off to ungroup, right-click for sort options -->
         <DataTemplate x:Key="PivotChipTemplate" DataType="{x:Type vm:PivotGroupChip}">
             <StackPanel Orientation="Horizontal">
-                <TextBlock x:Name="sep" Text="&#xE76C;" FontFamily="{StaticResource Font.Icon}" FontSize="9" VerticalAlignment="Center"
+                <TextBlock x:Name="sep" Text="&#xE76C;" FontFamily="{StaticResource Font.Icon}" FontSize="11" VerticalAlignment="Center"
                            Foreground="{DynamicResource Brush.TextDisabled}" Margin="2,0,4,0"/>
                 <Border Background="{DynamicResource Brush.Control}" BorderBrush="{DynamicResource Brush.BorderStrong}" BorderThickness="1" CornerRadius="10"
                         Padding="8,1,8,1" Margin="0,1" Cursor="Hand" Tag="{Binding}"
@@ -96,7 +135,7 @@
                     </Border.ContextMenu>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="{Binding Column}" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding SortGlyph}" Margin="6,0,0,0" FontSize="10" VerticalAlignment="Center"
+                        <TextBlock Text="{Binding SortGlyph}" Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
                                    Foreground="{DynamicResource Brush.Accent}"/>
                     </StackPanel>
                 </Border>
@@ -118,7 +157,7 @@
             <StackPanel>
                 <DockPanel>
                     <Button x:Name="funnel" DockPanel.Dock="Right" Style="{StaticResource HeaderMiniButton}" Click="Funnel_Click"
-                            Content="&#xE71C;" FontFamily="{StaticResource Font.Icon}" FontSize="10" Margin="4,0,0,0"
+                            Content="&#xE71C;" FontFamily="{StaticResource Font.Icon}" FontSize="11" Margin="4,0,0,0"
                             Foreground="{DynamicResource Brush.TextDisabled}"
                             AutomationProperties.AutomationId="{Binding Column, StringFormat=Results.Header.Funnel.{0}}"
                             AutomationProperties.Name="{Binding Column, StringFormat=Filter values of {0}}"
@@ -132,11 +171,11 @@
                 </DockPanel>
                 <DockPanel Margin="0,4,0,0">
                     <Button DockPanel.Dock="Left" Style="{StaticResource HeaderMiniButton}" Click="FilterOp_Click" MinWidth="22"
-                            Content="{Binding OpSymbol}" ToolTip="{Binding OpLabel}" FontFamily="{DynamicResource Font.UI}" FontSize="11"
+                            Content="{Binding OpSymbol}" ToolTip="{Binding OpLabel}" FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Small}"
                             Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,0,3,0"
                             AutomationProperties.AutomationId="{Binding Column, StringFormat=Results.FilterRow.{0}.Op}"
                             AutomationProperties.Name="{Binding OpLabel}"/>
-                    <TextBox x:Name="box" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" MinHeight="0" Padding="3,1" FontSize="11"
+                    <TextBox x:Name="box" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" MinHeight="0" Padding="3,1" FontSize="{DynamicResource FontSize.Small}"
                              FontWeight="Normal" FontFamily="{DynamicResource Font.Mono}" IsEnabled="{Binding OpNeedsValue}"
                              AutomationProperties.AutomationId="{Binding Column, StringFormat=Results.FilterRow.{0}}"
                              AutomationProperties.Name="{Binding Column, StringFormat=Filter {0}}"
@@ -241,9 +280,18 @@
     <DockPanel>
 
         <!-- filter bar -->
+        <!-- search on the left, the flag filter / Actions / Focus group on the right; the group drops to a second row when the pane is too narrow for both (FilterBar_SizeChanged) -->
         <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="10" Margin="0,0,0,8">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <Grid x:Name="FilterBar" SizeChanged="FilterBar_SizeChanged">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel x:Name="BarButtons" Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
                 <ToggleButton x:Name="FlagFilterButton" AutomationProperties.AutomationId="Results.FlagFilter" AutomationProperties.Name="Flag filter"
                               AutomationProperties.ItemStatus="{Binding FlagFilterText}"
                               IsChecked="{Binding IsOpen, ElementName=FlagFilterPopup, Mode=TwoWay}" Margin="0,0,6,0" MinHeight="30"
@@ -251,7 +299,7 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource Icon}" Text="&#xE7C1;" FontSize="12" Foreground="{DynamicResource Brush.Warning}"/>
                         <TextBlock Text="{Binding FlagFilterText}" Margin="6,0,0,0" MinWidth="64"/>
-                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Font.Icon}" FontSize="9" Margin="8,0,0,0" VerticalAlignment="Center"
+                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Font.Icon}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
                                    Foreground="{DynamicResource Brush.TextSecondary}"/>
                     </StackPanel>
                 </ToggleButton>
@@ -259,6 +307,7 @@
                        AllowsTransparency="True" Opened="FlagFilterPopup_Opened">
                     <Border x:Name="FlagFilterPopupRoot" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.BorderStrong}"
                             BorderThickness="1" CornerRadius="4" Padding="10,8" MinWidth="260" TextElement.Foreground="{DynamicResource Brush.Text}"
+                            TextElement.FontFamily="{DynamicResource Font.UI}" TextElement.FontSize="{DynamicResource FontSize.Body}"
                             AutomationProperties.AutomationId="Results.FlagFilter.Popup">
                         <StackPanel>
                             <CheckBox x:Name="FlagModeAll" Content="All rows" Checked="FlagMode_Changed" Unchecked="FlagMode_Changed" Tag="all" Margin="0,2"
@@ -278,7 +327,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:FlagOption}">
                                         <DockPanel Margin="0,2">
-                                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="only" MinHeight="0" Padding="6,1" FontSize="11"
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="only" MinHeight="0" Padding="6,1" FontSize="{DynamicResource FontSize.Small}"
                                                     Foreground="{DynamicResource Brush.Accent}" Click="FlagOnly_Click" Margin="8,0,0,0"
                                                     AutomationProperties.AutomationId="{Binding Id, StringFormat=Results.FlagFilter.{0}.Only}"
                                                     AutomationProperties.Name="{Binding Label, StringFormat=Only {0}}"
@@ -313,7 +362,7 @@
                         Click="ActionsButton_Click" Margin="0,0,6,0" ToolTip="Export, copy, open in default app, show in Explorer, column widths">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Actions"/>
-                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Font.Icon}" FontSize="9" Margin="8,0,0,0" VerticalAlignment="Center"
+                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Font.Icon}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
                                    Foreground="{DynamicResource Brush.TextSecondary}"/>
                     </StackPanel>
                     <Button.ContextMenu>
@@ -346,6 +395,8 @@
                     <Separator/>
                     <MenuItem Header="View" Style="{StaticResource MenuCaptionItem}" AutomationProperties.AutomationId="Results.Actions.Caption.View"/>
                     <MenuItem x:Name="ActResetWidths" Header="Reset column widths" Click="ActResetWidths_Click" AutomationProperties.AutomationId="Results.Actions.ResetColumnWidths"><MenuItem.Icon><TextBlock Text="&#xE72C;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon></MenuItem>
+                    <MenuItem x:Name="ActGroupBar" Header="Show group bar" IsCheckable="True" Click="ActGroupBar_Click" AutomationProperties.AutomationId="Results.Actions.GroupBar"
+                              ToolTip="Shows the bar you drag column headers onto to group (it shows by itself while a grouping is active)"/>
                     <MenuItem x:Name="ActHideHints" Header="Hide hints (this session)" IsCheckable="True" Click="ActHideHints_Click" AutomationProperties.AutomationId="Results.Actions.HideHints"
                               ToolTip="Hides reliability banners and column markers on Analyze until you close the app"/>
                     <Separator/>
@@ -353,12 +404,13 @@
                 </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
+                
                 <ToggleButton x:Name="FocusButton" AutomationProperties.AutomationId="Results.FocusMode" AutomationProperties.Name="Focus mode"
                               Click="FocusButton_Click" MinHeight="30" MinWidth="34" Padding="6,0" ToolTip="Focus mode (F11)">
                     <TextBlock x:Name="FocusGlyph" Style="{StaticResource Icon}" Text="&#xE740;" FontSize="13"/>
                 </ToggleButton>
                 </StackPanel>
-                <Grid>
+                <Grid x:Name="SearchHost" MinWidth="220" VerticalAlignment="Center">
                     <TextBox AutomationProperties.AutomationId="Results.Search" Text="{Binding GlobalText, UpdateSourceTrigger=PropertyChanged}"
                              Tag="Search all columns… (AND, OR, NOT, &quot;phrase&quot;)"
                              Padding="6,4,26,4" PreviewKeyDown="Search_PreviewKeyDown">
@@ -404,7 +456,7 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Text="Need column-specific conditions? Use Filter actions → Edit filter… below the grid." Style="{StaticResource Caption}"
+                                <TextBlock Text="Need column-specific conditions? Use Filter actions → Edit filter… below the table." Style="{StaticResource Caption}"
                                            TextWrapping="Wrap" MaxWidth="400" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
@@ -414,7 +466,7 @@
                             Visibility="{Binding HasSearchText, Converter={StaticResource BoolToVis}}"
                             AutomationProperties.AutomationId="Results.Search.Clear" AutomationProperties.Name="Clear search"/>
                 </Grid>
-            </DockPanel>
+            </Grid>
         </Border>
 
         <!-- status -->
@@ -440,7 +492,7 @@
                 Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
                 DragEnter="PivotPanel_DragOver" DragOver="PivotPanel_DragOver" DragLeave="PivotPanel_DragLeave" Drop="PivotPanel_Drop"
                 AutomationProperties.AutomationId="Results.Pivot.Panel" AutomationProperties.Name="Group panel"
-                Visibility="{Binding HasFile, Converter={StaticResource BoolToVis}}">
+                Visibility="{Binding GroupBarVisible, Converter={StaticResource BoolToVis}}">
             <Border.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="Full Expand" Click="PivotPanelExpandAll_Click" AutomationProperties.AutomationId="Results.Pivot.Menu.ExpandAll"/>
@@ -475,13 +527,13 @@
         </Border>
 
         <Grid>
-            <DataGrid x:Name="Grid" AutomationProperties.AutomationId="Results.Grid" AllowDrop="True" DragEnter="Grid_ChipDragOver" DragOver="Grid_ChipDragOver" Drop="Grid_ChipDrop" ItemsSource="{Binding Rows}" IsReadOnly="True"
+            <DataGrid x:Name="Grid" vc:CellSearchHit.Query="{Binding GlobalText, FallbackValue='', TargetNullValue=''}" AutomationProperties.AutomationId="Results.Grid" AllowDrop="True" DragEnter="Grid_ChipDragOver" DragOver="Grid_ChipDragOver" Drop="Grid_ChipDrop" ItemsSource="{Binding Rows}" IsReadOnly="True"
                       EnableRowVirtualization="True" EnableColumnVirtualization="True"
                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                       VirtualizingPanel.ScrollUnit="Item" ScrollViewer.IsDeferredScrollingEnabled="False"
                       SelectionUnit="CellOrRowHeader" SelectionMode="Extended" RowHeight="{DynamicResource Grid.RowHeight}" FrozenColumnCount="1"
                       FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"
-                      ClipboardCopyMode="ExcludeHeader" Sorting="Grid_Sorting"
+                      ClipboardCopyMode="ExcludeHeader" HeadersVisibility="All" RowHeaderStyle="{StaticResource RowNumberHeaderStyle}" RowHeaderWidth="60" Sorting="Grid_Sorting"
                       PreviewMouseRightButtonDown="Grid_PreviewMouseRightButtonDown" ContextMenuOpening="Grid_ContextMenuOpening"
                       PreviewKeyDown="Grid_PreviewKeyDown" MouseDoubleClick="Grid_MouseDoubleClick"
                       PreviewMouseLeftButtonDown="Grid_PreviewMouseLeftButtonDown" PreviewMouseMove="Grid_PreviewMouseMove" ButtonBase.Click="GroupChevron_Click"
@@ -490,8 +542,8 @@
                     <ContextMenu AutomationProperties.AutomationId="Results.Menu"/>
                 </DataGrid.ContextMenu>
             </DataGrid>
-            <TextBlock Text="Pick a CSV from the tree." HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Foreground="{DynamicResource Brush.TextSecondary}" Visibility="{Binding HasFile, Converter={StaticResource BoolToVisInv}}"/>
+            <c:EmptyState Glyph="&#xE9F9;" Title="No file open" Message="Pick a CSV from the tree."
+                       Visibility="{Binding HasFile, Converter={StaticResource BoolToVisInv}}"/>
         </Grid>
     </DockPanel>
 </UserControl>

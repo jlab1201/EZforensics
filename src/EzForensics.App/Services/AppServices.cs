@@ -28,14 +28,16 @@ public sealed class AppServices
             PreferredFlavor = settings.PreferredBuildFlavor,
             StripTimestampPrefix = settings.StripTimestampPrefix,
             LogLevel = settings.ToolLogLevel,
+            EvtxCustomMapsDir = EzForensics.Core.EventLogs.EvtxCustomMaps.DefaultFolder,
         };
         Queue.Jobs.CollectionChanged += OnJobsChanged;
-        // Install / update processes run on a private queue: never listed on the Jobs page (only case work is).
+        // Install / update processes run on a private queue: never listed in the Jobs list on Ingest (only case work is).
         Maintenance = new MaintenanceRunner(new JobQueue(Locator, 2, TimeSpan.FromMinutes(Math.Max(1, settings.JobTimeoutMinutes)))
         {
             PreferredFlavor = settings.PreferredBuildFlavor,
             StripTimestampPrefix = false,
             LogLevel = settings.ToolLogLevel,
+            EvtxCustomMapsDir = EzForensics.Core.EventLogs.EvtxCustomMaps.DefaultFolder,
         }, Path.Combine(AppPaths.LogsDir, "maintenance"));
         IngestDefaults.UseDefaultSelection(IngestSelections.Find(settings.IngestSelections, IngestSelections.DefaultName).RuleIds);
         settings.PropertyChanged += (_, e) =>
@@ -59,7 +61,7 @@ public sealed class AppServices
     public JobQueue Queue { get; }
     /// <summary>
     /// Private runner for install / update processes (setup wizard, background resume; later the Tools page): its own JobQueue that the
-    /// Jobs page never lists. Output goes to the caller's log callback and to job logs under the given log folder.
+    /// Ingest never lists. Output goes to the caller's log callback and to job logs under the given log folder.
     /// </summary>
     public MaintenanceRunner Maintenance { get; }
     public JobOutputHub Output { get; }
@@ -87,12 +89,26 @@ public sealed class AppServices
 
     public Task<bool> ProbeNet9Async() => RuntimeProbe.HasNet9Async();
 
-    /// <summary>Raised to show a specific job (selected, log loaded) on the Jobs page.</summary>
+    /// <summary>Raised to show a specific job (selected, log loaded) on Ingest.</summary>
     public event Action<Job>? JobRequested;
+
+    /// <summary>Raised to open Ingest (its jobs list).</summary>
+    public event Action? JobsRequested;
+
+    public void ShowJobs() => JobsRequested?.Invoke();
+
+    /// <summary>Raised after Navigate to Learn when the Inbox tab should be on screen.</summary>
+    public event Action? LearnInboxRequested;
+    public void ShowLearnInbox()
+    {
+        Navigate<ViewModels.Learn.LearnViewModel>();
+        LearnInboxRequested?.Invoke();
+    }
 
     public void ShowJob(Job job) => JobRequested?.Invoke(job);
 
     public void Navigate<TViewModel>() => NavigationRequested?.Invoke(typeof(TViewModel));
+    public void Navigate(Type viewModel) => NavigationRequested?.Invoke(viewModel);
 
     /// <summary>Raised after <see cref="OpenToolsConfiguration"/> switched to the Tools page: it opens that tool's category and entry.</summary>
     public event Action<ToolsSection>? ToolsSectionRequested;
@@ -103,6 +119,10 @@ public sealed class AppServices
         Navigate<ViewModels.ToolsViewModel>();
         ToolsSectionRequested?.Invoke(section);
     }
+
+    /// <summary>Raised after an Explore tool was installed or removed on the Tools page.</summary>
+    public event Action? ExploreToolsChanged;
+    public void RaiseExploreToolsChanged() => ExploreToolsChanged?.Invoke();
 
     /// <summary>Set after the Ingest memory defaults change (Tools page): the plans pick up the new plugin set.</summary>
     public event Action? MemoryPluginsChanged;
@@ -119,6 +139,28 @@ public sealed class AppServices
         FocusModeChanged?.Invoke(on);
     }
 
+    /// <summary>Raised when a case folder becomes the open case everywhere (Analyze's tree, Review, Spectre), e.g. after Load demo case.</summary>
+    public event Action<string>? CaseOpenRequested;
+
+    /// <summary>Makes <paramref name="caseDir"/> the open case: the last case, and Analyze's case folder (so Review and Spectre follow it).</summary>
+    public void OpenCase(string caseDir)
+    {
+        LastCaseDir = caseDir;
+        CaseOpenRequested?.Invoke(caseDir);
+    }
+
+    /// <summary>
+    /// Load demo case: copies the synthetic demo shipped with the app to a new folder under the case root, builds its process tree data and
+    /// opens it as the case. Returns the new case folder.
+    /// </summary>
+    public async Task<string> LoadDemoCaseAsync()
+    {
+        var r = await EzForensics.Core.Case.DemoCase.CreateAsync(Settings.CaseRoot);
+        foreach (var w in r.Warnings) AppLog.Warn("Demo case: " + w);
+        OpenCase(r.CaseDir);
+        return r.CaseDir;
+    }
+
     /// <summary>Raised to open a CSV (case folder, file) on the Analyze page.</summary>
     public event Action<string, string>? OpenCsvRequested;
 
@@ -127,6 +169,32 @@ public sealed class AppServices
     {
         LastCaseDir = caseDir;
         OpenCsvRequested?.Invoke(caseDir, csvPath);
+    }
+
+    /// <summary>Raised to open a CSV on Analyze at one record: (case folder, file, record id from a Spectre finding).</summary>
+    public event Action<string, string, string>? OpenRecordRequested;
+
+    /// <summary>Switches to Analyze, opens <paramref name="csvPath"/> and selects the row whose record-id column equals <paramref name="recordId"/>.</summary>
+    public void OpenRecordInResults(string caseDir, string csvPath, string recordId)
+    {
+        if (OpenRecordRequested == null) { OpenInResults(caseDir, csvPath); return; }
+        LastCaseDir = caseDir;
+        OpenRecordRequested.Invoke(caseDir, csvPath, recordId);
+    }
+
+    /// <summary>Raised to show the records behind a finding on Analyze: (case folder, files with their rows, finding title).</summary>
+    public event Action<string, IReadOnlyList<Core.Spectre.EvidenceTarget>, string>? ShowEvidenceRequested;
+
+    /// <summary>
+    /// Switches to Analyze, opens the first file of <paramref name="targets"/>, flags the rows behind the finding, filters to them and selects the first;
+    /// a banner on Analyze says so and offers the other files. Without a listener (tests, no Analyze page) it just opens the first file.
+    /// </summary>
+    public void ShowEvidenceInResults(string caseDir, IReadOnlyList<Core.Spectre.EvidenceTarget> targets, string title)
+    {
+        if (targets.Count == 0) return;
+        if (ShowEvidenceRequested == null) { OpenInResults(caseDir, targets[0].Csv); return; }
+        LastCaseDir = caseDir;
+        ShowEvidenceRequested.Invoke(caseDir, targets, title);
     }
 
     public async Task RescanAsync()

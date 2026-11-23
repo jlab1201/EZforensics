@@ -33,7 +33,7 @@ public static class SupertimelineSummary
                 _ => $"The plaso super timeline of {o.Host} failed: {o.Error}".TrimEnd(),
             });
         if (outcomes.Any(o => o.State == SupertimelineState.Failed))
-            parts.Add("Click its Result to open the log on the Jobs page.");
+            parts.Add("Click its Result to open the log in the Jobs list on Ingest.");
         if (built.Count > 0) parts.Add("Open the Analyze page to review the results.");
         return (string.Join(" ", parts), outcomes.Count > 0 && built.Count == outcomes.Count);
     }

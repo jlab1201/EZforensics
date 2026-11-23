@@ -4,6 +4,7 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EzForensics.App.Services;
+using EzForensics.App.Views;
 using EzForensics.Core.Processes;
 using EzForensics.Core.Results;
 
@@ -12,7 +13,7 @@ namespace EzForensics.App.ViewModels;
 /// <summary>
 /// Processes page tree of one host (ProcessTreePane): Show exited, Navigator, and the details card. Everything is read from the process
 /// correlator's files (<see cref="ProcessActivityStore"/>: Processes.csv, Processes_Sets.csv, Processes_Activity.csv); the App never correlates itself. Missing or
-/// stale files: the correlator job is queued (Jobs page) and the tree loads when it has written them. <see cref="Dispose"/> cancels and releases the CSVs.
+/// stale files: the correlator job is queued (the Jobs list on Ingest) and the tree loads when it has written them. <see cref="Dispose"/> cancels and releases the CSVs.
 /// </summary>
 public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGraphSource, IDisposable
 {
@@ -35,7 +36,7 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
     private bool _disposed;
     private Task _navigator = Task.CompletedTask;
     /// <summary>Navigator open / closed, kept for the rest of the app session (a new tree opens like the last one was left).</summary>
-    private static bool s_navigatorOpen = true;
+    private static bool s_navigatorOpen = false;
     /// <summary>View › Show grid, kept for the rest of the app session like <see cref="s_navigatorOpen"/>.</summary>
     private static bool s_showGrid = true;
 
@@ -98,8 +99,18 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
     public bool ShowSelectHint => Selected == null;
 
     partial void OnIsNavigatorOpenChanged(bool value) => s_navigatorOpen = value;
+
+    /// <summary>Navigator search box: lists only the processes whose name, PID, user, command line or path contains it.</summary>
+    [ObservableProperty] private string _navigatorSearch = "";
+    partial void OnNavigatorSearchChanged(string value) { foreach (var s in NavigatorSections) s.ApplyFilter(value); }
+
+    [RelayCommand] private void ClearNavigatorSearch() => NavigatorSearch = "";
     partial void OnShowGridChanged(bool value) => s_showGrid = value;
-    partial void OnHasIndicatorsChanged(bool value) => OnPropertyChanged(nameof(HasNoIndicators));
+    partial void OnHasIndicatorsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HasNoIndicators));
+        FlagAllIndicatorsCommand.NotifyCanExecuteChanged();
+    }
     partial void OnSelectedGroupChanged(NavigatorGroupViewModel? value) => OnPropertyChanged(nameof(HasSelectedGroup));
     partial void OnSelectedChanged(ProcessNodeViewModel? value)
     {
@@ -126,9 +137,9 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
             return new List<NavigatorSectionViewModel>
             {
                 Sec(NavigatorSection.Indicators, "Indicators", g.Indicators, true),
-                Sec(NavigatorSection.DataGaps, "Data gaps", g.DataGaps, false),
                 Sec(NavigatorSection.Roles, "Roles", g.Roles, false),
                 Sec(NavigatorSection.Sessions, "Sessions & users", g.Sessions, false),
+                Sec(NavigatorSection.DataGaps, "Data gaps", g.DataGaps, false),
             };
         }, ct);
         if (_disposed || !ReferenceEquals(_graph, graph)) return;
@@ -136,6 +147,7 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
         NavigatorSections.Clear();
         foreach (var s in sections) NavigatorSections.Add(s);
         HasIndicators = sections[0].HasGroups;
+        if (!string.IsNullOrWhiteSpace(NavigatorSearch)) foreach (var s in sections) s.ApplyFilter(NavigatorSearch);
     }
 
     /// <summary>
@@ -150,7 +162,10 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
         bool leftFocus = false;
         if (_focus != null && revealed.Any(m => !IsDrawn(m)))
         {
+            // the traced route stays: the whole tree draws it too, and a later Parent link / ancestor selection extends it (#10)
+            var (origin, top) = (_trailOrigin, _trailTop);
             ExitFocus(center: null);
+            if (origin != null && top != null) SetTrail(origin, top);
             leftFocus = true;
         }
         var members = group == null ? null : new HashSet<ProcessNodeViewModel>(group.Nodes);
@@ -183,7 +198,7 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
 
     /// <summary>
     /// One path: when the correlator's output is up to date the tree and the card are read from it (<see cref="ProcessActivityStore"/>); when it is missing or stale the
-    /// correlator job is queued ("Correlating processes…", see Jobs), awaited, and the new files are read. Nothing is correlated here.
+    /// correlator job is queued ("Correlating processes…", see the Jobs list on Ingest), awaited, and the new files are read. Nothing is correlated here.
     /// </summary>
     public async Task LoadAsync()
     {
@@ -195,7 +210,7 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
             if (store == null)
             {
                 if (_disposed) return;
-                StatusText = "Correlating processes… (the process correlator runs on the Jobs page)";
+                StatusText = "Correlating processes… (the process correlator job is listed in the Jobs list on Ingest)";
                 var error = await _correlate(host, ct);
                 if (_disposed) return;
                 store = error == null ? await ProcessActivityStore.OpenAsync(host, ct) : null;
@@ -219,6 +234,16 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
         finally { if (!_disposed) IsLoading = false; }
     }
 
+    /// <summary>Tests: the card / count / flag source without a correlator store (call before <see cref="ShowGraphAsync"/>).</summary>
+    internal void UseDetailSource(IProcessDetailSource source)
+    {
+        _activity = source;
+        FlagAllIndicatorsCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>The running count pass of <see cref="ShowGraphAsync"/> (tests await it).</summary>
+    internal Task DataCountsTask { get; private set; } = Task.CompletedTask;
+
     /// <summary>Builds the node view models off the UI thread and shows the tree.</summary>
     internal async Task ShowGraphAsync(ProcessGraph source, CancellationToken ct)
     {
@@ -238,7 +263,7 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
                 {
                     var (n, parent, depth) = stack.Pop();
                     if (!seen.Add(n)) continue;
-                    var vm = new ProcessNodeViewModel(n, parent, Toggle, ExpandUp) { IsExpanded = depth < InitialExpandDepth };
+                    var vm = new ProcessNodeViewModel(n, parent, Toggle, ExpandUp) { IsExpanded = depth < InitialExpandDepth, OpenTab = OpenDetailTab };
                     all.Add(vm);
                     if (parent == null) top.Add(vm); else parent.AllChildren.Add(vm);
                     for (int i = n.Children.Count - 1; i >= 0; i--) stack.Push((n.Children[i], vm, depth + 1));
@@ -260,6 +285,7 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
                 : $"{graph.AllNodes.Count:N0} processes, {FlaggedCount:N0} flagged";
             RecomputeVisible();
             _ = RefreshServicesAsync();
+            DataCountsTask = RefreshDataCountsAsync();
             await _navigator;
         }
         catch (OperationCanceledException) { }
@@ -364,7 +390,28 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
         if (node != null) node.IsSelected = true;
         if (node != null) AdvanceTrail(node);
         // a ghost parent has no evidence: the pane shows a one-line note (GhostNote) instead of the card
-        Detail = node == null || node.IsGhost ? null : new ProcessDetailViewModel(node, _activity, _openRowsInGrid, RevealAndSelect);
+        var tab = _openOnTab;
+        _openOnTab = null;
+        if (Detail != null) Detail.TabChosen -= OnDetailTabChosen;
+        Detail = node == null || node.IsGhost ? null
+            : new ProcessDetailViewModel(node, _activity, _openRowsInGrid, RevealAndSelect, initialTab: tab, flagRows: FlagRowsOf, preferredTab: _chosenTab);
+        if (Detail != null) Detail.TabChosen += OnDetailTabChosen;
+    }
+
+    /// <summary>The tab the user last picked on the card's rail: the next card opens on it when it has rows (or is Overview); else the first tab with data.</summary>
+    private ProcessTab? _chosenTab;
+    /// <summary>The tab the next <see cref="SelectNode"/> opens the card on (a node's data chip), ahead of <see cref="_chosenTab"/>.</summary>
+    private ProcessTab? _openOnTab;
+
+    private void OnDetailTabChosen(ProcessTab tab) => _chosenTab = tab;
+
+    /// <summary>A node's data chip: selects the node and shows its details on <paramref name="tab"/>.</summary>
+    public void OpenDetailTab(ProcessNodeViewModel node, ProcessTab tab)
+    {
+        if (ReferenceEquals(Selected, node) && Detail != null) { Detail.ShowTab(tab); return; }
+        _openOnTab = tab;
+        SelectNode(node);
+        _openOnTab = null;
     }
 
     /// <summary>Selects a node that may be collapsed or filtered away (Parent Process link): reveals it and centres it.</summary>
@@ -520,6 +567,8 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
     {
         OnPropertyChanged(nameof(IsFocusMode));
         OnPropertyChanged(nameof(CanShowWholeTree));
+        OnPropertyChanged(nameof(ShowWholeTreeChecked));
+        OnPropertyChanged(nameof(CanToggleWholeTree));
         ShowWholeTreeCommand.NotifyCanExecuteChanged();
     }
 
@@ -529,12 +578,43 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
 
     public bool CanShowWholeTree => IsFocusMode;
 
+    /// <summary>View › Show whole tree: ticked in Tree mode. Ticking leaves the path view; unticking returns to the last path view (re-opened with its trail if it came from a PID click).</summary>
+    public bool ShowWholeTreeChecked
+    {
+        get => !IsFocusMode;
+        set
+        {
+            if (value == !IsFocusMode) return;
+            if (value) ExitFocus(center: Selected);
+            else if (_lastPathNode != null)
+            {
+                if (_lastPathWasOpenPath) OpenPath(_lastPathNode);
+                else EnterFocus(_lastPathNode, _lastPathScope);
+            }
+            OnPropertyChanged();   // reverts the checkbox when there was no path to return to
+        }
+    }
+
+    /// <summary>The Show whole tree checkbox is enabled in the path view, or in Tree mode once a path view has been opened.</summary>
+    public bool CanToggleWholeTree => IsFocusMode || _lastPathNode != null;
+
+    private ProcessNodeViewModel? _lastPathNode;
+    private FocusScope _lastPathScope;
+    private bool _lastPathWasOpenPath;
+
+    // ------------------------------------------------------------ Fit to screen (View menu checkbox)
+
+    /// <summary>View › Fit to screen: while ticked the graph is refitted after each re-layout and when the canvas resizes; any user zoom / pan unticks it (the canvas writes it back).</summary>
+    [ObservableProperty] private bool _fitToScreen;
+    partial void OnFitToScreenChanged(bool value) { if (value) Fit(); }
+
     /// <summary>A PID click: the path view (Trace up) of that process, centred and selected; the filters that would hide it are cleared first.</summary>
     public void OpenPath(ProcessNodeViewModel node)
     {
         if (!ShowExited && node.IsExited) ShowExited = true;
         EnterFocus(node, FocusScope.TraceUp);
         SetTrail(node, node);
+        _lastPathWasOpenPath = true;
         CenterRequested?.Invoke(node);
     }
 
@@ -566,7 +646,7 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
     /// <summary>The trail only grows upwards: selecting (or revealing) an ancestor of the clicked process above the current top moves the top there.</summary>
     private void AdvanceTrail(ProcessNodeViewModel node)
     {
-        if (_trailOrigin == null || _trailTop == null || _focus == null || ReferenceEquals(node, _trailTop)) return;
+        if (_trailOrigin == null || _trailTop == null || ReferenceEquals(node, _trailTop)) return;
         for (var p = _trailTop.Parent; p != null; p = p.Parent)
             if (ReferenceEquals(p, node)) { SetTrail(_trailOrigin, node); return; }
     }
@@ -575,6 +655,7 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
     public void EnterFocus(ProcessNodeViewModel node, FocusScope scope)
     {
         SetTrail(null, null);   // OpenPath starts its trail after this
+        (_lastPathNode, _lastPathScope, _lastPathWasOpenPath) = (node, scope, false);
         if (_treeExpansion == null) _treeExpansion = _all.ToDictionary(n => n, n => n.IsExpanded);
         else foreach (var (n, e) in _treeExpansion) n.IsExpanded = e;   // a new focus starts from the Tree state, not from the last focus
         var f = FocusProjection.Compute(node, n => n.Parent, n => n.AllChildren, _roots, scope);
@@ -625,7 +706,20 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
             _shownAncestors = f.Ancestors.Count - IndexOfAncestor(f, node);
             return;
         }
-        if (_focus != null && !IsDrawn(node)) ExitFocus(center: null);
+        if (_focus != null && !IsDrawn(node))
+        {
+            // a target on the trail or above its top (a Parent link) keeps the route: leaving the path view must not wipe it; SelectNode then extends it upwards
+            var (origin, top) = (_trailOrigin, _trailTop);
+            bool keep = origin != null && top != null && (_trail.Contains(node) || IsAncestorOf(node, top));
+            ExitFocus(center: null);
+            if (keep) SetTrail(origin, top);
+        }
+    }
+
+    private static bool IsAncestorOf(ProcessNodeViewModel ancestor, ProcessNodeViewModel node)
+    {
+        for (var p = node.Parent; p != null; p = p.Parent) if (ReferenceEquals(p, ancestor)) return true;
+        return false;
     }
 
     /// <summary>Path view (Trace up): how many ancestors are drawn above the node, nearest first (the parent at first; "↑ N more" adds one per click).</summary>
@@ -707,6 +801,122 @@ public sealed partial class ProcessTreeViewModel : ObservableObject, IProcessGra
         catch (Exception ex) { AppLog.Error("Could not read the svcscan services for the process tree", ex); return; }
         if (_disposed || version != _servicesVersion || !ReferenceEquals(nodes, _all)) return;
         foreach (var (n, names) in found) n.SetServices(names);
+    }
+
+    // ------------------------------------------------------------ data chips: linked rows per card tab on every node
+
+    /// <summary>
+    /// Count pass after the graph is shown: every node's rail tab counts (the correlator's Processes.csv columns, the same rows the card lists: an in-memory lookup,
+    /// no CSV is read again) become its data chips. Off the UI thread, dropped when the graph changed or the tree was disposed.
+    /// </summary>
+    private async Task RefreshDataCountsAsync()
+    {
+        var activity = _activity;
+        var store = _store;
+        var nodes = _all;
+        if (activity == null || nodes.Count == 0) return;
+        var ct = _cts.Token;
+        List<(ProcessNodeViewModel Node, IReadOnlyDictionary<ProcessTab, int> Counts)> found;
+        try
+        {
+            found = await Task.Run(() =>
+            {
+                var list = new List<(ProcessNodeViewModel, IReadOnlyDictionary<ProcessTab, int>)>(nodes.Count);
+                foreach (var n in nodes)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (n.IsGhost) continue;
+                    list.Add((n, store != null ? store.TabCounts(n.Node) : activity.Counts(n.Node)));
+                }
+                return list;
+            }, ct);
+        }
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex) { AppLog.Error("Could not count the linked rows for the process tree", ex); return; }
+        if (_disposed || !ReferenceEquals(nodes, _all)) return;
+        foreach (var (n, c) in found) n.SetDataCounts(c, ProcessDetailViewModel.RailTabs);
+    }
+
+    // ------------------------------------------------------------ Flag all (Navigator Indicators) / Flag rows (details card)
+
+    /// <summary>Above this many rows "Flag all" / "Flag rows" ask first.</summary>
+    public const int FlagConfirmRows = 1000;
+
+    /// <summary>
+    /// Applies the rows to the Analyze flags (per CSV, with the last used flag; the open grid refreshes when it shows one of them) and returns how many rows changed.
+    /// Set by the Analyze host; null = flagging is not available (the buttons are disabled).
+    /// </summary>
+    public Func<IReadOnlyList<ProcessCsvRows>, int>? FlagRowsSink
+    {
+        get => _flagRowsSink;
+        set { _flagRowsSink = value; FlagAllIndicatorsCommand.NotifyCanExecuteChanged(); }
+    }
+    private Func<IReadOnlyList<ProcessCsvRows>, int>? _flagRowsSink;
+    /// <summary>Asked before more than <see cref="FlagConfirmRows"/> rows are flagged; true = go ahead. Tests replace it; the default shows an EzDialog.</summary>
+    public Func<string, bool> ConfirmFlag { get; set; } = message =>
+        Dialogs.Confirm("Flag rows", message, "Flag", "Cancel", EzDialogSeverity.Question, defaultNo: true);
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(FlagAllIndicatorsCommand))]
+    private bool _isFlagging;
+
+    /// <summary>Processes listed under the Navigator's Indicators (the same rule checks; ghosts excluded).</summary>
+    public IReadOnlyList<ProcessNodeViewModel> IndicatorNodes => NavigatorSections.Where(s => s.Section == NavigatorSection.Indicators)
+        .SelectMany(s => s.Groups).SelectMany(g => g.Nodes).Where(n => !n.IsGhost).Distinct().ToList();
+
+    private bool CanFlagAll() => !IsFlagging && FlagRowsSink != null && _activity != null && HasIndicators;
+
+    /// <summary>Navigator "Flag all": flags every source row of every process listed under Indicators.</summary>
+    [RelayCommand(CanExecute = nameof(CanFlagAll))]
+    private Task FlagAllIndicatorsAsync() => FlagProcessesAsync(IndicatorNodes, "the processes with indicators");
+
+    /// <summary>Details card "Flag rows" of one process.</summary>
+    private Task FlagRowsOf(ProcessNodeViewModel node) => FlagProcessesAsync(new[] { node }, node.Name + " (" + node.PidText + ")");
+
+    /// <summary>Finds the processes' rows in every source CSV off the UI thread (<see cref="ProcessRowLocator.CollectRowsAsync"/>), confirms a large batch, flags them.</summary>
+    internal async Task FlagProcessesAsync(IReadOnlyList<ProcessNodeViewModel> nodes, string what)
+    {
+        var activity = _activity;
+        var sink = FlagRowsSink;
+        if (activity == null || sink == null || nodes.Count == 0 || IsFlagging) return;
+        IsFlagging = true;
+        var ct = _cts.Token;
+        try
+        {
+            StatusText = $"Finding the rows of {what}…";
+            var host = HostFolder;
+            var real = nodes.Select(n => n.Node).ToList();
+            var files = await Task.Run(async () =>
+            {
+                var lists = new List<string>();
+                try
+                {
+                    var f = ProcessGraphBuilder.FindFiles(host);
+                    lists.AddRange(f.PsList.Concat(f.PsScan).Concat(f.PsTree));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { AppLog.Warn("Flag rows: could not list the process CSVs: " + ex.Message); }
+                return await ProcessRowLocator.CollectRowsAsync(activity, real, lists, ct);
+            }, ct);
+            if (_disposed) return;
+            int total = files.Sum(f => f.Rows.Count);
+            if (total == 0) { StatusText = $"No source rows found for {what}."; return; }
+            if (total > FlagConfirmRows && !ConfirmFlag($"Flag {total:N0} rows in {files.Count:N0} file{(files.Count == 1 ? "" : "s")} for {what}?"))
+            {
+                StatusText = "Flagging cancelled.";
+                return;
+            }
+            int changed = sink(files);
+            AppLog.Info($"Process tree: flagged {total:N0} rows ({changed:N0} changed) in {files.Count} files for {nodes.Count} processes.");
+            StatusText = $"Flagged {total:N0} row{(total == 1 ? "" : "s")} in {files.Count:N0} file{(files.Count == 1 ? "" : "s")} for {what}"
+                + (changed < total ? $" ({(total - changed):N0} already had that flag)." : ".");
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            AppLog.Error("Could not flag the process rows", ex);
+            StatusText = "Could not flag the rows: " + ex.Message;
+        }
+        finally { if (!_disposed) IsFlagging = false; }
     }
 
     public void Dispose()

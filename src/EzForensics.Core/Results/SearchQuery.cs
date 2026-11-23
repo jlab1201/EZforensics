@@ -48,6 +48,24 @@ public sealed class SearchQuery
     /// <summary>Row predicate: true when the row satisfies the query.</summary>
     public Func<string[], bool> Compile() => Build(_root);
 
+    /// <summary>The words and phrases that are not under a NOT (what a result cell should highlight), distinct, case-insensitive.</summary>
+    public IReadOnlyList<string> PositiveTerms()
+    {
+        var set = new List<string>();
+        void Walk(Node n, bool neg)
+        {
+            switch (n)
+            {
+                case Term t: if (!neg && t.Text.Length > 0 && !set.Contains(t.Text, StringComparer.OrdinalIgnoreCase)) set.Add(t.Text); break;
+                case Not x: Walk(x.Inner, !neg); break;
+                case And a: foreach (var i in a.Items) Walk(i, neg); break;
+                case Or o: foreach (var i in o.Items) Walk(i, neg); break;
+            }
+        }
+        Walk(_root, false);
+        return set;
+    }
+
     /// <summary>Normalised text, e.g. <c>(psexec OR wmic) AND NOT admin</c>; terms with spaces or specials are quoted.</summary>
     public string ToDisplayString() => Render(_root);
 

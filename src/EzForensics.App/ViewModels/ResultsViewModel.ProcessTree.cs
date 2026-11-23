@@ -46,7 +46,10 @@ public sealed partial class ResultsViewModel
     {
         CloseProcessTree();
         var name = Path.GetFileName(hostFolder.TrimEnd('\\', '/'));
-        var vm = new ProcessTreeViewModel(hostFolder, string.IsNullOrEmpty(name) ? hostFolder : name, OpenProcessRowsInGrid, CloseProcessTree, CorrelateProcessesAsync);
+        var vm = new ProcessTreeViewModel(hostFolder, string.IsNullOrEmpty(name) ? hostFolder : name, OpenProcessRowsInGrid, CloseProcessTree, CorrelateProcessesAsync)
+        {
+            FlagRowsSink = FlagProcessRows,
+        };
         ProcessTree = vm;
         vm.LoadTask = vm.LoadAsync();
         await vm.LoadTask;
@@ -100,19 +103,23 @@ public sealed partial class ResultsViewModel
             var host = current ? PidLinkHost : PidLinkHostOf(csvPath);
             if (host == null || pid <= 0) return;
             DateTime? time = null, create = null;
+            int? childPid = null;
             if (current && _index is { } idx && row >= 0 && row < idx.RowCount)
             {
                 try
                 {
                     var cells = idx.ReadRow(row);
                     time = PidLinks.RowTime(idx.Headers, cells);
+                    childPid = PidLinks.RowChildPid(idx.Headers, cells, pid);
                     if (ProcessPidResolver.IsMemoryCsv(csvPath) || ProcessPidResolver.IsProcessListCsv(csvPath)) create = PidLinks.RowCreateTime(idx.Headers, cells);
                 }
                 catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException) { AppLog.Warn("PID link: could not read the row: " + ex.Message); }
             }
             AppLog.Info($"Analyze: PID {pid} of {Path.GetFileName(csvPath)} row {row + 1} opened in the process tree of {host}.");
             var tree = await OpenProcessTreeAsync(host);
-            tree?.SelectPid(pid, time, csvPath, create);
+            ProcessNode? child = null;
+            if (tree != null && childPid is { } cp && cp != pid) child = tree.FindNode(cp, time, csvPath, create);
+            tree?.SelectPid(pid, time, csvPath, create, child);
         }
         catch (Exception ex) { ShowError("Could not open the PID in the process tree", ex); }
     }
@@ -126,7 +133,7 @@ public sealed partial class ResultsViewModel
         var job = EnqueueProcessCorrelation(hostFolder, force: true);
         if (job == null) { StatusText = "Could not rebuild the process correlation: the EZ Forensics executable path is unknown."; return; }
         var name = Path.GetFileName(hostFolder.TrimEnd('\\', '/'));
-        StatusText = $"Rebuilding the process correlation of {name} (see Jobs)…";
+        StatusText = $"Rebuilding the process correlation of {name} (see the Jobs list on Ingest)…";
         AppLog.Info($"Analyze: process correlation of {hostFolder} queued.");
         job.PropertyChanged += (_, e) =>
         {
@@ -134,7 +141,7 @@ public sealed partial class ResultsViewModel
             AppServices.OnUi(() =>
             {
                 StatusText = job.State == JobState.Succeeded ? $"Process correlation of {name} rebuilt."
-                    : $"The process correlation of {name} did not finish ({job.StatusReason ?? job.State.ToString()}); see Jobs.";
+                    : $"The process correlation of {name} did not finish ({job.StatusReason ?? job.State.ToString()}); see the Jobs list on Ingest.";
                 if (job.State == JobState.Succeeded)
                 {
                     ProcessCorrelationRebuilt?.Invoke(hostFolder);
@@ -155,7 +162,7 @@ public sealed partial class ResultsViewModel
 
     /// <summary>
     /// Processes page, output missing or stale: runs the correlator job for the host (an unfinished one of the same host is awaited instead of queueing another) and
-    /// completes when it has finished. Null = it succeeded; else why not. Cancelling only stops the wait: the job keeps running on the Jobs page.
+    /// completes when it has finished. Null = it succeeded; else why not. Cancelling only stops the wait: the job keeps running in the Jobs list on Ingest.
     /// </summary>
     public async Task<string?> CorrelateProcessesAsync(string hostFolder, CancellationToken ct)
     {
@@ -170,6 +177,38 @@ public sealed partial class ResultsViewModel
         }
         await job.Recorded.WaitAsync(ct);
         return job.State == JobState.Succeeded ? null : job.StatusReason ?? job.State.ToString();
+    }
+
+    /// <summary>
+    /// Process tree "Flag all" / "Flag rows": gives the rows the last used flag in each CSV. The open grid's CSV goes through its own flag store (so the grid redraws and
+    /// its next save keeps them); any other CSV opens its sidecar, flags and saves it now. Returns how many rows changed.
+    /// </summary>
+    internal int FlagProcessRows(IReadOnlyList<ProcessCsvRows> files)
+    {
+        var id = EffectiveLastFlagId();
+        int changed = 0;
+        foreach (var f in files)
+        {
+            if (f.Rows.Count == 0) continue;
+            if (_flags != null && CurrentFile != null && SamePath(f.CsvPath, CurrentFile))
+            {
+                _flags.DefaultFlagId = id;
+                changed += _flags.SetFlag(f.Rows, id);
+                AfterFlagEdit(f.Rows.ToList());
+                continue;
+            }
+            try
+            {
+                using var store = RowFlagStore.Open(f.CsvPath);
+                changed += store.SetFlag(f.Rows, id);
+                store.Flush();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                AppLog.Error("Could not flag the process rows of " + f.CsvPath, ex);
+            }
+        }
+        return changed;
     }
 
     /// <summary>
@@ -197,6 +236,6 @@ public sealed partial class ResultsViewModel
                 if (filter is FilterCondition { Op: ColumnFilterMode.Equals } fc && CellFor(fc.Column) is { } cell) cell.Set(ColumnFilterMode.Equals, fc.Value);
                 else Extra.Children.Add(filter.Clone());
             });
-        }, "Could not open the rows in the grid");
+        }, "Could not open the rows in the table");
     }
 }

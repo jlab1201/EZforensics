@@ -5,6 +5,7 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EzForensics.App.Services;
+using EzForensics.Core.Assistant;
 using EzForensics.Core.Plaso;
 using EzForensics.Core.Settings;
 using EzForensics.Core.Setup;
@@ -45,7 +46,7 @@ public sealed partial class SetupItemViewModel : ObservableObject
     public SetupItem Item { get; }
     public SetupBundleViewModel Bundle { get; }
     public string Id => Item.Id;
-    public string Title => Item.Title;
+    public string Title => _owner.TitleFor(Item);
     public string Description => Item.Description;
     /// <summary>Not selectable: built in, coming soon, or already on this computer (.NET 9 installed system-wide).</summary>
     public bool IsEnabled => Item.Selectable && !_owner.IsAlreadyOnMachine(Item);
@@ -66,6 +67,7 @@ public sealed partial class SetupItemViewModel : ObservableObject
 
     public void RaiseInfo()
     {
+        OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(SizeText));
         OnPropertyChanged(nameof(Note));
         OnPropertyChanged(nameof(HasNote));
@@ -143,6 +145,7 @@ public sealed partial class SetupBundleViewModel : ObservableObject
     {
         if (_updating) return;
         OnPropertyChanged(nameof(IsChecked));
+        OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(SizeText));
         OnPropertyChanged(nameof(ChildSummary));
     }
@@ -159,6 +162,8 @@ public sealed partial class SetupWizardViewModel : ObservableObject
     private readonly AppServices _s;
     private readonly SetupCatalog _catalog = SetupCatalog.Default;
     private readonly SetupSelection? _resume;
+    /// <summary>Tests (README screenshots): a fake machine probe. Given, the system check never starts a process or touches the network.</summary>
+    private readonly EzForensics.Core.Runtimes.IRuntimeProbe? _probe;
     private bool _applyingProfile;
     private CancellationTokenSource? _cts;
     private SetupRunner? _runner;
@@ -175,9 +180,10 @@ public sealed partial class SetupWizardViewModel : ObservableObject
 
     /// <param name="firstSetup">The wizard of the first start (or its resume after the restart): Cancel removes what it installed.</param>
     /// <param name="priorInstalled">First setup resumed after the restart: what it installed before the restart.</param>
-    public SetupWizardViewModel(AppServices s, SetupSelection? resume = null, bool firstSetup = false, IEnumerable<RevertTarget>? priorInstalled = null)
+    public SetupWizardViewModel(AppServices s, SetupSelection? resume = null, bool firstSetup = false, IEnumerable<RevertTarget>? priorInstalled = null, EzForensics.Core.Runtimes.IRuntimeProbe? probe = null)
     {
         _s = s;
+        _probe = probe;
         _order = new SetupStepOrder(Steps);
         _resume = resume;
         FirstSetup = firstSetup;
@@ -427,8 +433,8 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         var watch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            using var http = _s.CreateHttpClient();
-            var r = await SystemCheck.RunAsync(http, _s.Settings, null);
+            using var http = _probe == null ? _s.CreateHttpClient() : null;
+            var r = await SystemCheck.RunAsync(http, _s.Settings, null, _probe);
             Machine = r;
             Checks.Clear();
             foreach (var row in BuildRows(r)) Checks.Add(row);
@@ -483,11 +489,20 @@ public sealed partial class SetupWizardViewModel : ObservableObject
             WslStatus.NotAvailable => "This Windows has no WSL, so Network (Zeek, RITA) cannot be installed.",
             _ => null,
         });
-        yield return new CheckRow("Net9", ".NET 9 runtime", r.HasSystemNet9 ? "Installed" : r.HasPrivateNet9 ? "Private copy" : "Not installed (setup adds a private copy)",
+        yield return new CheckRow("Net9", ".NET 9 and 10 runtimes", r.HasSystemNet9 ? "Installed" : r.HasPrivateNet9 ? "Private copy" : "Not installed (setup adds a private copy)",
             r.HasNet9 ? CheckLevel.Ok : CheckLevel.Info,
             r.HasNet9 ? "The net9 builds of the EZ tools can run."
-                : "Setup installs a private .NET 9 runtime into EZ Forensics' data folder (no admin, nothing else changes) for " +
+                : "Setup installs private .NET 9 and 10 runtimes into EZ Forensics' data folder (no admin, nothing else changes) for " +
                   "the net9 tool builds. Without it, the net4 builds are used (they need only the .NET Framework in Windows).");
+        var ai = LocalAiAdvisor.Recommend(r);
+        yield return new CheckRow("Ai", "AI assistant", ai.Choice switch
+        {
+            LocalAiChoice.Local => $"Local AI: {ai.Model}",
+            LocalAiChoice.LocalSlow => "Cloud AI recommended",
+            _ => "Cloud AI recommended",
+        }, ai.RecommendLocal ? CheckLevel.Ok : CheckLevel.Info,
+            $"{ai.Reason} ({r.TotalRamBytes / 1073741824.0:0} GB RAM)" +
+            (r.Ollama.Running ? $" Ollama is running ({r.Ollama.Models.Count} model(s))." : r.Ollama.Installed ? " Ollama is installed but not running." : ""));
         yield return new CheckRow("Python", "Python for plaso", r.Python ?? "None (a private copy is downloaded)", r.Python != null ? CheckLevel.Ok : CheckLevel.Warning,
             r.Python != null ? null : $"No Python 3.10-3.13 was found: a private Python {PrivatePython.Default.Version} (python.org's official package, SHA-512 checked) is downloaded for plaso and Volatility. No admin, no PATH changes.");
         yield return new CheckRow("Internet", "Internet", r.InternetReachable switch
@@ -496,7 +511,7 @@ public sealed partial class SetupWizardViewModel : ObservableObject
             false => "Not reachable",
             _ => "Unknown",
         }, r.InternetReachable == false ? CheckLevel.Warning : CheckLevel.Ok,
-            r.InternetReachable == false ? $"{r.InternetError}. Check the proxy in Settings." : "download.ericzimmermanstools.com answered.");
+            r.InternetReachable == false ? $"{r.InternetError}. Check the proxy in Options." : "download.ericzimmermanstools.com answered.");
         var have = new List<string>();
         if (r.EzToolsInstalled) have.Add($"{r.InstalledZips.Count} EZ tools");
         if (r.PlasoVersion != null) have.Add("plaso " + r.PlasoVersion);
@@ -570,12 +585,28 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         return $"≈{SetupPlan.FormatMB(dl)}";
     }
 
+    /// <summary>"Local AI (Ollama + qwen3:8b, ~5 GB download)" once the PC is measured.</summary>
+    internal string TitleFor(SetupItem i)
+    {
+        if (i.Id != SetupIds.LocalAi || Machine == null) return i.Title;
+        var (model, gb) = LocalAiAdvisor.ModelToInstall(LocalAiAdvisor.Recommend(Machine));
+        return $"Local AI (Ollama + {model}, ~{gb + (Machine.Ollama.Installed ? 0 : 1.3):0.#} GB download)";
+    }
+
     private (int Download, int Disk) Size(SetupItem i) => i.Id switch
     {
+        SetupIds.LocalAi when Machine != null => LocalAiSize(Machine),
         SetupIds.Plaso => PlasoSetup.Estimate(needsPython: Machine?.Python == null),
         SetupIds.Zeek => (ZeekSetup.WslDownloadMB, ZeekSetup.WslDiskMB),
         _ => (i.DownloadMB, i.DiskMB),
     };
+
+    private static (int, int) LocalAiSize(SystemCheckResult r)
+    {
+        var (_, gb) = LocalAiAdvisor.ModelToInstall(LocalAiAdvisor.Recommend(r));
+        int dl = (int)(gb * 1024) + (r.Ollama.Installed ? 0 : 1300);
+        return (dl, dl * 2);
+    }
 
     internal string? NoteFor(SetupItem i)
     {
@@ -583,6 +614,8 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         if (r == null) return null;
         return i.Id switch
         {
+            SetupIds.LocalAi when !LocalAiAdvisor.Recommend(r).RecommendLocal => "Your PC is better suited to a cloud AI: set it up later in Options → AI",
+            SetupIds.LocalAi when r.Ollama.Running => "Ollama is already running",
             SetupIds.Dotnet9 when r.HasNet9 => "Already installed",
             SetupIds.Plaso when r.PlasoVersion != null => "Already installed",
             SetupIds.Zeek when r.ZeekSummary != null => "Already available",
@@ -603,7 +636,8 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         var (dl, disk) = Size(i);
         var extra = r == null ? null : i.Id switch
         {
-            SetupIds.Dotnet9 when r.HasNet9 => r.HasSystemNet9 ? ".NET 9 is already installed on this computer: not needed." : "EZ Forensics' private copy is already installed.",
+            SetupIds.LocalAi => LocalAiAdvisor.Recommend(r).Reason,
+            SetupIds.Dotnet9 when r.HasNet9 => r.HasSystemNet9 ? ".NET 9 and 10 are already installed on this computer: not needed." : "EZ Forensics' private copy is already installed.",
             SetupIds.Plaso when r.PlasoVersion != null => $"plaso {r.PlasoVersion} is already installed.",
             SetupIds.Plaso when r.Python == null => $"No Python found: a private Python {PrivatePython.Default.Version} is downloaded first.",
             SetupIds.Zeek when r.ZeekSummary != null => "Zeek is already available on this computer.",

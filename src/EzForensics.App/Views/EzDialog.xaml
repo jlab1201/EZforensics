@@ -4,7 +4,7 @@
         Title="EZ Forensics" Icon="pack://application:,,,/Assets/EzForensics.png" Width="460" SizeToContent="Height" MaxHeight="640" ResizeMode="NoResize"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
-        FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}" TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}"
+        Foreground="{DynamicResource Brush.Text}" FontFamily="{DynamicResource Font.UI}" FontSize="{DynamicResource FontSize.Body}" TextOptions.TextFormattingMode="{DynamicResource Ui.TextFormatting}"
         AutomationProperties.AutomationId="EzDialog">
     <Border x:Name="Frame" Background="{DynamicResource Brush.Window}" BorderBrush="{DynamicResource Brush.Info}" BorderThickness="1.5"
             CornerRadius="8" Margin="8">
@@ -22,6 +22,8 @@
             </Border>
             <StackPanel Margin="16,12,16,4">
                 <TextBlock x:Name="MessageText" TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text}" AutomationProperties.AutomationId="EzDialog.Message"/>
+                <TextBox x:Name="InputBox" Margin="0,10,0,0" Visibility="Collapsed" TextWrapping="Wrap" AcceptsReturn="False" MaxLength="500"
+                         AutomationProperties.AutomationId="EzDialog.Input" AutomationProperties.Name="Reply"/>
                 <Expander x:Name="DetailsExpander" Header="Details" Margin="0,10,0,0" Visibility="Collapsed" AutomationProperties.AutomationId="EzDialog.Details">
                     <TextBox x:Name="DetailsBox" IsReadOnly="True" TextWrapping="Wrap" Style="{StaticResource MonoBox}" MaxHeight="220" Margin="0,6,0,0"
                              VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="EzDialog.DetailsText"/>

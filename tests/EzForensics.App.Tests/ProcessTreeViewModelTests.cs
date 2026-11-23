@@ -177,6 +177,37 @@ public sealed class ProcessTreeViewModelTests
     }
 
     [Fact]
+    public async Task Show_whole_tree_checkbox_toggles_between_tree_and_the_last_path()
+    {
+        var vm = await LoadAsync();
+        vm.ShowWholeTreeChecked.Should().BeTrue();
+        vm.CanToggleWholeTree.Should().BeFalse();   // no path view opened yet
+        vm.ShowWholeTreeChecked = false;
+        vm.IsFocusMode.Should().BeFalse();
+        vm.OpenPath(Node(vm, 11));
+        vm.ShowWholeTreeChecked.Should().BeFalse();
+        vm.CanToggleWholeTree.Should().BeTrue();
+        vm.ShowWholeTreeChecked = true;
+        vm.IsFocusMode.Should().BeFalse();
+        vm.CanToggleWholeTree.Should().BeTrue();
+        vm.ShowWholeTreeChecked = false;   // back to the last path
+        vm.IsFocusMode.Should().BeTrue();
+        vm.TrailNodes.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task Fit_to_screen_fits_when_ticked()
+    {
+        var vm = await LoadAsync();
+        int fits = 0;
+        vm.FitRequested += () => fits++;
+        vm.FitToScreen = true;
+        fits.Should().Be(1);
+        vm.FitToScreen = false;
+        fits.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Open_path_opens_the_path_view_of_the_selection()
     {
         var vm = await LoadAsync();
@@ -369,6 +400,36 @@ public sealed class ProcessTreeViewModelTests
     }
 
     [Fact]
+    public void Navigator_search_lists_matching_processes_opens_their_groups_and_clearing_restores()
+    {
+        ProcessNodeViewModel P(int pid, string name, string cmd = "", ProcessMarkers m = ProcessMarkers.None) =>
+            new(new ProcessNode { Pid = pid, Name = name, CmdLine = cmd, Markers = m }, null, _ => { });
+        NavigatorGroupViewModel Group(string key, params ProcessNodeViewModel[] nodes) =>
+            new(new NavigatorGroup(NavigatorSection.Roles, key, key, nodes.Select(n => new NavigatorMember(n.Node, "")).ToList(), 0), nodes, nodes.Select(_ => "").ToList(), _ => { }, _ => { });
+        var shells = Group("Shells", P(10, "cmd.exe", "cmd /c whoami", ProcessMarkers.SuspiciousParent), P(11, "powershell.exe"));
+        var svc = Group("Services", P(20, "svchost.exe"));
+        var roles = new NavigatorSectionViewModel(NavigatorSection.Roles, "Roles", new[] { shells, svc }, expanded: false);
+
+        roles.ApplyFilter("WHOAMI");   // command line, any case
+        roles.IsExpanded.Should().BeTrue();
+        roles.Children.Should().Equal(shells);
+        shells.IsExpanded.Should().BeTrue();
+        shells.Children.Cast<NavigatorMemberViewModel>().Select(m => m.Node.Node.Pid).Should().Equal(10);
+        shells.CountText.Should().Be("1 of 2");
+        shells.Members[0].IsFlagged.Should().BeTrue();
+
+        roles.ApplyFilter("20");   // PID
+        roles.Children.Should().Equal(svc);
+        roles.ApplyFilter("nothing-like-this");
+        roles.Children.Should().ContainSingle().Which.DisplayName.Should().Be("No match");
+
+        roles.ApplyFilter("");
+        roles.IsExpanded.Should().BeFalse();
+        roles.Children.Should().Equal(shells, svc);
+        shells.Children.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void Long_or_multiline_field_values_offer_more_and_toggle()
     {
         new ProcessDetailField("Command line", "cmd /c dir", id: "CmdLine").IsLong.Should().BeFalse();
@@ -402,5 +463,54 @@ public sealed class ProcessTreeViewModelTests
         vm.TrailNodes.Select(n => n.Pid).Should().Equal(11);
         vm.ShowWholeTreeCommand.Execute(null);
         vm.TrailNodes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Parent_link_keeps_and_extends_the_trail_when_the_path_view_is_left()
+    {
+        var vm = await LoadAsync();
+        vm.OpenPath(Node(vm, 20));
+        vm.RevealAndSelect(Node(vm, 21));   // a sibling drawn through the parent's pill: the trail stays on 20
+        vm.TrailNodes.Select(n => n.Pid).Should().Equal(20);
+        vm.ShowWholeTreeChecked = true;      // Tree mode again (clears the trail by design) ...
+        vm.OpenPath(Node(vm, 20));
+        // ... and a Navigator click on the trail's own ancestor that Focus does not draw must keep the route and extend it
+        vm.RevealAndSelect(Node(vm, 1));
+        vm.TrailNodes.Select(n => n.Pid).Should().Equal(20, 11, 1);
+        vm.OpenPath(Node(vm, 20));
+        vm.RevealAndSelect(Node(vm, 10));    // an unrelated process Focus does not draw: the trail is dropped as before
+        vm.TrailNodes.Should().BeEmpty();
+
+        // the reported flow through the real Navigator: a group shows the whole tree, a PID click traces one process, the card's Parent link keeps the trail
+        await WaitForNavigatorAsync(vm);
+        var group = vm.NavigatorSections.Single(s => s.Section == NavigatorSection.Sessions).Groups.First();
+        vm.OpenPath(Node(vm, 20));
+        vm.SelectGroup(group);               // members the path does not draw: back to the whole tree
+        vm.IsFocusMode.Should().BeFalse();
+        vm.SelectPid(20, null, null, null);  // the PID click: path view + trail
+        vm.TrailNodes.Select(n => n.Pid).Should().Equal(20);
+        vm.Detail!.SelectParentCommand.Execute(null);
+        vm.Selected!.Pid.Should().Be(11);
+        vm.TrailNodes.Select(n => n.Pid).Should().Equal(20, 11);
+        vm.Detail!.SelectParentCommand.Execute(null);
+        vm.Selected!.Pid.Should().Be(1);
+        vm.TrailNodes.Select(n => n.Pid).Should().Equal(20, 11, 1);
+
+        // the group clicked while the trail is shown (the path draws only part of it): the whole tree comes back with the trail kept, and Parent still extends it
+        vm.OpenPath(Node(vm, 20));
+        vm.SelectGroup(null);
+        vm.SelectGroup(group);
+        vm.IsFocusMode.Should().BeFalse();
+        vm.TrailNodes.Select(n => n.Pid).Should().Equal(20);
+        vm.RevealAndSelect(Node(vm, 20));    // a click on the traced process in the whole tree
+        vm.TrailNodes.Select(n => n.Pid).Should().Equal(20);
+        vm.Detail!.SelectParentCommand.Execute(null);
+        vm.TrailNodes.Select(n => n.Pid).Should().Equal(20, 11);
+    }
+
+    private static async Task WaitForNavigatorAsync(ProcessTreeViewModel vm)
+    {
+        for (int i = 0; i < 200 && vm.NavigatorSections.Count == 0; i++) await Task.Delay(10);
+        vm.NavigatorSections.Should().NotBeEmpty();
     }
 }

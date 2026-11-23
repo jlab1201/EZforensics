@@ -52,12 +52,33 @@ if (-not $SkipTests) {
     Invoke-Checked "dotnet" @("test", (Join-Path $repo "tests\EzForensics.Core.Tests"), "-c", $Configuration, "--nologo")
 }
 
+Step "Embedding model for the knowledge engine (copied into models next to the exe)"
+& (Join-Path $PSScriptRoot "get-embedding-model.ps1")
+if (-not (Test-Path (Join-Path $repo "models\bge-small-en-v1.5\model_quantized.onnx"))) { throw "The embedding model is missing after get-embedding-model.ps1." }
+
 Step "Publish (self-contained win-x64) to $publish"
 if (Test-Path $publish) { Remove-Item -Recurse -Force $publish }
 Invoke-Checked "dotnet" @("publish", $app, "-c", $Configuration, "-r", "win-x64", "--self-contained", "true",
     "-p:Version=$Version", "-p:FileVersion=$Version.0", "-p:InformationalVersion=$Version",
     "-p:PublishReadyToRun=false", "-o", $publish, "--nologo")
 if (-not (Test-Path (Join-Path $publish "EzForensics.exe"))) { throw "Publish did not produce EzForensics.exe." }
+
+Step "Spectre engine wheel (bundled into spectre next to the exe)"
+$spectreSrc = Join-Path (Split-Path -Parent $repo) "Spectre"
+$python = Get-Command python -ErrorAction SilentlyContinue
+if (-not (Test-Path (Join-Path $spectreSrc "pyproject.toml"))) {
+    Write-Warning "Spectre folder not found at ${spectreSrc}: the installer will not bundle the Spectre engine."
+} elseif (-not $python) {
+    Write-Warning "python is not on PATH: the installer will not bundle the Spectre engine."
+} else {
+    $wheelDir = Join-Path $publish "spectre"
+    New-Item -ItemType Directory -Force $wheelDir | Out-Null
+    # pip writes progress to stderr; under ErrorActionPreference=Stop Windows PowerShell would treat that as a failure
+    $prevPref = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    & python -m pip wheel --no-deps -w $wheelDir $spectreSrc 2>&1 | ForEach-Object { "$_" } | Out-Host
+    $ErrorActionPreference = $prevPref
+    if ($LASTEXITCODE -ne 0) { Write-Warning "pip wheel failed: the installer will not bundle the Spectre engine."; Remove-Item -Recurse -Force $wheelDir -ErrorAction SilentlyContinue }
+}
 
 Step "Velopack (vpk)"
 $vpk = Get-Command vpk -ErrorAction SilentlyContinue

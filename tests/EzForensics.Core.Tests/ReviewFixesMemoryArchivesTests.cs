@@ -200,7 +200,7 @@ public sealed class ReviewFixesMemoryArchivesTests : IDisposable
         ps.State.Should().Be(JobState.Failed);
         f.Gate.Failed.Should().BeTrue();
 
-        // Jobs page "Retry" of the plugin alone (same spec, same gate): runs instead of failing on the old check.
+        // Ingest job list "Retry" of the plugin alone (same spec, same gate): runs instead of failing on the old check.
         var retry = q.Enqueue(ps.Spec, f.Case);
         await q.WhenAllAsync();
         retry.State.Should().Be(JobState.Succeeded, retry.StatusReason);

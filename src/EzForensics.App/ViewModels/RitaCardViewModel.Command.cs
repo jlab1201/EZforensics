@@ -25,7 +25,7 @@ public sealed partial class RitaCardViewModel
             SourcePlaceholder = "No folder selected",
             SourceHelp = "A folder with Zeek logs (conn, dns, http, ssl), e.g. the output of a Zeek run; every sub-folder is one capture.",
             AllowFolder = true,
-            OutputHelp = "The case folder: the Rita_*.csv files go to its Network folder. Auto uses a new folder under the case root for every run.",
+            OutputHelp = "The case folder: the Rita_*.csv files go to its Network folder. Auto uses a new folder under the case folder for every run.",
             Caption = "RITA runs as one pipeline script in the EZ Forensics Linux environment (WSL); its key lines:",
         };
         tile.SetRows(new[]
@@ -72,7 +72,7 @@ public sealed partial class RitaCardViewModel
             S.Queue.Enqueue(spec, caseDir);
             S.LastCaseDir = caseDir;
             tile.RollAutoOutputDir();
-            _onMessage($"Queued RITA on {captures.Count} capture(s). Follow it on the Jobs page; the Rita_*.csv files go to {RitaJobs.OutputDirFor(caseDir, null)}.", InfoSeverity.Info);
+            _onMessage($"Queued RITA on {captures.Count} capture(s). Follow it in the Jobs list on Ingest; the Rita_*.csv files go to {RitaJobs.OutputDirFor(caseDir, null)}.", InfoSeverity.Info);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or InvalidOperationException)
         {

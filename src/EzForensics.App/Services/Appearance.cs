@@ -100,6 +100,10 @@ public static class Appearance
         res["FontSize.Body"] = UiFonts.ClampSize(uiSize, UiFonts.DefaultUiSize);
         res["Font.Mono"] = new FontFamily(UiFonts.Family(monoFamily, UiFonts.DefaultMonoFamily));
         res["FontSize.Mono"] = UiFonts.ClampSize(monoSize, UiFonts.DefaultMonoSize);
+        var body = UiFonts.ClampSize(uiSize, UiFonts.DefaultUiSize);
+        res["FontSize.Caption"] = Math.Max(8.0, body - 1.5); // 11.5 at the default 13
+        res["FontSize.Small"] = Math.Max(8.0, body - 2.0);   // 11 at the default 13
+        res["FontSize.Label"] = Math.Max(8.0, body - 1.0);   // 12 at the default 13
         res["Grid.RowHeight"] = UiFonts.GridRowHeight(monoSize);
     }
 

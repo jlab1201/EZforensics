@@ -193,6 +193,10 @@ public static class SetupRevert
                 case SetupStepKind.InstallVolatilitySymbols:
                     if (!before.SymbolPackInstalled) NewEntries(paths.VolatilitySymbols, what, Array.Empty<string>());
                     break;
+                case SetupStepKind.InstallExploreTool:
+                    Add(RevertKind.Path, new Explore.ExploreToolLocator().ToolDir(Enum.Parse<Explore.ExploreTool>(
+                        s.ItemId switch { SetupIds.ExploreDie => "Die", SetupIds.ExploreExifTool => "ExifTool", _ => "CyberChef" })), what);
+                    break;
                 case SetupStepKind.InstallEzDistro:
                     if (!before.EzDistroExisted) Add(RevertKind.WslDistro, paths.DistroInstallDir, what);
                     break;

@@ -34,6 +34,8 @@ public sealed class CsvIndex : IDisposable
     public string Path { get; }
     public IReadOnlyList<string> Headers { get; }
     public long FileLength { get; }
+    /// <summary>True for a Plaso l2tcsv file (<c>date,time,timezone,MACB,...</c>): its slash dates are MM/dd/yyyy by spec, so they may be read month-first.</summary>
+    public bool MonthFirstSlashDates { get; }
     /// <summary>Number of data rows (excluding the header) indexed so far; grows until <see cref="IndexingCompleted"/> finishes.</summary>
     public long RowCount => Volatile.Read(ref _count);
     public long BytesIndexed => Volatile.Read(ref _bytesIndexed);
@@ -45,6 +47,7 @@ public sealed class CsvIndex : IDisposable
     {
         Path = path;
         Headers = headers;
+        MonthFirstSlashDates = Timeline.SlashDates.IsL2tcsvHeader(headers);
         _readStream = readStream;
         _handle = readStream.SafeFileHandle;
         FileLength = length;

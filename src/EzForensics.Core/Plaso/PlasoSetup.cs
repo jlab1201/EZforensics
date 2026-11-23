@@ -2,7 +2,7 @@ using EzForensics.Core.Execution;
 
 namespace EzForensics.Core.Plaso;
 
-/// <summary>One install/update step, run as a JobQueue job (logged, on the Jobs page, in the run manifest).</summary>
+/// <summary>One install/update step, run as a JobQueue job (logged, in the Jobs list on Ingest, in the run manifest).</summary>
 public sealed record PlasoSetupStep(string ToolId, string Exe, IReadOnlyList<string> Args, string Label, TimeSpan Timeout, string? ExeVersion = null)
 {
     public JobSpec ToJobSpec(string outputDir) =>
@@ -27,10 +27,18 @@ public static class PlasoSetup
     public static PlasoSetupStep CreateVenvStep(PlasoLocator loc, PythonInfo python) =>
         new(ToolIdVenv, python.Exe, loc.InstallCommands().CreateVenv, "Create plaso venv", TimeSpan.FromMinutes(15), python.Version.ToString());
 
-    public static PlasoSetupStep PipStep(PlasoLocator loc, bool update)
+    /// <summary>
+    /// The plaso release a new install gets (an exact pin, not whatever PyPI serves that day): the version the command builder and sizes
+    /// were checked against. Raise it after testing a newer release.
+    /// </summary>
+    public const string PinnedVersion = "20260720";
+
+    /// <param name="version">Update only: the exact release to update to (e.g. the PyPI latest the user clicked); null = <see cref="PinnedVersion"/>.</param>
+    public static PlasoSetupStep PipStep(PlasoLocator loc, bool update, string? version = null)
     {
-        var (py, args) = loc.UpdateCommand();
-        return new(ToolIdPip, py, args, update ? "pip install --upgrade plaso (update)" : "pip install plaso", TimeSpan.FromMinutes(90));
+        var (py, args) = loc.UpdateCommand(update ? version : null);
+        var target = args[^1];
+        return new(ToolIdPip, py, args, update ? $"pip install --upgrade {target} (update)" : $"pip install {target}", TimeSpan.FromMinutes(90));
     }
 
     public static PlasoSetupStep DockerPullStep(string docker) =>

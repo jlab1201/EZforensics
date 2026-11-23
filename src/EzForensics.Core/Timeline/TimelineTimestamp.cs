@@ -13,7 +13,6 @@ public static class TimelineTimestamp
     {
         "yyyy-MM-dd HH:mm:ss.FFFFFFF", "yyyy-MM-ddTHH:mm:ss.FFFFFFF", "yyyy-MM-ddTHH:mm:ss.FFFFFFFZ",
         "yyyy-MM-dd HH:mm:ss.FFFFFFFZ", "yyyy-MM-dd HH:mm", "yyyy-MM-dd", "yyyy/MM/dd HH:mm:ss.FFFFFFF",
-        "MM/dd/yyyy HH:mm:ss.FFFFFFF", "M/d/yyyy h:mm:ss tt", "M/d/yyyy H:mm:ss",
     };
 
     public static string Format(DateTime utc) => utc.ToString(OutputFormat, CultureInfo.InvariantCulture);
@@ -21,8 +20,9 @@ public static class TimelineTimestamp
     /// <summary>
     /// Parses an EZ timestamp. Fast path for <c>yyyy-MM-dd HH:mm:ss[.fffffff]</c>; when <paramref name="strict"/>
     /// is false a few other invariant formats are accepted too. 1601-01-01 / 0001-01-01 are "null" dates.
+    /// An ambiguous slash date (<c>01/02/2020</c>) is Invalid unless <paramref name="monthFirstSlash"/> (a Plaso l2tcsv file: MM/dd/yyyy by spec).
     /// </summary>
-    public static TimestampParseResult TryParse(string? s, out DateTime utc, bool strict = false)
+    public static TimestampParseResult TryParse(string? s, out DateTime utc, bool strict = false, bool monthFirstSlash = false)
     {
         utc = default;
         if (s == null) return TimestampParseResult.Empty;
@@ -33,9 +33,10 @@ public static class TimelineTimestamp
         {
             if (strict) return TimestampParseResult.Invalid;
             if (!(span.Length >= 8 && char.IsAsciiDigit(span[0])) ||
-                !(DateTime.TryParseExact(span, ExactFormats, CultureInfo.InvariantCulture,
+                !SlashDates.TryNormalize(span, monthFirstSlash, out var text) ||
+                !(DateTime.TryParseExact(text ?? span.ToString(), ExactFormats, CultureInfo.InvariantCulture,
                       DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out utc) ||
-                  DateTime.TryParse(span, CultureInfo.InvariantCulture,
+                  DateTime.TryParse(text ?? span.ToString(), CultureInfo.InvariantCulture,
                       DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out utc)))
                 return TimestampParseResult.Invalid;
             utc = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
@@ -83,5 +84,47 @@ public static class TimelineTimestamp
             v = v * 10 + (c - '0');
         }
         return true;
+    }
+}
+
+/// <summary>
+/// Slash dates (<c>aa/bb/yyyy</c>) are never guessed: when either part could be the month or the day the text stays unparsed,
+/// unless month-first is allowed (Plaso l2tcsv). A part above 12 settles it (<c>13/02/2020</c> is day-first).
+/// </summary>
+public static class SlashDates
+{
+    /// <summary>The first row of a Plaso l2tcsv file: <c>date,time,timezone,MACB,...</c>, whose date column is MM/dd/yyyy by spec.</summary>
+    public static bool IsL2tcsvHeader(IReadOnlyList<string> headers) =>
+        headers.Count >= 4 && Is(headers[0], "date") && Is(headers[1], "time") && Is(headers[2], "timezone") && Is(headers[3], "MACB");
+
+    private static bool Is(string h, string name) => string.Equals(h?.Trim(), name, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// False when <paramref name="s"/> is an ambiguous or impossible slash date. Otherwise <paramref name="text"/> is the text to parse with the
+    /// invariant (month-first) culture: null when unchanged, or the day-first date rewritten month-first.
+    /// </summary>
+    public static bool TryNormalize(ReadOnlySpan<char> s, bool monthFirst, out string? text)
+    {
+        text = null;
+        int i = 0;
+        if (!Num(s, ref i, out int a) || i >= s.Length || !IsSep(s[i])) return true; // not aa/bb/yyyy
+        char sep = s[i++];
+        if (!Num(s, ref i, out int b) || i >= s.Length || s[i] != sep) return true;
+        int rest = i + 1;
+        if (rest >= s.Length || !char.IsAsciiDigit(s[rest])) return true;
+        if (a > 12 && b > 12) return false;
+        if (a > 12) { text = string.Concat(b.ToString(CultureInfo.InvariantCulture), sep.ToString(), a.ToString(CultureInfo.InvariantCulture), s.Slice(i).ToString()); return true; }
+        if (b > 12 || a == b) return true;
+        return monthFirst;
+    }
+
+    private static bool IsSep(char c) => c is '/' or '-' or '.';
+
+    private static bool Num(ReadOnlySpan<char> s, ref int i, out int v)
+    {
+        v = 0;
+        int start = i;
+        while (i < s.Length && i - start < 3 && char.IsAsciiDigit(s[i])) { v = v * 10 + (s[i] - '0'); i++; }
+        return i > start && i - start <= 2;
     }
 }

@@ -4,7 +4,8 @@ obj/
 .vs/
 *.user
 TestResults/
-samples/
+samples/*
+!samples/demo-case/
 *.suo
 publish/
 
@@ -21,3 +22,12 @@ PROGRESS.md
 # Local agent configuration
 CLAUDE.md
 .claude/
+
+# Embedding model (build/get-embedding-model.ps1)
+models/
+
+# vendored Brain libraries ship their dist folders
+!src/EzForensics.App/Assets/brain/vendor/**/dist/
+
+# Local-only design notes (not part of the public export)
+docs/superpowers/

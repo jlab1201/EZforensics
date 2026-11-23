@@ -31,6 +31,9 @@ public sealed class RowItem : INotifyPropertyChanged
     /// <summary>1-based file row number (for display).</summary>
     public long RowNumber => Source + 1;
 
+    /// <summary>1-based position in the current view (sort/filter order) shown in the row gutter; not part of the data.</summary>
+    public long ViewRowNumber => Position + 1;
+
     /// <summary>Flag state (looked up in the owner's flag set; keyed on <see cref="Source"/>).</summary>
     public bool IsFlagged => _owner.IsFlagged?.Invoke(Source) == true;
 
@@ -51,10 +54,27 @@ public sealed class RowItem : INotifyPropertyChanged
         ? $"{ResultsViewModel.FlagLabel(id)}\nClick to cycle flags. Right-click: choose a flag. Ctrl+1..9 flag the selected rows, Ctrl+0 clears, Space toggles."
         : "Click to flag. Right-click: choose a flag. Ctrl+1..9 flag the selected rows, Ctrl+0 clears, Space toggles.";
 
+    /// <summary>Titles of the key events this row belongs to (null when none): the gutter marker and its tooltip.</summary>
+    public string? KeyEventText => _owner.KeyEventOf?.Invoke(Source);
+
+    public bool InKeyEvent => KeyEventText != null;
+
+    /// <summary>Titles of the Spectre findings this row is evidence for (null when none): the Spectre gutter glyph and its tooltip.</summary>
+    public string? SpectreText => _owner.SpectreOf?.Invoke(Source);
+    public bool IsSpectreFlagged => SpectreText != null;
+
+    /// <summary>The owner's own mark on the row (the Findings evidence panel's labels); null when none or no lookup is set.</summary>
+    public object? Mark => _owner.MarkOf?.Invoke(Source);
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public void RaiseFlagChanged()
     {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Mark)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(KeyEventText)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(InKeyEvent)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SpectreText)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSpectreFlagged)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsFlagged)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FlagId)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FlagBrush)));
@@ -87,9 +107,16 @@ public sealed class GroupRowItem
     public PivotNode Node { get; }
     public int Position { get; }
     public int Depth { get; }
+    /// <summary>Group header lines have no file row number (the row header stays empty).</summary>
+    public string? RowNumber => null;
+    public string? ViewRowNumber => null;
     internal int Version { get; }
     public bool IsGroupHeader => true;
     public bool IsFlagged => false;
+    public bool InKeyEvent => false;
+    public string? KeyEventText => null;
+    public bool IsSpectreFlagged => false;
+    public string? SpectreText => null;
     public string Column => Node.Column;
     /// <summary>Group value for display ("(blank)" for empty cells).</summary>
     public string ValueText => Node.Value.Length == 0 ? "(blank)" : Node.Value.Replace('\r', ' ').Replace('\n', ' ');
@@ -130,12 +157,20 @@ public sealed class VirtualRowList : IList, INotifyCollectionChanged, INotifyPro
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public CsvIndex Index => _idx;
+    /// <summary>Rows in the CSV file (the largest <see cref="RowItem.RowNumber"/>).</summary>
+    public long SourceRowCount => _idx.RowCount;
     /// <summary>Flag lookup by file row index (a HashSet lookup; no re-indexing).</summary>
     public Func<long, bool>? IsFlagged { get; set; }
     /// <summary>Collapsed-group lookup by <see cref="PivotNode.Key"/> (grouped mode).</summary>
     public Func<string, bool>? IsCollapsedKey { get; set; }
     /// <summary>Flag id lookup by file row index.</summary>
     public Func<long, string?>? FlagIdOf { get; set; }
+    /// <summary>Other marks by file row index (<see cref="RowItem.Mark"/>); refreshed with <see cref="NotifyFlagsChanged"/>.</summary>
+    public Func<long, object?>? MarkOf { get; set; }
+
+    /// <summary>Titles of the key events holding a file row (null when none); refreshed with <see cref="NotifyFlagsChanged"/>.</summary>
+    public Func<long, string?>? KeyEventOf { get; set; }
+    public Func<long, string?>? SpectreOf { get; set; }
 
     /// <summary>Refreshes the flag glyph of realised rows (all of them when <paramref name="sources"/> is null).</summary>
     public void NotifyFlagsChanged(IReadOnlyCollection<long>? sources = null)

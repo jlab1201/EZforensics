@@ -18,6 +18,9 @@
     <SolidColorBrush x:Key="Brush.ControlPressed" Color="#CBCBCB"/>
     <SolidColorBrush x:Key="Brush.Input" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="Brush.Selection" Color="#CFE0FF"/>
+    <SolidColorBrush x:Key="Brush.SearchHit" Color="#FFE066"/>
+    <SolidColorBrush x:Key="Brush.SearchHitText" Color="#1A1A1A"/>
+    <SolidColorBrush x:Key="Brush.SearchHitCell" Color="#FFE066" Opacity="0.28"/>
     <SolidColorBrush x:Key="Brush.RowAlt" Color="#F5F5F5"/>
     <SolidColorBrush x:Key="Brush.Code" Color="#F4F4F4"/>
     <SolidColorBrush x:Key="Brush.ScrollThumb" Color="#ADADAD"/>
@@ -30,6 +33,15 @@
     <SolidColorBrush x:Key="Brush.SuccessBg" Color="#E3F6EE"/>
     <SolidColorBrush x:Key="Brush.InfoBg" Color="#E6EEFD"/>
     <SolidColorBrush x:Key="Brush.Neutral" Color="#6B7280"/>
+    <SolidColorBrush x:Key="Brush.NeutralText" Color="#4B5563"/>
+    <SolidColorBrush x:Key="Mark.Spectre" Color="#0B7A6F"/>
+    <SolidColorBrush x:Key="Mark.Added" Color="#7E3FC8"/>
+    <!-- severity text, rings and dots (one set for every list, editor, card and the overview) -->
+    <SolidColorBrush x:Key="Brush.Severity.Critical" Color="#991B1B"/>
+    <SolidColorBrush x:Key="Brush.Severity.High" Color="#DC2626"/>
+    <SolidColorBrush x:Key="Brush.Severity.Medium" Color="#B45309"/>
+    <SolidColorBrush x:Key="Brush.Severity.Low" Color="#2563EB"/>
+    <SolidColorBrush x:Key="Brush.Severity.Info" Color="#6B7280"/>
     <!-- process tree: Hidden marker -->
     <SolidColorBrush x:Key="Brush.Orange" Color="#EA580C"/>
     <!-- process tree: diamond fill per role (roles.json; ProcessNodeViewModel.RoleKey), also the Navigator Roles swatches -->

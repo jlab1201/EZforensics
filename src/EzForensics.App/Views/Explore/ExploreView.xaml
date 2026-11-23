@@ -1,0 +1,165 @@
+<UserControl x:Class="EzForensics.App.Views.Explore.ExploreView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:EzForensics.App.Controls"
+             xmlns:svc="clr-namespace:EzForensics.App.Services"
+             xmlns:ex="clr-namespace:EzForensics.App.Views.Explore">
+    <UserControl.InputBindings>
+        <KeyBinding Key="F" Modifiers="Ctrl+Shift" Command="{Binding OpenAdvancedSearchCommand}"/>
+        <KeyBinding Key="Left" Modifiers="Alt" Command="{Binding BackCommand}"/>
+        <KeyBinding Key="Right" Modifiers="Alt" Command="{Binding ForwardCommand}"/>
+        <KeyBinding Key="Up" Modifiers="Alt" Command="{Binding UpCommand}"/>
+    </UserControl.InputBindings>
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top">
+            <c:PageHeader Title="{x:Static svc:PageNames.Explore}"/>
+            <ContentControl Content="{Binding Banner}" ContentTemplate="{StaticResource InfoBarTemplate}"
+                            Visibility="{Binding Banner, Converter={StaticResource BoolToVis}}" Margin="0,6,0,0"/>
+        </StackPanel>
+
+        <!-- nothing to explore yet -->
+        <Border Style="{DynamicResource Card}" Margin="0,8,0,0" Padding="24" Visibility="{Binding HasCase, Converter={StaticResource BoolToVisInv}}"
+                AutomationProperties.AutomationId="Explore.NoCase">
+            <TextBlock Text="No case folder yet. Run Ingest first, then come back to look at the files in the case." Style="{DynamicResource Caption}" TextWrapping="Wrap"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+
+        <DockPanel Margin="0,8,0,0" Visibility="{Binding HasCase, Converter={StaticResource BoolToVis}}">
+            <Grid x:Name="Body">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="TreeColumn" Width="230" MinWidth="140"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition x:Name="MainColumn" Width="*" MinWidth="320"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- sources: one card like Analyze's case pane, Browse and Refresh on its top row (Alt+Left/Right/Up and Backspace navigate) -->
+                <Border Style="{DynamicResource Card}" Padding="8">
+                    <DockPanel>
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Button DockPanel.Dock="Right" Content="&#xE72C;" FontFamily="{DynamicResource Font.Icon}" Command="{Binding RefreshCommand}" Margin="4,0,0,0" ToolTip="Refresh"
+                                    AutomationProperties.AutomationId="Explore.Refresh" AutomationProperties.Name="Refresh"/>
+                            <Button DockPanel.Dock="Right" Content="&#xE8DA;" FontFamily="{DynamicResource Font.Icon}" Click="Browse_Click" Margin="4,0,0,0" ToolTip="Add a folder or a file to browse"
+                                    AutomationProperties.AutomationId="Explore.Browse" AutomationProperties.Name="Browse"/>
+                            <TextBlock Text="Sources" Style="{DynamicResource Caption}" VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TreeView x:Name="SourceTree" ItemsSource="{Binding RootNodes}" BorderThickness="0" Background="Transparent"
+                                  AutomationProperties.AutomationId="Explore.Sources" AutomationProperties.Name="Sources">
+                            <TreeView.ItemContainerStyle>
+                                <Style TargetType="TreeViewItem" BasedOn="{StaticResource GuideTreeItem}">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
+                                    <Setter Property="AutomationProperties.HelpText" Value="{Binding FullPath}"/>
+                                    <EventSetter Event="Selected" Handler="TreeItem_Selected"/>
+                                </Style>
+                            </TreeView.ItemContainerStyle>
+                            <TreeView.ItemTemplate>
+                                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                    <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip="{Binding FullPath}">
+                                        <StackPanel.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Remove from list" Click="RemoveSource_Click" IsEnabled="{Binding CanRemove}"
+                                                          ToolTip="Takes it out of the Sources list. The folder or file on disk is not touched."/>
+                                            </ContextMenu>
+                                        </StackPanel.ContextMenu>
+                                        <TextBlock Text="{Binding Glyph}" Style="{DynamicResource Icon}" Margin="0,0,6,0" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </HierarchicalDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                    </DockPanel>
+                </Border>
+                <GridSplitter Grid.Column="1" Width="8" Background="Transparent" HorizontalAlignment="Center" ResizeBehavior="PreviousAndNext"
+                              AutomationProperties.AutomationId="Explore.Splitter.Tree" AutomationProperties.Name="Resize the sources pane"/>
+
+                <!-- list + viewer -->
+                <DockPanel Grid.Column="2">
+                    <!-- search bar card like Analyze's: name filter | Advanced search -->
+                    <Border DockPanel.Dock="Top" Style="{DynamicResource Card}" Padding="10" Margin="0,0,0,8">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Advanced search" Command="{Binding OpenAdvancedSearchCommand}" Margin="8,0,0,0"
+                                    ToolTip="Search files and folders by name and content in its own window (Ctrl+Shift+F)" AutomationProperties.AutomationId="Explore.Search.Open" AutomationProperties.Name="Advanced search"/>
+                            <TextBox Tag="Filter by name" Text="{Binding NameFilter, UpdateSourceTrigger=PropertyChanged}" PreviewKeyDown="Filter_PreviewKeyDown" MinWidth="120"
+                                     ToolTip="Searches this folder and its subfolders by name. Use * and ? as wildcards and ; between alternatives (*.exe;*.dll). Esc clears it."
+                                     AutomationProperties.AutomationId="Explore.Filter" AutomationProperties.Name="Filter by name"/>
+                        </DockPanel>
+                    </Border>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" MinHeight="120"/>
+                        <RowDefinition Height="8"/>
+                        <RowDefinition Height="1.3*" MinHeight="160"/>
+                    </Grid.RowDefinitions>
+                    <Border Style="{DynamicResource Card}" Padding="6">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Bottom" Margin="2,6,0,0" Style="{DynamicResource Caption}" Text="{Binding ListStatus}" AutomationProperties.AutomationId="Explore.ListStatus"/>
+                            <TextBlock DockPanel.Dock="Top" Margin="2,0,0,6" Foreground="{DynamicResource Brush.Error}" TextWrapping="Wrap" Text="{Binding ListError}"
+                                       Visibility="{Binding ListError, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Explore.ListError"/>
+                            <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="3" Margin="0,0,0,4" Visibility="{Binding IsLoadingFolder, Converter={StaticResource BoolToVis}}"/>
+                            <DataGrid x:Name="FileGrid" ItemsSource="{Binding RowsView}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended"
+                                      HeadersVisibility="Column" CanUserAddRows="False" CanUserResizeColumns="True" GridLinesVisibility="None"
+                                      EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                      SelectedItem="{Binding SelectedRow, Mode=TwoWay}" LoadingRow="FileGrid_LoadingRow" SelectionChanged="FileGrid_SelectionChanged"
+                                      MouseDoubleClick="FileGrid_MouseDoubleClick" PreviewKeyDown="FileGrid_PreviewKeyDown" PreviewMouseRightButtonDown="FileGrid_PreviewMouseRightButtonDown"
+                                      ScrollViewer.ScrollChanged="FileGrid_ScrollChanged"
+                                      AutomationProperties.AutomationId="Explore.FileGrid" AutomationProperties.Name="Files">
+                                <DataGrid.ContextMenu>
+                                    <ContextMenu AutomationProperties.AutomationId="Explore.FileMenu">
+                                        <MenuItem Header="Export..." Command="{Binding ExportCommand}" AutomationProperties.AutomationId="Explore.Menu.Export"/>
+                                        <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" AutomationProperties.AutomationId="Explore.Menu.CopyPath"/>
+                                        <MenuItem Header="Copy SHA-256" Command="{Binding CopySha256Command}" AutomationProperties.AutomationId="Explore.Menu.CopySha256"/>
+                                        <MenuItem Header="Send to CyberChef" Command="{Binding SendFileToCyberChefCommand}" AutomationProperties.AutomationId="Explore.Menu.SendToCyberChef"/>
+                                        <Separator/>
+                                        <MenuItem Header="Show in Explorer" Command="{Binding ShowInExplorerCommand}" ToolTip="Selects the file in Explorer. It is never opened or run."
+                                                  AutomationProperties.AutomationId="Explore.Menu.ShowInExplorer"/>
+                                    </ContextMenu>
+                                </DataGrid.ContextMenu>
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="Name" Width="240" SortMemberPath="Name">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Glyph}" Style="{DynamicResource Icon}" Margin="2,0,6,0" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FullPath}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn x:Name="PathColumn" Header="Path" Binding="{Binding ParentPath}" Width="220" Visibility="Collapsed"/>
+                                    <DataGridTextColumn Header="Size" Binding="{Binding SizeText}" SortMemberPath="SizeBytes" Width="80">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextAlignment" Value="Right"/><Setter Property="Padding" Value="0,0,6,0"/></Style></DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedText}" SortMemberPath="ModifiedUtc" Width="170"/>
+                                    <DataGridTextColumn Header="Type" Binding="{Binding TypeText}" Width="150"/>
+                                    <DataGridTextColumn Header="Ext&#x2260;" Binding="{Binding ExtFlag}" Width="52"/>
+                                    <DataGridTextColumn Header="Entropy" Binding="{Binding EntropyText}" SortMemberPath="Entropy" Width="64"/>
+                                    <DataGridTextColumn Header="Signed" Binding="{Binding SignedText}" Width="110"/>
+                                    <DataGridTextColumn Header="SHA-256" Binding="{Binding Sha256}" Width="*" MinWidth="120"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </Border>
+                    <GridSplitter Grid.Row="1" Height="8" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeBehavior="PreviousAndNext"
+                                  AutomationProperties.AutomationId="Explore.Splitter.Viewer" AutomationProperties.Name="Resize the viewer"/>
+
+                    <!-- viewer tabs; the PE tab only exists for PE files, Preview only for images and text -->
+                    <Border Grid.Row="2" Style="{DynamicResource Card}" Padding="10,8,10,10">
+                        <Grid>
+                            <TabControl Style="{DynamicResource FlatTabs}" SelectedIndex="{Binding SelectedTab, Mode=TwoWay}" AutomationProperties.AutomationId="Explore.Tabs"
+                                        Visibility="{Binding HasFile, Converter={StaticResource BoolToVis}}">
+                                <TabItem Header="Overview" AutomationProperties.AutomationId="Explore.Tab.Overview"><ex:OverviewTab/></TabItem>
+                                <TabItem Header="Preview" Visibility="{Binding HasPreview, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Explore.Tab.Preview"><ex:PreviewTab/></TabItem>
+                                <TabItem Header="Hex" AutomationProperties.AutomationId="Explore.Tab.Hex"><ex:HexTab/></TabItem>
+                                <TabItem Header="Strings" AutomationProperties.AutomationId="Explore.Tab.Strings"><ex:StringsTab/></TabItem>
+                                <TabItem Header="Metadata" AutomationProperties.AutomationId="Explore.Tab.Metadata"><ex:MetadataTab/></TabItem>
+                                <TabItem Header="PE" Visibility="{Binding IsPeTab, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Explore.Tab.Pe"><ex:PeTab/></TabItem>
+                            </TabControl>
+                            <c:EmptyState Glyph="&#xE8A5;" Title="No file selected" Message="Select a file to see its details."
+                                       Visibility="{Binding HasFile, Converter={StaticResource BoolToVisInv}}" AutomationProperties.AutomationId="Explore.NoFile"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+                </DockPanel>
+            </Grid>
+        </DockPanel>
+    </DockPanel>
+</UserControl>

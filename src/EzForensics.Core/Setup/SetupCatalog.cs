@@ -1,4 +1,5 @@
 using EzForensics.Core.Catalog;
+using EzForensics.Core.Explore;
 using EzForensics.Core.Memory;
 using EzForensics.Core.Plaso;
 using EzForensics.Core.Runtimes;
@@ -11,14 +12,15 @@ namespace EzForensics.Core.Setup;
 public static class SetupIds
 {
     /// <summary>Bundles.</summary>
-    public const string BundleArtifacts = "artifacts", BundleTimeline = "timeline", BundleNetwork = "network", BundleMemory = "memory";
+    public const string BundleArtifacts = "artifacts", BundleTimeline = "timeline", BundleNetwork = "network", BundleMemory = "memory", BundleExplore = "explore", BundleAi = "ai";
 
     // Retired: "ez-timeline-explorer", "ez-gui-viewers" (the GUI viewers are no longer installed by setup; a saved selection that still
     // names them is fine: the planner drops unknown ids).
     public const string EzCli = "ez-cli", EzSync = "ez-sync",
         PersistenceBuiltIn = "persistence-builtin", ComputerDetails = "computer-details", Dotnet9 = "dotnet9",
         Plaso = "plaso", EzDistro = "ez-wsl-distro", Zeek = "zeek", Rita = "rita", Volatility = "volatility3",
-        VolatilitySymbols = "volatility3-symbols";
+        VolatilitySymbols = "volatility3-symbols",
+        ExploreDie = "explore-die", ExploreExifTool = "explore-exiftool", ExploreCyberChef = "explore-cyberchef", LocalAi = "local-ai";
 
     /// <summary>Licence the user must accept in the UI before the item is installed (never accepted automatically).</summary>
 }
@@ -105,7 +107,7 @@ public sealed class SetupCatalog
     };
 
     /// <summary>Approximate download size of the .NET 9 Desktop Runtime zip (x64) and its size on disk.</summary>
-    public const int Dotnet9DownloadMB = 60, Dotnet9DiskMB = 170;
+    public const int Dotnet9DownloadMB = 120, Dotnet9DiskMB = 340;
     /// <summary>EvtxECmd / RECmd / SQLECmd --sync (maps and batch files from GitHub).</summary>
     public const int SyncDownloadMB = 8, SyncDiskMB = 20;
 
@@ -147,8 +149,8 @@ public sealed class SetupCatalog
                     new SetupItem
                     {
                         // Default on: Minimal selects it when the machine has no .NET 9 (with .NET 9 it is "already installed").
-                        Id = SetupIds.Dotnet9, Title = "Microsoft .NET 9 Desktop Runtime (private copy)", DefaultOn = true,
-                        Description = "Only needed for the net9 EZ builds (SQLECmd and WxTCmd exist only as net9 builds). Installed per user into EZ Forensics' data folder with Microsoft's official dotnet-install script: no admin rights, nothing else on the system changes. Without it, the net4 builds are used (they need only the .NET Framework that ships with Windows).",
+                        Id = SetupIds.Dotnet9, Title = "Microsoft .NET 9 and 10 Desktop Runtimes (private copy)", DefaultOn = true,
+                        Description = "Only needed for the net9 EZ builds, which need .NET 9 and 10 (SQLECmd and WxTCmd exist only as net9 builds). Installed per user into EZ Forensics' data folder with Microsoft's official dotnet-install script: no admin rights, nothing else on the system changes. Without it, the net4 builds are used (they need only the .NET Framework that ships with Windows).",
                         DownloadMB = Dotnet9DownloadMB, DiskMB = Dotnet9DiskMB,
                     },
                     new SetupItem
@@ -223,6 +225,38 @@ public sealed class SetupCatalog
                     },
                 },
             },
+            new SetupBundle
+            {
+                Id = SetupIds.BundleExplore, Title = "File analysis (Explore)", DefaultOn = true,
+                Description = "Small per-user downloads for the Explore page: file type and packer detection, file metadata and CyberChef. No admin rights, nothing is run on your files.",
+                Items = new[]
+                {
+                    ExploreItem(SetupIds.ExploreDie, ExploreToolReleases.Die, "Detect It Easy (DIE)", "Identifies file types, packers and compilers (MIT)."),
+                    ExploreItem(SetupIds.ExploreExifTool, ExploreToolReleases.ExifTool, "ExifTool", "Reads metadata from almost any file type (Perl Artistic License / GPL)."),
+                    ExploreItem(SetupIds.ExploreCyberChef, ExploreToolReleases.CyberChef, "CyberChef", "Decodes and transforms data; runs offline inside EZ Forensics (Apache-2.0)."),
+                },
+            },
+            new SetupBundle
+            {
+                Id = SetupIds.BundleAi, Title = "AI assistant (Spectre)", DefaultOn = true,
+                Description = "Spectre can run on your own PC with Ollama, so nothing leaves the computer. Everything always ticks it (a slower PC gets a smaller model); Minimal ticks it only when your PC is up to it. You can also set up a cloud AI later in Options, AI.",
+                Items = new[]
+                {
+                    new SetupItem
+                    {
+                        Id = SetupIds.LocalAi, Title = "Local AI (Ollama + model)", DefaultOn = false,
+                        Description = "Installs Ollama (official per-user installer from ollama.com, no admin) and downloads a model that suits this PC, then points Spectre at it. Ollama is MIT licensed; the Qwen3 models are Apache-2.0.",
+                        DownloadMB = 3800, DiskMB = 7000,
+                    },
+                },
+            },
         }, net9Only);
     }
+
+    private static SetupItem ExploreItem(string id, ExploreToolSpec spec, string title, string what) => new()
+    {
+        Id = id, Title = title, DefaultOn = true,
+        Description = $"{what} {spec.Name} {spec.Version}, downloaded from upstream and checked against a pinned SHA-256.",
+        DownloadMB = (int)Math.Max(1, spec.Size / (1024 * 1024)), DiskMB = (int)Math.Max(1, spec.Size * 3 / (1024 * 1024)),
+    };
 }

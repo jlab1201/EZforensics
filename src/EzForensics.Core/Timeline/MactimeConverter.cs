@@ -18,13 +18,21 @@ public static class MactimeConverter
     public const int DefaultChunkRows = 2_000_000;
     private const string FileNameMarker = "($FILE_NAME)";
 
+    /// <summary>Data rows written and bodyfile lines dropped for having fewer than 11 fields.</summary>
+    public readonly record struct ConvertStats(long Rows, long ShortLines);
+
     /// <summary>One bodyfile line: its name, inode, size and the four timestamps (ticks of UTC, 0 = none). Rows start with the fixed-width timestamp, so ordinal order = time order.</summary>
     internal readonly record struct BodyLine(string Name, string Meta, string Size, long A, long M, long C, long B);
 
     /// <summary>Converts <paramref name="bodyFiles"/> into <paramref name="csvPath"/>; returns the number of data rows. A partial CSV is deleted on failure or cancel.</summary>
     /// <param name="chunkRows">Rows held in memory before a sorted chunk is spilled to a temp file (small values exercise the merge path).</param>
-    public static long Convert(IEnumerable<string> bodyFiles, string csvPath, int chunkRows = DefaultChunkRows, CancellationToken ct = default)
+    public static long Convert(IEnumerable<string> bodyFiles, string csvPath, int chunkRows = DefaultChunkRows, CancellationToken ct = default) =>
+        ConvertWithStats(bodyFiles, csvPath, chunkRows, ct).Rows;
+
+    /// <summary>Like <see cref="Convert"/>, also counting the lines dropped for having fewer than 11 fields (a truncated or foreign bodyfile).</summary>
+    public static ConvertStats ConvertWithStats(IEnumerable<string> bodyFiles, string csvPath, int chunkRows = DefaultChunkRows, CancellationToken ct = default)
     {
+        long shortLines = 0;
         if (chunkRows < 1) chunkRows = 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(csvPath))!);
         var chunks = new List<string>();
@@ -39,7 +47,7 @@ public static class MactimeConverter
                 while ((line = reader.ReadLine()) != null)
                 {
                     if ((++n & 0x3FFF) == 0) ct.ThrowIfCancellationRequested();
-                    if (!TryParseLine(line, out var b)) continue;
+                    if (!TryParseLine(line, out var b)) { if (IsShortLine(line)) shortLines++; continue; }
                     AddRows(b, buffer);
                     if (buffer.Count >= chunkRows) chunks.Add(Spill(buffer, csvPath, chunks.Count));
                 }
@@ -62,7 +70,7 @@ public static class MactimeConverter
                     rows = Merge(chunks, w, ct);
                 }
             }
-            return rows;
+            return new ConvertStats(rows, shortLines);
         }
         catch
         {
@@ -108,6 +116,8 @@ public static class MactimeConverter
         finally { foreach (var r in readers) r.Dispose(); }
     }
 
+    private static bool IsShortLine(string line) => line.Length > 0 && line[0] != '#' && line.Count(c => c == '|') < 10;
+
     /// <summary>Parses one bodyfile line (the name may hold '|': the 9 numeric / id fields are counted from the end). False for blanks, comments and short lines.</summary>
     internal static bool TryParseLine(string line, out BodyLine body)
     {
@@ -121,16 +131,20 @@ public static class MactimeConverter
         return body.A != 0 || body.M != 0 || body.C != 0 || body.B != 0;
     }
 
+    /// <summary>1601-01-01 (FILETIME zero) in epoch seconds; an unset NTFS time converts to this.</summary>
+    private const long FileTimeZeroEpochSeconds = -11644473600;
     private static readonly long UnixEpochTicks = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).Ticks;
 
-    /// <summary>Epoch seconds (optionally with a fraction) to UTC ticks; 0 for empty, zero, negative, invalid or out-of-range values.</summary>
+    /// <summary>Epoch seconds (optionally with a fraction) to UTC ticks; 0 for empty, zero, invalid or out-of-range values. Pre-1970 values are kept (valid NTFS times, a timestomp indicator); the FILETIME zero (1601-01-01) and earlier mean "no time".</summary>
     internal static long Ticks(string s)
     {
         s = s.Trim();
         if (s.Length == 0) return 0;
         int dot = s.IndexOf('.');
         var whole = dot < 0 ? s : s[..dot];
-        if (!long.TryParse(whole, NumberStyles.None, CultureInfo.InvariantCulture, out var secs) || secs <= 0) return 0;
+        if (!long.TryParse(whole, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var secs) || secs == 0) return 0;
+        bool negative = whole.StartsWith('-');
+        if (secs <= FileTimeZeroEpochSeconds) return 0;
         long frac = 0;
         if (dot >= 0 && dot + 1 < s.Length)
         {
@@ -138,7 +152,7 @@ public static class MactimeConverter
             if (!long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out frac)) frac = 0;
         }
         if (secs > (DateTime.MaxValue.Ticks - UnixEpochTicks) / TimeSpan.TicksPerSecond - 1) return 0;
-        return UnixEpochTicks + secs * TimeSpan.TicksPerSecond + frac;
+        return UnixEpochTicks + secs * TimeSpan.TicksPerSecond + (negative ? -frac : frac);
     }
 
     /// <summary>Adds one CSV row per distinct timestamp of <paramref name="b"/> (flags combined, "macb" order).</summary>

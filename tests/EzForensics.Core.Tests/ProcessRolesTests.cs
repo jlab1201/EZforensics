@@ -25,6 +25,27 @@ public sealed class ProcessRolesTests : IDisposable
         return g;
     }
 
+    [Fact]
+    public void Orphans_are_every_process_whose_parent_was_not_captured_and_the_title_counts_their_trees()
+    {
+        var orphan = Node(10, "a.exe", ppid: 77); orphan.Markers = ProcessMarkers.Orphan;
+        var reused = Node(11, "b.exe", ppid: 88); reused.Markers = ProcessMarkers.ParentPidReused;
+        var logOnly = Node(12, "c.exe", ppid: 99); logOnly.Markers = ProcessMarkers.FromLogsOnly;
+        var child = Node(13, "d.exe", ppid: 12); child.Markers = ProcessMarkers.FromLogsOnly;
+        child.Parent = logOnly; logOnly.Children.Add(child);
+        var system = Node(4, "System", ppid: 0);
+        var g = Graph(orphan, reused, logOnly, child, system);
+
+        var gaps = ProcessIndicators.DataGaps(g).Where(x => x.Kind == DataGapKind.Orphan).ToList();
+        gaps.Select(x => x.Node.Pid).Should().Equal(10, 11, 12);   // the log-only child has its parent; System is a natural root
+        gaps[1].Text.Should().Contain("PID reused");
+        gaps[2].Text.Should().Contain("before the logs begin");
+
+        var group = ProcessNavigatorGroups.Build(g).DataGaps.Single(x => x.Key == "Orphan");
+        group.Count.Should().Be(3);
+        group.Title.Should().Be("Orphans (parent not captured) · 4 processes in their trees");
+    }
+
     [Theory]
     [InlineData(@"C:\Windows\System32\svchost.exe", "Services", RoleBasis.NamePath)]
     [InlineData(@"\Device\HarddiskVolume3\Windows\System32\SVCHOST.EXE", "Services", RoleBasis.NamePath)]
@@ -207,7 +228,7 @@ public sealed class ProcessRolesTests : IDisposable
     }
 
     [Fact]
-    public void Ghost_name_comes_only_from_a_stated_parent_image_and_is_empty_when_children_disagree()
+    public void Ghost_name_comes_only_from_a_stated_parent_image_and_children_that_disagree_get_one_ghost_each()
     {
         var g = new ProcessGraph();
         var a = Node(1, "a.exe", ppid: 50); a.ParentImage = @"C:\Windows\System32\cmd.exe"; a.Markers = ProcessMarkers.Orphan;
@@ -220,9 +241,9 @@ public sealed class ProcessRolesTests : IDisposable
         var g50 = g.Ghosts.Single(x => x.Pid == 50);
         g50.Name.Should().Be("cmd.exe");
         g50.Path.Should().Be(@"C:\Windows\System32\cmd.exe");
-        var g60 = g.Ghosts.Single(x => x.Pid == 60);
-        g60.Name.Should().BeEmpty();
-        g60.Path.Should().BeEmpty();
+        // different stated parent images: two parent processes that reused PID 60, never one nameless ghost
+        g.Ghosts.Where(x => x.Pid == 60).Select(x => x.Name).Should().BeEquivalentTo("one.exe", "two.exe");
+        g.Ghosts.Where(x => x.Pid == 60).Should().OnlyContain(x => x.Children.Count == 1);
     }
 
     [Fact]
@@ -258,5 +279,65 @@ public sealed class ProcessRolesTests : IDisposable
         string Kinds(ProcessGraph g) => string.Join("|", g.AllNodes.OrderBy(n => n.Pid).Select(n => n.Pid + ":" + ProcessIndicators.KindsText(n)));
         Kinds(loaded).Should().Be(Kinds(live));
         ProcessCorrelator.ReadManifest(Host)!.Version.Should().Be(ProcessCorrelator.FormatVersion);
+    }
+
+    private static ProcessNode Child(ProcessNode parent, ProcessNode child)
+    {
+        child.Parent = parent;
+        parent.Children.Add(child);
+        return child;
+    }
+
+    [Fact]
+    public void Svchost_started_by_explorer_keeps_its_role_but_is_labelled_unexpected_parent_and_listed_under_indicators()
+    {
+        var explorer = Node(100, "explorer.exe", @"C:\Windows\explorer.exe");
+        var svc = Child(explorer, Node(200, "svchost.exe", @"C:\Windows\System32\svchost.exe", ppid: 100));
+        var g = Graph(explorer, svc);
+        g.Roots.Remove(svc);
+        ProcessIndicators.Annotate(g);   // no SuspiciousParent marker set: the role rule alone lists it
+
+        svc.Role.Should().Be("Services");
+        ProcessRoles.HasUnexpectedParent(svc).Should().BeTrue();
+        ProcessRoles.RoleLabel(svc).Should().Be("Services · unexpected parent");
+        svc.Indicators.Should().ContainSingle(i => i.Kind == IndicatorKind.SuspiciousParent)
+            .Which.Evidence.Should().Contain("svchost.exe should be started by services.exe").And.Contain("explorer.exe (PID 100)");
+        ProcessNavigatorGroups.Build(g).Indicators.Single(x => x.Key == "SuspiciousParent").Members.Select(m => m.Node).Should().Equal(svc);
+    }
+
+    [Fact]
+    public void Svchost_started_by_services_is_plain_services_and_the_marker_does_not_duplicate_the_indicator()
+    {
+        var services = Node(600, "services.exe", @"C:\Windows\System32\services.exe");
+        var svc = Child(services, Node(700, "svchost.exe", @"C:\Windows\System32\svchost.exe", ppid: 600));
+        var explorer = Node(100, "explorer.exe", @"C:\Windows\explorer.exe");
+        var bad = Child(explorer, Node(800, "svchost.exe", ppid: 100));
+        bad.Markers = ProcessMarkers.SuspiciousParent;
+        var g = Graph(services, svc, explorer, bad);
+        ProcessIndicators.Annotate(g);
+
+        ProcessRoles.HasUnexpectedParent(svc).Should().BeFalse();
+        ProcessRoles.RoleLabel(svc).Should().Be("Services");
+        svc.Indicators.Should().BeEmpty();
+        bad.Indicators.Count(i => i.Kind == IndicatorKind.SuspiciousParent).Should().Be(1);
+    }
+
+    [Fact]
+    public void No_known_parent_is_never_an_unexpected_parent()
+    {
+        var orphan = Node(900, "svchost.exe", @"C:\Windows\System32\svchost.exe", ppid: 77);
+        var ghost = new ProcessNode { Pid = 55, Name = "explorer.exe", IsGhost = true };
+        var underGhost = Child(ghost, Node(901, "svchost.exe", ppid: 55));
+        var desktop = Node(100, "explorer.exe");
+        var noRule = Child(desktop, Node(902, "notepad.exe", ppid: 100));
+        ProcessIndicators.Annotate(Graph(orphan, ghost, underGhost, desktop, noRule));
+
+        ProcessRoles.HasUnexpectedParent(orphan).Should().BeFalse();
+        ProcessRoles.HasUnexpectedParent(underGhost).Should().BeFalse();
+        ProcessRoles.HasUnexpectedParent(noRule).Should().BeFalse();
+        ProcessRoles.RoleLabel(orphan).Should().Be("Services");
+        ProcessRoles.RoleLabel(noRule).Should().Be("Other");
+        ProcessRoles.RoleLabel(ghost).Should().BeEmpty();
+        orphan.Indicators.Should().NotContain(i => i.Kind == IndicatorKind.SuspiciousParent);
     }
 }

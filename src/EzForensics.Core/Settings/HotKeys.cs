@@ -25,6 +25,7 @@ public static class HotKeys
     public const string ExportFiltered = "Analyze.ExportFiltered";
     public const string ShowInExplorer = "Analyze.ShowInExplorer";
     public const string Back = "App.Back";
+    public const string ToggleNav = "App.ToggleNav";
 
     public static IReadOnlyList<HotKeyAction> Actions { get; } = new HotKeyAction[]
     {
@@ -37,6 +38,7 @@ public static class HotKeys
         new(ExportFiltered, "Export filtered rows", "File", "Ctrl+Shift+S"),
         new(ShowInExplorer, "Show file in Explorer", "File", "Ctrl+Shift+O"),
         new(Back, "Go back", "Navigation", "Alt+Left"),
+        new(ToggleNav, "Toggle sidebar (pin / collapse)", "Navigation", "Ctrl+B"),
     };
 
     /// <summary>Keys that stay hard-coded (listed read-only in Options and the shortcuts dialog).</summary>

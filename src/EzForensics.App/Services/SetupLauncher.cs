@@ -160,16 +160,21 @@ public static class SetupLauncher
     /// <summary>
     /// UI-test hook: <c>EZFORENSICS_SETUP_SIMULATE=&lt;fake tool exe&gt;</c> runs that exe as a job instead of the real install for the
     /// step kinds in <c>EZFORENSICS_SETUP_SIMULATE_STEPS</c> (comma-separated; default: everything except the EZ tools download and
-    /// map sync). Logged loudly; never set in normal use.
+    /// map sync). Logged loudly; never set in normal use. Debug builds only: a Release build ignores the variable, so it cannot be
+    /// used to make the installed app run an arbitrary exe.
     /// </summary>
     public static string? SimulatorExe
     {
         get
         {
+#if !DEBUG
+            return null;
+#else
             var exe = AppPaths.Env("SETUP_SIMULATE");
             if (exe == null || !File.Exists(exe)) return null;
             AppLog.Warn("Setup simulation is ON (EZFORENSICS_SETUP_SIMULATE): some steps run " + exe + " instead of installing.");
             return exe;
+#endif
         }
     }
 

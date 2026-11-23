@@ -28,7 +28,7 @@
                 <Button Content="Save" Style="{StaticResource AccentButton}" Command="{Binding SaveCommand}" MinWidth="90"/>
             </StackPanel>
             <TextBlock Style="{StaticResource Caption}" VerticalAlignment="Center">
-                <Run Text="Settings file: "/><Run Text="{Binding SettingsPath, Mode=OneWay}"/>
+                <Run Text="Options file: "/><Run Text="{Binding SettingsPath, Mode=OneWay}"/>
                 <Run Text="  ·  App log: "/><Run Text="{Binding LogPath, Mode=OneWay}"/>
             </TextBlock>
         </DockPanel>
@@ -36,8 +36,9 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <Grid x:Name="CardsGrid" VerticalAlignment="Top" SizeChanged="CardsGrid_SizeChanged">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="SecondColumn" Width="*"/></Grid.ColumnDefinitions>
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <Border x:Name="CardInstall" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <!-- wide: 3 rows (Install|Display, Flags|Ingest, AI|Hot Keys); narrow: one column of 6 (code-behind) -->
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Border x:Name="CardInstall" Grid.Row="0" Grid.Column="0" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0"><TextBlock Style="{StaticResource SectionTitle}" Text="Installation"/></StackPanel>
                         <Grid DataContext="{Binding Edit}">
@@ -46,7 +47,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Style="{StaticResource RowLabel}" Text="Tools root"/>
                     <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource {x:Type TextBox}}" Margin="0,10,0,0"
                              Text="{Binding ToolsRoot, UpdateSourceTrigger=PropertyChanged}"/>
@@ -57,42 +58,49 @@
                     <TextBox Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" Width="100" HorizontalAlignment="Left"
                              Text="{Binding MaxParallel, UpdateSourceTrigger=PropertyChanged}"/>
 
-                    <TextBlock Grid.Row="2" Style="{StaticResource RowLabel}" Text="Job timeout (minutes)"/>
-                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,10,0,0" Width="100" HorizontalAlignment="Left"
+                    <TextBlock Grid.Row="3" Style="{StaticResource RowLabel}" Text="Job timeout (minutes)"/>
+                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,10,0,0" Width="100" HorizontalAlignment="Left"
                              Text="{Binding JobTimeoutMinutes, UpdateSourceTrigger=PropertyChanged}"/>
 
-                    <TextBlock Grid.Row="3" Style="{StaticResource RowLabel}" Text="Case root"/>
-                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,10,0,0" Text="{Binding CaseRoot, UpdateSourceTrigger=PropertyChanged}"/>
-                    <Button Grid.Row="3" Grid.Column="2" Content="Browse…" Margin="6,10,0,0"
+                    <TextBlock Grid.Row="4" Style="{StaticResource RowLabel}" Text="Case folder"/>
+                    <TextBox Grid.Row="4" Grid.Column="1" Margin="0,10,0,0" Text="{Binding CaseRoot, UpdateSourceTrigger=PropertyChanged}"/>
+                    <Button Grid.Row="4" Grid.Column="2" Content="Browse…" Margin="6,10,0,0"
                             Command="{Binding DataContext.BrowseCaseRootCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
 
-                    <StackPanel Grid.Row="4" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,13,16,0">
+                    <StackPanel Grid.Row="5" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,13,16,0">
                         <TextBlock Text="Output names" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         <c:HelpTip Text="Only affects jobs you run from the Tools page, e.g. TypedURLs_NTUSER.DAT.csv instead of 20261007123456_TypedURLs__NTUSER.DAT.csv (originals are kept in the case manifest). Ingest runs always use the standard case names (Host\Category\Artifact.csv)." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.OutputNames"/>
                     </StackPanel>
-                    <StackPanel Grid.Row="4" Grid.Column="1" Margin="0,12,0,0">
+                    <StackPanel Grid.Row="5" Grid.Column="1" Margin="0,12,0,0">
                         <CheckBox Content="Tools page: remove timestamp prefix from output file names" IsChecked="{Binding StripTimestampPrefix}"
                                   AutomationProperties.AutomationId="Settings.StripTimestampPrefix"
                                   AutomationProperties.Name="Tools page: remove timestamp prefix from output file names"/>
                     </StackPanel>
 
-                    <StackPanel Grid.Row="5" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,13,16,0">
+                    <StackPanel Grid.Row="6" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,13,16,0">
                         <TextBlock Text="Tool logging" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         <c:HelpTip Text="Debug adds lines starting with &quot;# Debug:&quot; to every job log: the full command line (quoted), working directory, whether EZ Forensics runs as Administrator, the tool's path, version and signature, the exit code, the duration and the last lines of its output. Use it when a tool fails and you need to see why; Normal keeps the logs short." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.ToolLogging"/>
                     </StackPanel>
-                    <ComboBox Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" Width="180" HorizontalAlignment="Left"
+                    <ComboBox Grid.Row="6" Grid.Column="1" Margin="0,10,0,0" Width="180" HorizontalAlignment="Left"
                               ItemsSource="{x:Static vm:SettingsViewModel.ToolLogLevels}" SelectedItem="{Binding ToolLogLevel}"
                               AutomationProperties.AutomationId="Settings.ToolLogLevel" AutomationProperties.Name="Tool logging"/>
 
-                    <StackPanel Grid.Row="6" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,13,16,0">
+                    <StackPanel Grid.Row="7" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,13,16,0">
                         <TextBlock Text="Updates" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         <c:HelpTip Text="Looks for a newer version on the project's GitHub releases. Only works for a copy installed with EzForensics-Setup.exe. Leave the box empty to use the default; paste another GitHub repository URL, an https feed URL or a folder to use that instead." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.Updates"/>
                     </StackPanel>
-                    <TextBox Grid.Row="6" Grid.Column="1" Margin="0,10,0,0" Text="{Binding UpdateFeedUrl, UpdateSourceTrigger=PropertyChanged}"
+                    <TextBox Grid.Row="7" Grid.Column="1" Margin="0,10,0,0" Text="{Binding UpdateFeedUrl, UpdateSourceTrigger=PropertyChanged}"
                              Tag="empty = https://github.com/jlab1201/EZforensics"
                              AutomationProperties.AutomationId="Settings.UpdateFeedUrl" AutomationProperties.Name="Update feed"/>
 
-                    <StackPanel Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                    <StackPanel Grid.Row="8" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,13,16,0">
+                        <TextBlock Text="Examiner name" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <c:HelpTip Text="Recorded with every edit and approval on the Review page. Leave empty to use your Windows user name." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.Examiner"/>
+                    </StackPanel>
+                    <TextBox Grid.Row="8" Grid.Column="1" Margin="0,10,0,0" Width="260" HorizontalAlignment="Left" Text="{Binding ExaminerName, UpdateSourceTrigger=PropertyChanged}"
+                             Tag="empty = Windows user name" AutomationProperties.AutomationId="Settings.ExaminerName" AutomationProperties.Name="Examiner name"/>
+
+                    <StackPanel Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
                         <StackPanel Orientation="Horizontal">
                             <Button Content="Check for updates" Margin="0,0,6,0"
                                     Command="{Binding DataContext.CheckAppUpdateCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -108,7 +116,7 @@
                         </Grid>
                     </StackPanel>
                 </Border>
-                <Border x:Name="CardDisplay" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Border x:Name="CardDisplay" Grid.Row="0" Grid.Column="1" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0"><TextBlock Style="{StaticResource SectionTitle}" Text="Display"/></StackPanel>
                         <Grid DataContext="{Binding Edit}">
@@ -117,7 +125,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Style="{StaticResource RowLabel}" Text="Theme"/>
                     <ComboBox Grid.Row="0" Grid.Column="1" Margin="0,10,0,0" Width="180" HorizontalAlignment="Left"
                               ItemsSource="{x:Static vm:SettingsViewModel.Themes}" SelectedItem="{Binding Theme}"/>
@@ -134,27 +142,27 @@
                                   Text="{Binding UiFontSize, UpdateSourceTrigger=PropertyChanged}"/>
                     </StackPanel>
 
-                    <TextBlock Grid.Row="2" Style="{StaticResource RowLabel}" Text="Monospace font"/>
-                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Grid.Row="3" Style="{StaticResource RowLabel}" Text="Monospace font"/>
+                    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,10,0,0">
                         <ComboBox Width="260" IsEditable="True" AutomationProperties.AutomationId="Settings.MonoFontFamily"
                                   ItemsSource="{x:Static vm:SettingsViewModel.FontFamilies}"
                                   Text="{Binding MonoFontFamily, UpdateSourceTrigger=PropertyChanged}"
-                                  ToolTip="Logs, command previews, the Analyze grid and the cell viewer"/>
+                                  ToolTip="Logs, command previews, the Analyze table and the cell viewer"/>
                         <TextBlock Text="Size" VerticalAlignment="Center" Margin="14,0,8,0"/>
                         <ComboBox Width="80" IsEditable="True" AutomationProperties.AutomationId="Settings.MonoFontSize"
                                   ItemsSource="{x:Static vm:SettingsViewModel.FontSizes}"
                                   Text="{Binding MonoFontSize, UpdateSourceTrigger=PropertyChanged}"/>
                     </StackPanel>
 
-                    <TextBlock Grid.Row="3" Style="{StaticResource RowLabel}" Text="Date format (--dt)"/>
-                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,10,0,0" Text="{Binding DateFormat, UpdateSourceTrigger=PropertyChanged}"
+                    <TextBlock Grid.Row="4" Style="{StaticResource RowLabel}" Text="Date format (--dt)"/>
+                    <TextBox Grid.Row="4" Grid.Column="1" Margin="0,10,0,0" Text="{Binding DateFormat, UpdateSourceTrigger=PropertyChanged}"
                              Tag="empty = tool default (yyyy-MM-dd HH:mm:ss)" FontFamily="{DynamicResource Font.Mono}"/>
 
-                    <StackPanel Grid.Row="4" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,13,16,0">
+                    <StackPanel Grid.Row="5" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,13,16,0">
                         <TextBlock Text="Analyze hints" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         <c:HelpTip Text="Hides reliability banners and column markers on Analyze for good. To hide them only until you close the app, use Analyze &gt; Actions &gt; Hide hints." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.AnalyzeHints"/>
                     </StackPanel>
-                    <ComboBox Grid.Row="4" Grid.Column="1" Margin="0,10,0,0" Width="180" HorizontalAlignment="Left"
+                    <ComboBox Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" Width="180" HorizontalAlignment="Left"
                               SelectedValuePath="Tag" SelectedValue="{Binding ShowAnalyzeHints}"
                               AutomationProperties.AutomationId="Settings.ShowAnalyzeHints" AutomationProperties.Name="Analyze hints">
                         <ComboBoxItem Content="Show"><ComboBoxItem.Tag><sys:Boolean>True</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
@@ -164,7 +172,7 @@
                         </Grid>
                     </StackPanel>
                 </Border>
-                <Border x:Name="CardFlags" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Border x:Name="CardFlags" Grid.Row="1" Grid.Column="0" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0"><TextBlock Style="{StaticResource SectionTitle}" Text="Analyze Flags"/><c:HelpTip Text="Flags, in the order shown in the flag menu, filter and Ctrl+1..9. Rename, recolour, reorder, add or remove them. Flags are saved by id, so renaming never breaks flags already set." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.AnalyzeFlags"/></StackPanel>
 <StackPanel Margin="0,8,0,0">
@@ -216,9 +224,9 @@
                     </StackPanel>
                     </StackPanel>
                 </Border>
-                <Border x:Name="CardIngest" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Border x:Name="CardIngest" Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                     <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0"><TextBlock Style="{StaticResource SectionTitle}" Text="Ingest Selection"/></StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0"><TextBlock Style="{StaticResource SectionTitle}" Text="Ingest selection"/></StackPanel>
                     <StackPanel Margin="0,8,0,0" x:Name="IngestSelectionsSection" DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
                         <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap"
                                    Text="Named sets of planned jobs for the Custom selection menu on the Ingest page. Pick a selection to see and change its jobs. Changes are saved immediately."/>
@@ -240,7 +248,7 @@
                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                     <Border Margin="8,0,0,0" Padding="6,1" CornerRadius="8" VerticalAlignment="Center" Background="{DynamicResource Brush.Control}"
                                                             Visibility="{Binding IsDefault, Converter={StaticResource BoolToVis}}" ToolTip="Built in: can be edited but not renamed or deleted">
-                                                        <TextBlock Text="Default" Style="{StaticResource Caption}" FontSize="11"/>
+                                                        <TextBlock Text="Default" Style="{StaticResource Caption}" FontSize="{DynamicResource FontSize.Small}"/>
                                                     </Border>
                                                 </StackPanel>
                                             </DockPanel>
@@ -305,11 +313,83 @@
                     </StackPanel>
                     </StackPanel>
                 </Border>
-                <Border x:Name="CardHotKeys" Grid.Row="2" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Border x:Name="CardAi" Grid.Row="2" Grid.Column="0" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="AI"/>
+                            <c:HelpTip Text="Model for Spectre, the investigation assistant. Local (Ollama) needs no key. Cloud keys are encrypted for your Windows account and never shown again. Provider and model apply after Save. Auto-mode lets Spectre apply its filter, flag, sort and open-file suggestions without asking; each one can be undone from the chat." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.Ai"/>
+                        </StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Style="{StaticResource RowLabel}" Text="Provider"/>
+                            <ComboBox Grid.Row="0" Grid.Column="1" Margin="0,10,0,0" Width="220" HorizontalAlignment="Left"
+                                      ItemsSource="{x:Static vm:AiSettingsViewModel.Providers}" DisplayMemberPath="Name" SelectedValuePath="Id"
+                                      SelectedValue="{Binding Edit.AiProvider}" AutomationProperties.AutomationId="Settings.Ai.Provider"/>
+
+                            <TextBlock Grid.Row="1" Style="{StaticResource RowLabel}" Text="Model"/>
+                            <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" IsEditable="True"
+                                      ItemsSource="{Binding Ai.Models}" Text="{Binding Edit.AiModel, UpdateSourceTrigger=LostFocus}"
+                                      AutomationProperties.AutomationId="Settings.Ai.Model"/>
+                            <Button Grid.Row="1" Grid.Column="2" Content="Refresh" Margin="6,10,0,0" Command="{Binding Ai.RefreshModelsCommand}"
+                                    AutomationProperties.AutomationId="Settings.Ai.Refresh"/>
+
+                            <TextBlock Grid.Row="2" Style="{StaticResource RowLabel}" Visibility="{Binding Ai.ShowBaseUrl, Converter={StaticResource BoolToVis}}" Text="Base URL"/>
+                            <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,10,0,0" Visibility="{Binding Ai.ShowBaseUrl, Converter={StaticResource BoolToVis}}">
+                                <TextBox Width="320" Text="{Binding Edit.AiBaseUrl, UpdateSourceTrigger=LostFocus}" AutomationProperties.AutomationId="Settings.Ai.BaseUrl"/>
+                                <c:HelpTip Text="Address of the server, e.g. http://localhost:1234/v1/ for LM Studio. Needed for Other (OpenAI-compatible); for Local and OpenAI leave it empty to use the default. The API key is optional for Other." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.AiBaseUrl"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="3" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,10,0,0" Visibility="{Binding Ai.NeedsKey, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Style="{StaticResource RowLabel}" Text="API key" Width="150" Margin="0"/>
+                                <PasswordBox x:Name="AiKeyBox" Width="220" AutomationProperties.AutomationId="Settings.Ai.Key"/>
+                                <Button Content="Save key" Margin="6,0,0,0" Click="AiSaveKey_Click" AutomationProperties.AutomationId="Settings.Ai.SaveKey"/>
+                                <Button Content="Clear" Margin="6,0,0,0" Command="{Binding Ai.ClearKeyCommand}" AutomationProperties.AutomationId="Settings.Ai.ClearKey"/>
+                                <TextBlock Text="{Binding Ai.KeyStatus}" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{DynamicResource Brush.TextSecondary}"
+                                           AutomationProperties.AutomationId="Settings.Ai.KeyStatus"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,10,0,0">
+                                <Button Content="Test" MinWidth="80" Command="{Binding Ai.TestCommand}" AutomationProperties.AutomationId="Settings.Ai.Test"/>
+                                <Button Content="Set up local AI…" Margin="8,0,0,0" Command="{Binding Ai.SetUpLocalAiCommand}" AutomationProperties.AutomationId="Settings.Ai.SetUpLocal" ToolTip="Installs Ollama and a model that suits this PC, then uses it for Spectre. Anything already installed is skipped."/>
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Ai.Status}" AutomationProperties.AutomationId="Settings.Ai.Status"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,10,0,0"
+                                        Visibility="{Binding Ai.CanTuneOllama, Converter={StaticResource BoolToVis}}">
+                                <Button Content="Speed up Ollama" Command="{Binding Ai.TuneOllamaCommand}" AutomationProperties.AutomationId="Settings.Ai.TuneOllama"/>
+                                <c:HelpTip Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.TuneOllama"
+                                           Text="Turns on Ollama's flash attention and a smaller memory cache (OLLAMA_FLASH_ATTENTION=1, OLLAMA_KV_CACHE_TYPE=q8_0) for your Windows user. On an 8 GB GPU this keeps Spectre's model fully on the GPU, about 2.5x faster. Restart Ollama afterwards."/>
+                            </StackPanel>
+
+                            <CheckBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0" IsChecked="{Binding Edit.AssistantAutoMode}"
+                                      Content="Auto-mode: let Spectre apply filters, flags and open files without asking"
+                                      ToolTip="Spectre applies its filter, flag, sort and open-file suggestions at once and shows an Undo button. Off = it asks first. Changes apply after Save."
+                                      AutomationProperties.AutomationId="Settings.Ai.AutoMode" AutomationProperties.Name="Auto-mode"/>
+
+                            <CheckBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,10,0,0" IsChecked="{Binding Edit.RunSpectreAfterIngest}"
+                                      Content="Run Spectre after Ingest"
+                                      ToolTip="When an Ingest run finishes (not after Stop), the Spectre analysis is queued (its progress shows on Review): it hands the case to the Spectre engine and runs the analysis, so the Review page is ready. Needs the Spectre engine (Tools). Applies after Save."
+                                      AutomationProperties.AutomationId="Settings.Ai.RunSpectreAfterIngest" AutomationProperties.Name="Run Spectre after Ingest"/>
+
+                            <StackPanel Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,10,0,0">
+                                <Button Content="Open prompt files" Command="{Binding Ai.OpenPromptFilesCommand}" AutomationProperties.AutomationId="Settings.Ai.OpenPrompts"
+                                        ToolTip="Opens the folder where you can override what Spectre is told (copy a file from the prompts folder next to the exe and edit it)."/>
+                                <Button Content="Save last request" Margin="6,0,0,0" Command="{Binding Ai.SaveLastRequestCommand}" AutomationProperties.AutomationId="Settings.Ai.SaveRequest"
+                                        ToolTip="Saves exactly what Spectre last sent to the model (system prompt, tools, messages) and opens it. The API key is not included."/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                <Border x:Name="CardHotKeys" Grid.Row="2" Grid.Column="1" Style="{StaticResource Card}" Padding="18,4,18,18" Margin="0,0,14,14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <TextBlock Style="{StaticResource SectionTitle}" Text="Hot Keys"/>
-                            <c:HelpTip Text="Keyboard shortcuts for the Analyze grid and Actions menu. Click a key box, then press the combination you want (Esc cancels). A combination already used by another action is refused until you clear or change that one. Changes apply after Save, without a restart." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.HotKeys"/>
+                            <c:HelpTip Text="Keyboard shortcuts for the Analyze table and Actions menu. Click a key box, then press the combination you want (Esc cancels). A combination already used by another action is refused until you clear or change that one. Changes apply after Save, without a restart." Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Settings.Help.HotKeys"/>
                         </StackPanel>
                         <StackPanel Margin="0,8,0,0">
                             <!-- shared size scope: the name column is as wide as the longest action name in every group, so the key boxes line up and stay close -->
@@ -317,7 +397,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:HotKeyGroup}">
                                         <StackPanel Margin="0,6,0,0">
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,0,0,2"/>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="{DynamicResource FontSize.Small}" Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,0,0,2"/>
                                             <ItemsControl ItemsSource="{Binding Items}" Margin="16,0,0,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate DataType="{x:Type vm:HotKeyEditItem}">
@@ -366,7 +446,7 @@
                             </ItemsControl>
                             <Button Content="Reset all to defaults" HorizontalAlignment="Left" Margin="0,10,0,0" Padding="10,3" Command="{Binding ResetAllHotKeysCommand}"
                                     AutomationProperties.AutomationId="Settings.HotKeys.ResetAll"/>
-                            <TextBlock Text="FIXED (not editable)" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,14,0,2"/>
+                            <TextBlock Text="FIXED (not editable)" FontWeight="SemiBold" FontSize="{DynamicResource FontSize.Small}" Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,14,0,2"/>
                             <ItemsControl ItemsSource="{x:Static vm:SettingsViewModel.FixedHotKeys}" Margin="16,0,0,0" AutomationProperties.AutomationId="Settings.HotKeys.Fixed">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>

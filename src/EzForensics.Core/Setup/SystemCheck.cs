@@ -41,6 +41,11 @@ public sealed record SystemCheckResult
     public bool HasNet9 => HasSystemNet9 || HasPrivateNet9;
     /// <summary>A Python plaso can use (3.10-3.13, including EZ Forensics' private one).</summary>
     public string? Python { get; init; }
+    /// <summary>Installed RAM (bytes); 0 = unknown.</summary>
+    public long TotalRamBytes { get; init; }
+    /// <summary>Graphics adapters with dedicated VRAM, biggest first.</summary>
+    public IReadOnlyList<GpuInfo> Gpus { get; init; } = Array.Empty<GpuInfo>();
+    public OllamaState Ollama { get; init; } = OllamaState.None;
     public bool? InternetReachable { get; init; }
     public string? InternetError { get; init; }
 
@@ -53,6 +58,8 @@ public sealed record SystemCheckResult
     public string? VolatilityVersion { get; init; }
     /// <summary>The offline Windows symbol pack was extracted into Volatility's symbols folder.</summary>
     public bool VolatilitySymbolsInstalled { get; init; }
+    /// <summary>Explore tools (<see cref="Explore.ExploreTool"/> names) installed at the pinned version.</summary>
+    public IReadOnlyCollection<string> ExploreCurrent { get; init; } = Array.Empty<string>();
     /// <summary>Installed RITA version in the EZ Forensics distro (RitaLocator.Discover), or null.</summary>
     public string? RitaVersion { get; init; }
     /// <summary>RITA is installed from an older pin / schema (<see cref="RitaVersion"/> set): the setup step re-runs the install.</summary>
@@ -74,7 +81,9 @@ public static class SystemCheck
         probe ??= SystemRuntimeProbe.Instance;
         var net = http == null ? Task.FromResult<(bool?, string?)>((null, null)) : ProbeInternetAsync(http, ct);
         var local = Task.Run(() => Collect(settings, locator, probe, probeEngines), ct);
+        var ollama = http == null ? Task.FromResult(OllamaState.None) : AiHardware.ProbeOllamaAsync(http, ct: ct);
         var r = await local.ConfigureAwait(false);
+        r = r with { Ollama = await ollama.ConfigureAwait(false) };
         var (ok, err) = await net.ConfigureAwait(false);
         return r with { InternetReachable = ok, InternetError = err };
     }
@@ -129,6 +138,8 @@ public static class SystemCheck
         {
             OsName = OsName(),
             OsBuild = Environment.OSVersion.Version.Build,
+            TotalRamBytes = AiHardware.TotalRamBytes(),
+            Gpus = AiHardware.Gpus(),
             Is64Bit = RuntimeInformation.OSArchitecture is Architecture.X64 or Architecture.Arm64,
             FreeDiskBytes = free,
             DataRoot = dataRoot,
@@ -146,6 +157,7 @@ public static class SystemCheck
             ZeekSummary = zeek,
             VolatilityVersion = volatility,
             VolatilitySymbolsInstalled = volSymbols,
+            ExploreCurrent = new Explore.ExploreToolLocator().All().Where(t => t.IsCurrent).Select(t => t.Tool.ToString()).ToList(),
             RitaVersion = rita,
             RitaUpdateAvailable = ritaUpdate,
         };
@@ -197,7 +209,7 @@ public static class SystemCheck
             using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
             return ((int)resp.StatusCode < 500, (int)resp.StatusCode < 500 ? null : $"HTTP {(int)resp.StatusCode}");
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return (false, "timed out (check the proxy in Settings)"); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return (false, "timed out (check the proxy in Options)"); }
         catch (HttpRequestException ex) { return (false, ex.Message); }
     }
 }

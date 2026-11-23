@@ -174,7 +174,7 @@ public sealed partial class ComputerDetailsViewModel : ObservableObject
         _ = LoadAsync(CaseFolder, autoCompute: false).ContinueWith(_ =>
         {
             if (job.State != JobState.Succeeded)
-                AppServices.OnUi(() => StatusText = "Computer details step: " + (job.StatusReason ?? job.State.ToString()) + " (see the Jobs page for the log).");
+                AppServices.OnUi(() => StatusText = "Computer details step: " + (job.StatusReason ?? job.State.ToString()) + " (see the Jobs list on Ingest for the log).");
         });
     }
 

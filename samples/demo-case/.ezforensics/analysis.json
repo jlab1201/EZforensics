@@ -1,0 +1,858 @@
+{
+  "version": 2,
+  "workspace": {
+    "findings": [
+      {
+        "id": "W-demo01",
+        "title": "RDP sign-in to demo.user from an external address",
+        "severity": "Medium",
+        "mitre": [
+          "T1078"
+        ],
+        "notes": "demo.user signed in over RDP (logon type 10) from 203.0.113.45, an address outside the demo network. The account is valid, so the sign-in itself raises no alarm.",
+        "rows": [
+          {
+            "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+            "row": 3,
+            "stale": false
+          }
+        ],
+        "updatedAt": "2026-03-14T12:00:00+00:00"
+      },
+      {
+        "id": "W-demo02",
+        "title": "Macro-enabled invoice downloaded from the internet",
+        "severity": "Medium",
+        "mitre": [
+          "T1566.001"
+        ],
+        "notes": "Invoice_2026-03.docm landed in Downloads with a Zone.Identifier (ZoneId=3, internet). Word opened it 12 seconds later.",
+        "rows": [
+          {
+            "csvRelPath": "DEMO-WS01/FileSystem/MFT.csv",
+            "row": 0,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/FileSystem/MFT.csv",
+            "row": 1,
+            "stale": false
+          }
+        ],
+        "updatedAt": "2026-03-14T12:00:00+00:00"
+      },
+      {
+        "id": "W-demo03",
+        "title": "Word started PowerShell with an encoded command",
+        "severity": "High",
+        "mitre": [
+          "T1059.001"
+        ],
+        "notes": "WINWORD.EXE (PID 4120) started powershell.exe (PID 5232) with -enc. Decoded, the command is 'Write-Output demo' (harmless demo text).",
+        "rows": [
+          {
+            "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+            "row": 9,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/ProgramExecution/Prefetch.csv",
+            "row": 1,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/Memory/Memory_PsList.csv",
+            "row": 11,
+            "stale": false
+          }
+        ],
+        "updatedAt": "2026-03-14T12:00:00+00:00"
+      },
+      {
+        "id": "W-demo04",
+        "title": "rundll32 ran a DLL from the user's Temp folder",
+        "severity": "High",
+        "mitre": [
+          "T1218.011"
+        ],
+        "notes": "PowerShell started rundll32.exe to run msupd.dll from AppData\\Local\\Temp; the DLL was written to disk 49 seconds earlier.",
+        "rows": [
+          {
+            "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+            "row": 13,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/FileSystem/MFT.csv",
+            "row": 3,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/ProgramExecution/Prefetch.csv",
+            "row": 2,
+            "stale": false
+          }
+        ],
+        "updatedAt": "2026-03-14T12:00:00+00:00"
+      },
+      {
+        "id": "W-demo05",
+        "title": "svchost.exe started by rundll32 and hollowed",
+        "severity": "Critical",
+        "mitre": [
+          "T1055.012"
+        ],
+        "notes": "svchost.exe PID 6104 has rundll32.exe as its parent (svchost is normally started by services.exe). malfind finds an executable MZ region and hollowprocesses reports the image is not mapped from svchost.exe.",
+        "rows": [
+          {
+            "csvRelPath": "DEMO-WS01/Memory/Memory_HollowProcesses.csv",
+            "row": 0,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/Memory/Memory_Malfind.csv",
+            "row": 0,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/Memory/Memory_PsList.csv",
+            "row": 14,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+            "row": 14,
+            "stale": false
+          }
+        ],
+        "updatedAt": "2026-03-14T12:00:00+00:00"
+      },
+      {
+        "id": "W-demo06",
+        "title": "New auto-start service DemoUpdateSvc",
+        "severity": "High",
+        "mitre": [
+          "T1543.003"
+        ],
+        "notes": "Service DemoUpdateSvc was installed (7045) to run C:\\ProgramData\\DemoUpdate\\updsvc.exe as LocalSystem at boot, and started a second later.",
+        "rows": [
+          {
+            "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+            "row": 16,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+            "row": 17,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/FileSystem/MFT.csv",
+            "row": 5,
+            "stale": false
+          },
+          {
+            "csvRelPath": "DEMO-WS01/ProgramExecution/Prefetch.csv",
+            "row": 3,
+            "stale": false
+          }
+        ],
+        "updatedAt": "2026-03-14T12:00:00+00:00"
+      },
+      {
+        "id": "W-demo07",
+        "title": "LSASS memory opened by the hollowed svchost.exe",
+        "severity": "High",
+        "mitre": [
+          "T1003.001"
+        ],
+        "notes": "Security 4656: the hollowed svchost.exe (PID 6104) asked for a handle to lsass.exe with access mask 0x1410 (read memory). A real svchost.exe has no reason to do that.",
+        "rows": [
+          {
+            "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+            "row": 19,
+            "stale": false
+          }
+        ],
+        "updatedAt": "2026-03-14T12:00:00+00:00"
+      },
+      {
+        "id": "W-demo08",
+        "title": "Outbound HTTPS from updsvc.exe to an external address",
+        "severity": "Medium",
+        "mitre": [
+          "T1071.001"
+        ],
+        "notes": "Security 5156: the new service binary updsvc.exe made an outbound TCP 443 connection to 198.51.100.23 (a documentation address in this demo). It looks like command-and-control beaconing.",
+        "rows": [
+          {
+            "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+            "row": 20,
+            "stale": false
+          }
+        ],
+        "updatedAt": "2026-03-14T12:00:00+00:00"
+      },
+      {
+        "id": "W-demo09",
+        "title": "Security event log cleared",
+        "severity": "High",
+        "mitre": [
+          "T1070.001"
+        ],
+        "notes": "Event 1102: demo.user cleared the Security log about two minutes before logging off. It is an attempt to hide the earlier activity.",
+        "rows": [
+          {
+            "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+            "row": 22,
+            "stale": false
+          }
+        ],
+        "updatedAt": "2026-03-14T12:00:00+00:00"
+      }
+    ]
+  },
+  "items": [
+    {
+      "id": "I-demo01",
+      "origin": "analyst",
+      "title": "RDP sign-in to demo.user from an external address",
+      "severity": "Medium",
+      "mitre": [
+        "T1078"
+      ],
+      "tactic": "Initial Access",
+      "notes": "demo.user signed in over RDP (logon type 10) from 203.0.113.45, an address outside the demo network. The account is valid, so the sign-in itself raises no alarm.",
+      "description": "",
+      "host": "DEMO-WS01",
+      "firstSeen": "2026-03-14T09:30:12+00:00",
+      "lastSeen": "2026-03-14T09:30:12+00:00",
+      "sourceRows": [
+        {
+          "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+          "row": 3,
+          "stale": false
+        }
+      ],
+      "rowEdits": {
+        "added": [],
+        "removed": [],
+        "perRow": []
+      },
+      "dupDecisions": [],
+      "keptByUser": false,
+      "dismissed": false,
+      "source": {
+        "workspaceId": "W-demo01"
+      },
+      "editedFields": [],
+      "sourceStatus": "current",
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "added from my analysis"
+        }
+      ],
+      "review": "confirmed"
+    },
+    {
+      "id": "I-demo02",
+      "origin": "analyst",
+      "title": "Macro-enabled invoice downloaded from the internet",
+      "severity": "Medium",
+      "mitre": [
+        "T1566.001"
+      ],
+      "notes": "Invoice_2026-03.docm landed in Downloads with a Zone.Identifier (ZoneId=3, internet). Word opened it 12 seconds later.",
+      "description": "",
+      "host": "DEMO-WS01",
+      "firstSeen": "2026-03-14T09:40:58+00:00",
+      "lastSeen": "2026-03-14T09:40:58+00:00",
+      "sourceRows": [
+        {
+          "csvRelPath": "DEMO-WS01/FileSystem/MFT.csv",
+          "row": 0,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/FileSystem/MFT.csv",
+          "row": 1,
+          "stale": false
+        }
+      ],
+      "rowEdits": {
+        "added": [],
+        "removed": [],
+        "perRow": []
+      },
+      "dupDecisions": [],
+      "keptByUser": false,
+      "dismissed": false,
+      "source": {
+        "workspaceId": "W-demo02"
+      },
+      "editedFields": [],
+      "sourceStatus": "current",
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "added from my analysis"
+        }
+      ],
+      "review": "confirmed"
+    },
+    {
+      "id": "I-demo03",
+      "origin": "analyst",
+      "title": "Word started PowerShell with an encoded command",
+      "severity": "High",
+      "mitre": [
+        "T1059.001"
+      ],
+      "notes": "WINWORD.EXE (PID 4120) started powershell.exe (PID 5232) with -enc. Decoded, the command is 'Write-Output demo' (harmless demo text).",
+      "description": "",
+      "host": "DEMO-WS01",
+      "firstSeen": "2026-03-14T09:42:03+00:00",
+      "lastSeen": "2026-03-14T09:42:03+00:00",
+      "sourceRows": [
+        {
+          "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+          "row": 9,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/ProgramExecution/Prefetch.csv",
+          "row": 1,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/Memory/Memory_PsList.csv",
+          "row": 11,
+          "stale": false
+        }
+      ],
+      "rowEdits": {
+        "added": [],
+        "removed": [],
+        "perRow": []
+      },
+      "dupDecisions": [],
+      "keptByUser": false,
+      "dismissed": false,
+      "source": {
+        "workspaceId": "W-demo03"
+      },
+      "editedFields": [],
+      "sourceStatus": "current",
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "added from my analysis"
+        }
+      ],
+      "review": "confirmed"
+    },
+    {
+      "id": "I-demo04",
+      "origin": "analyst",
+      "title": "rundll32 ran a DLL from the user's Temp folder",
+      "severity": "High",
+      "mitre": [
+        "T1218.011"
+      ],
+      "notes": "PowerShell started rundll32.exe to run msupd.dll from AppData\\Local\\Temp; the DLL was written to disk 49 seconds earlier.",
+      "description": "",
+      "host": "DEMO-WS01",
+      "firstSeen": "2026-03-14T09:43:20+00:00",
+      "lastSeen": "2026-03-14T09:43:20+00:00",
+      "sourceRows": [
+        {
+          "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+          "row": 13,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/FileSystem/MFT.csv",
+          "row": 3,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/ProgramExecution/Prefetch.csv",
+          "row": 2,
+          "stale": false
+        }
+      ],
+      "rowEdits": {
+        "added": [],
+        "removed": [],
+        "perRow": []
+      },
+      "dupDecisions": [],
+      "keptByUser": false,
+      "dismissed": false,
+      "source": {
+        "workspaceId": "W-demo04"
+      },
+      "editedFields": [],
+      "sourceStatus": "current",
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "added from my analysis"
+        }
+      ]
+    },
+    {
+      "id": "I-demo05",
+      "origin": "analyst",
+      "title": "svchost.exe started by rundll32 and hollowed",
+      "severity": "Critical",
+      "mitre": [
+        "T1055.012"
+      ],
+      "notes": "svchost.exe PID 6104 has rundll32.exe as its parent (svchost is normally started by services.exe). malfind finds an executable MZ region and hollowprocesses reports the image is not mapped from svchost.exe.",
+      "description": "",
+      "host": "DEMO-WS01",
+      "firstSeen": "2026-03-14T09:44:02+00:00",
+      "lastSeen": "2026-03-14T09:44:02+00:00",
+      "sourceRows": [
+        {
+          "csvRelPath": "DEMO-WS01/Memory/Memory_HollowProcesses.csv",
+          "row": 0,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/Memory/Memory_Malfind.csv",
+          "row": 0,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/Memory/Memory_PsList.csv",
+          "row": 14,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+          "row": 14,
+          "stale": false
+        }
+      ],
+      "rowEdits": {
+        "added": [],
+        "removed": [],
+        "perRow": []
+      },
+      "dupDecisions": [],
+      "keptByUser": false,
+      "dismissed": false,
+      "source": {
+        "workspaceId": "W-demo05"
+      },
+      "editedFields": [],
+      "sourceStatus": "current",
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "added from my analysis"
+        }
+      ]
+    },
+    {
+      "id": "I-demo06",
+      "origin": "analyst",
+      "title": "New auto-start service DemoUpdateSvc",
+      "severity": "High",
+      "mitre": [
+        "T1543.003"
+      ],
+      "notes": "Service DemoUpdateSvc was installed (7045) to run C:\\ProgramData\\DemoUpdate\\updsvc.exe as LocalSystem at boot, and started a second later.",
+      "description": "",
+      "host": "DEMO-WS01",
+      "firstSeen": "2026-03-14T09:47:30+00:00",
+      "lastSeen": "2026-03-14T09:47:31+00:00",
+      "sourceRows": [
+        {
+          "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+          "row": 16,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+          "row": 17,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/FileSystem/MFT.csv",
+          "row": 5,
+          "stale": false
+        },
+        {
+          "csvRelPath": "DEMO-WS01/ProgramExecution/Prefetch.csv",
+          "row": 3,
+          "stale": false
+        }
+      ],
+      "rowEdits": {
+        "added": [],
+        "removed": [],
+        "perRow": []
+      },
+      "dupDecisions": [],
+      "keptByUser": false,
+      "dismissed": false,
+      "source": {
+        "workspaceId": "W-demo06"
+      },
+      "editedFields": [],
+      "sourceStatus": "current",
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "added from my analysis"
+        }
+      ]
+    },
+    {
+      "id": "I-demo07",
+      "origin": "analyst",
+      "title": "LSASS memory opened by the hollowed svchost.exe",
+      "severity": "High",
+      "mitre": [
+        "T1003.001"
+      ],
+      "notes": "Security 4656: the hollowed svchost.exe (PID 6104) asked for a handle to lsass.exe with access mask 0x1410 (read memory). A real svchost.exe has no reason to do that.",
+      "description": "",
+      "host": "DEMO-WS01",
+      "firstSeen": "2026-03-14T09:52:17+00:00",
+      "lastSeen": "2026-03-14T09:52:17+00:00",
+      "sourceRows": [
+        {
+          "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+          "row": 19,
+          "stale": false
+        }
+      ],
+      "rowEdits": {
+        "added": [],
+        "removed": [],
+        "perRow": []
+      },
+      "dupDecisions": [],
+      "keptByUser": false,
+      "dismissed": false,
+      "source": {
+        "workspaceId": "W-demo07"
+      },
+      "editedFields": [],
+      "sourceStatus": "current",
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "added from my analysis"
+        }
+      ]
+    },
+    {
+      "id": "I-demo08",
+      "origin": "analyst",
+      "title": "Outbound HTTPS from updsvc.exe to an external address",
+      "severity": "Medium",
+      "mitre": [
+        "T1071.001"
+      ],
+      "notes": "Security 5156: the new service binary updsvc.exe made an outbound TCP 443 connection to 198.51.100.23 (a documentation address in this demo). It looks like command-and-control beaconing.",
+      "description": "",
+      "host": "DEMO-WS01",
+      "firstSeen": "2026-03-14T09:55:41+00:00",
+      "lastSeen": "2026-03-14T09:55:41+00:00",
+      "sourceRows": [
+        {
+          "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+          "row": 20,
+          "stale": false
+        }
+      ],
+      "rowEdits": {
+        "added": [],
+        "removed": [],
+        "perRow": []
+      },
+      "dupDecisions": [],
+      "keptByUser": false,
+      "dismissed": false,
+      "source": {
+        "workspaceId": "W-demo08"
+      },
+      "editedFields": [],
+      "sourceStatus": "current",
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "added from my analysis"
+        }
+      ]
+    },
+    {
+      "id": "I-demo09",
+      "origin": "analyst",
+      "title": "Security event log cleared",
+      "severity": "High",
+      "mitre": [
+        "T1070.001"
+      ],
+      "notes": "Event 1102: demo.user cleared the Security log about two minutes before logging off. It is an attempt to hide the earlier activity.",
+      "description": "",
+      "host": "DEMO-WS01",
+      "firstSeen": "2026-03-14T10:03:09+00:00",
+      "lastSeen": "2026-03-14T10:03:09+00:00",
+      "sourceRows": [
+        {
+          "csvRelPath": "DEMO-WS01/EventLogs/EventLogs.csv",
+          "row": 22,
+          "stale": false
+        }
+      ],
+      "rowEdits": {
+        "added": [],
+        "removed": [],
+        "perRow": []
+      },
+      "dupDecisions": [],
+      "keptByUser": false,
+      "dismissed": false,
+      "source": {
+        "workspaceId": "W-demo09"
+      },
+      "editedFields": [],
+      "sourceStatus": "current",
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "added from my analysis"
+        }
+      ]
+    }
+  ],
+  "keyEvents": [
+    {
+      "id": "K-demo01",
+      "title": "Attacker signs in over RDP as demo.user",
+      "time": "2026-03-14T09:30:12+00:00",
+      "severity": "Medium",
+      "mitre": [
+        "T1078"
+      ],
+      "notes": "A valid account is used from an external address: the start of the intrusion.",
+      "findingIds": [
+        "I-demo01"
+      ],
+      "source": {},
+      "editedFields": [
+        "title",
+        "notes"
+      ],
+      "sourceStatus": "current",
+      "keptByUser": false,
+      "dismissed": false,
+      "skippedFindingIds": [],
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "created from 1 finding(s)"
+        }
+      ]
+    },
+    {
+      "id": "K-demo02",
+      "title": "Malicious invoice runs encoded PowerShell",
+      "time": "2026-03-14T09:40:58+00:00",
+      "severity": "High",
+      "mitre": [
+        "T1059.001",
+        "T1566.001"
+      ],
+      "notes": "The downloaded macro document starts PowerShell with an encoded command.",
+      "findingIds": [
+        "I-demo02",
+        "I-demo03"
+      ],
+      "source": {},
+      "editedFields": [
+        "title",
+        "notes"
+      ],
+      "sourceStatus": "current",
+      "keptByUser": false,
+      "dismissed": false,
+      "skippedFindingIds": [],
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "created from 2 finding(s)"
+        }
+      ]
+    },
+    {
+      "id": "K-demo03",
+      "title": "Payload DLL hollows svchost.exe",
+      "time": "2026-03-14T09:43:20+00:00",
+      "severity": "Critical",
+      "mitre": [
+        "T1055.012",
+        "T1218.011"
+      ],
+      "notes": "rundll32 runs the dropped DLL, which starts svchost.exe and replaces its image in memory.",
+      "findingIds": [
+        "I-demo04",
+        "I-demo05"
+      ],
+      "source": {},
+      "editedFields": [
+        "title",
+        "notes"
+      ],
+      "sourceStatus": "current",
+      "keptByUser": false,
+      "dismissed": false,
+      "skippedFindingIds": [],
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "created from 2 finding(s)"
+        }
+      ]
+    },
+    {
+      "id": "K-demo04",
+      "title": "Persistence: DemoUpdateSvc service installed",
+      "time": "2026-03-14T09:47:30+00:00",
+      "severity": "High",
+      "mitre": [
+        "T1543.003"
+      ],
+      "notes": "An auto-start service keeps the attacker's program running after a reboot.",
+      "findingIds": [
+        "I-demo06"
+      ],
+      "source": {},
+      "editedFields": [
+        "title",
+        "notes"
+      ],
+      "sourceStatus": "current",
+      "keptByUser": false,
+      "dismissed": false,
+      "skippedFindingIds": [],
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "created from 1 finding(s)"
+        }
+      ]
+    },
+    {
+      "id": "K-demo05",
+      "title": "Credential access: LSASS memory read",
+      "time": "2026-03-14T09:52:17+00:00",
+      "severity": "High",
+      "mitre": [
+        "T1003.001"
+      ],
+      "notes": "The injected svchost.exe reads lsass.exe memory, which is how credentials are dumped.",
+      "findingIds": [
+        "I-demo07"
+      ],
+      "source": {},
+      "editedFields": [
+        "title",
+        "notes"
+      ],
+      "sourceStatus": "current",
+      "keptByUser": false,
+      "dismissed": false,
+      "skippedFindingIds": [],
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "created from 1 finding(s)"
+        }
+      ]
+    },
+    {
+      "id": "K-demo06",
+      "title": "C2: updsvc.exe beacons over HTTPS",
+      "time": "2026-03-14T09:55:41+00:00",
+      "severity": "Medium",
+      "mitre": [
+        "T1071.001"
+      ],
+      "notes": "The service binary connects out to an external address on port 443.",
+      "findingIds": [
+        "I-demo08"
+      ],
+      "source": {},
+      "editedFields": [
+        "title",
+        "notes"
+      ],
+      "sourceStatus": "current",
+      "keptByUser": false,
+      "dismissed": false,
+      "skippedFindingIds": [],
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "created from 1 finding(s)"
+        }
+      ]
+    },
+    {
+      "id": "K-demo07",
+      "title": "Defense evasion: Security log cleared",
+      "time": "2026-03-14T10:03:09+00:00",
+      "severity": "High",
+      "mitre": [
+        "T1070.001"
+      ],
+      "notes": "The attacker clears the Security log before leaving.",
+      "findingIds": [
+        "I-demo09"
+      ],
+      "source": {},
+      "editedFields": [
+        "title",
+        "notes"
+      ],
+      "sourceStatus": "current",
+      "keptByUser": false,
+      "dismissed": false,
+      "skippedFindingIds": [],
+      "history": [
+        {
+          "who": "demo.user",
+          "when": "2026-03-14T12:00:00+00:00",
+          "what": "created from 1 finding(s)"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "engineMigrated": true,
+    "lastSyncedAt": "2026-03-14T12:00:00+00:00"
+  }
+}

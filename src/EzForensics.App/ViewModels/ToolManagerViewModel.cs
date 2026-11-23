@@ -33,7 +33,7 @@ public sealed partial class RemoteItem : ObservableObject
     public static string FormatSize(long size) => size <= 0 ? "" : size >= 1 << 20 ? $"{size / (double)(1 << 20):0.0} MB" : $"{size / 1024.0:0} KB";
 }
 
-public enum ToolRowKind { EzZip, Plaso, Volatility, Zeek, Rita, Maps }
+public enum ToolRowKind { EzZip, Plaso, Volatility, Zeek, Rita, Spectre, Maps }
 
 /// <summary>One row of the Overview tools table: a catalog tool (and its download), plaso / Volatility / Zeek / RITA, or the maps / batch files sync.</summary>
 public sealed class ToolRow : ObservableObject
@@ -184,6 +184,8 @@ public sealed partial class ToolManagerViewModel : PageViewModel
         Zeek = new ZeekCardViewModel(ShowError, ShowMessage);
         Rita = new RitaCardViewModel(ShowError, ShowMessage);
         Volatility = new VolatilityCardViewModel(ShowError, ShowMessage);
+        Spectre = new SpectreToolsViewModel(ShowError, ShowMessage);
+        Spectre.Changed += RefreshSpecialRows;
         foreach (var card in new INotifyPropertyChanged[] { Zeek, Rita, Volatility }) card.PropertyChanged += OnCardChanged;
         S.ZeekChanged += RefreshSpecialRows;
         S.RitaChanged += RefreshSpecialRows;
@@ -193,6 +195,9 @@ public sealed partial class ToolManagerViewModel : PageViewModel
 
     /// <summary>"Zeek (packet capture → logs)" card.</summary>
     public ZeekCardViewModel Zeek { get; }
+
+    /// <summary>The Spectre engine's tools (Tools page, Spectre entry).</summary>
+    public SpectreToolsViewModel Spectre { get; }
 
     /// <summary>"RITA (beacons, long connections, DNS tunneling)" card.</summary>
     public RitaCardViewModel Rita { get; }
@@ -254,6 +259,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
         if (!_autoChecked && Remote.Count == 0) { _autoChecked = true; _ = CheckCoreAsync(quiet: true); }
         Zeek.OnNavigatedTo();
         Rita.OnNavigatedTo();
+        Spectre.EnsureProbed();
         Volatility.OnNavigatedTo();
     }
 
@@ -269,7 +275,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
         }
     }
 
-    private ToolRow? _plasoRow, _volatilityRow, _zeekRow, _ritaRow;
+    private ToolRow? _plasoRow, _volatilityRow, _zeekRow, _ritaRow, _spectreRow;
     /// <summary>"Queued" / "Installing…" per row while the primary action runs; kept across table rebuilds.</summary>
     private readonly Dictionary<(ToolRowKind, string), string> _rowPending = new();
     private const int MaintenanceOrder = 99;
@@ -293,7 +299,8 @@ public sealed partial class ToolManagerViewModel : PageViewModel
         _volatilityRow ??= SpecialRow(ToolRowKind.Volatility, ToolGroup.Memory, "Volatility 3");
         _zeekRow ??= SpecialRow(ToolRowKind.Zeek, ToolGroup.Network, "Zeek");
         _ritaRow ??= SpecialRow(ToolRowKind.Rita, ToolGroup.Network, "RITA");
-        rows.Add(_plasoRow); rows.Add(_volatilityRow); rows.Add(_zeekRow); rows.Add(_ritaRow);
+        _spectreRow ??= SpecialRow(ToolRowKind.Spectre, ToolGroup.Spectre, "Spectre engine");
+        rows.Add(_plasoRow); rows.Add(_volatilityRow); rows.Add(_zeekRow); rows.Add(_ritaRow); rows.Add(_spectreRow);
         rows.Add(MapsRow(root));
         foreach (var row in rows)
         {
@@ -316,11 +323,12 @@ public sealed partial class ToolManagerViewModel : PageViewModel
     /// <summary>Re-reads status / version / location of the plaso, Volatility, Zeek and RITA rows from their view models (no rebuild).</summary>
     private void RefreshSpecialRows()
     {
-        if (Volatility == null) return;
+        if (Volatility == null || Spectre == null) return;
         _plasoRow?.Update(PlasoStatus, Dash(PlasoVersion), Dash(PlasoLocation));
         _volatilityRow?.Update(Volatility.StatusLabel, Dash(Volatility.VersionText), Dash(Volatility.LocationText));
         _zeekRow?.Update(Zeek.StatusLabel, Dash(Zeek.VersionText), Dash(Zeek.LocationText));
         _ritaRow?.Update(Rita.StatusLabel, Dash(Rita.VersionText), Dash(Rita.LocationText));
+        _spectreRow?.Update(Spectre.StatusLabel, Dash(Spectre.VersionText), Dash(Spectre.LocationText));
         OnPropertyChanged(nameof(CanAct));
     }
 
@@ -329,14 +337,14 @@ public sealed partial class ToolManagerViewModel : PageViewModel
         if (e.PropertyName is "Status" or "StatusLabel" or "VersionText" or "IsBusy") RefreshSpecialRows();
     }
 
-    private bool AnyCardBusy => Zeek.IsBusy || Rita.IsBusy || Volatility.IsBusy || IsPlasoInstalling;
+    private bool AnyCardBusy => Zeek.IsBusy || Rita.IsBusy || Volatility.IsBusy || Spectre.IsBusy || IsPlasoInstalling;
 
     /// <summary>"Maps and batch files" row: newest write time and count of the Maps / BatchExamples files under the tools root.</summary>
     private ToolRow MapsRow(string root)
     {
         var files = SnapshotSyncFiles();
         var status = files.Count == 0 ? "Never synced" : $"Synced {files.Values.Max().ToLocalTime():yyyy-MM-dd}";
-        return new ToolRow(ToolRowKind.Maps, "Maintenance", MaintenanceOrder, "Maps and batch files", status, files.Count == 0 ? "" : $"{files.Count} files", root, "");
+        return new ToolRow(ToolRowKind.Maps, "Maintenance", MaintenanceOrder, "Maps and batch files", status, files.Count == 0 ? "" : EzForensics.Core.Common.Plural.Of(files.Count, "file"), root, "");
     }
 
     private static IReadOnlyList<RemoteDetail> SafeReadDetails(string root)
@@ -408,6 +416,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
             (ToolRowKind.Volatility, () => Volatility.Found, Volatility.InstallCommand, Volatility.UpdateCommand),
             (ToolRowKind.Zeek, () => Zeek.Found, Zeek.InstallCommand, Zeek.UpdateCommand),
             (ToolRowKind.Rita, () => Rita.Installed, Rita.InstallCommand, Rita.InstallCommand),
+            (ToolRowKind.Spectre, () => Spectre.Found, Spectre.InstallCommand, Spectre.InstallCommand),
         };
         // every ticked row stays ticked until the whole run is over; then only the rows that installed are unticked
         var ticked = ToolRows.Where(r => r.IsSelected).Select(r => (r.Kind, r.Name)).ToList();
@@ -492,7 +501,14 @@ public sealed partial class ToolManagerViewModel : PageViewModel
                 Progress = p.FileCount == 0 ? 0 : ((p.FileIndex - 1) + frac) / p.FileCount;
                 ProgressText = $"{p.Phase} {p.Name} ({p.FileIndex}/{p.FileCount})";
             });
-            await updater.DownloadAsync(sel.Select(s => s.File), S.Settings.ToolsRoot, progress, _cts.Token);
+            var failed = await updater.DownloadAsync(sel.Select(s => s.File), S.Settings.ToolsRoot, progress, _cts.Token, line => AppLog.Info(line));
+            if (failed.Count > 0)
+            {
+                RebuildToolRows();
+                await S.RescanAsync();
+                ShowMessage(string.Join(" ", failed), InfoSeverity.Error);
+                return false;
+            }
             foreach (var s in sel) { s.Status = RemoteFileStatus.UpToDate; if (clearSelection) s.IsSelected = false; }
             RebuildToolRows();
             Progress = 1;
@@ -523,7 +539,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
         {
             await GuardAsync(async () =>
             {
-                // Runs on the private maintenance queue (never the Jobs page); output goes to the app log.
+                // Runs on the private maintenance queue (never the Ingest job list); output goes to the app log.
                 var logDir = S.Maintenance.NewLogDir("sync");
                 var before = SnapshotSyncFiles();
                 int ok = 0, failed = 0;
@@ -579,7 +595,11 @@ public sealed partial class ToolManagerViewModel : PageViewModel
         if (!tile.Installed || tile.Path == null) { _ = DownloadToolAsync(tile); return; }
         try
         {
-            GuiLauncher.Launch(tile.Path, null, tile.RequiresAdmin);
+            GuiLauncher.Launch(tile.Path, null, tile.RequiresAdmin, line => AppLog.Info(line));
+        }
+        catch (GuiLauncher.UntrustedToolException ex)
+        {
+            ShowMessage(ex.Message, InfoSeverity.Error);
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
         {
@@ -724,7 +744,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
         }
         catch (Exception ex)
         {
-            _latestError = ex is TimeoutException ? "PyPI timed out; check the proxy in Settings" : "PyPI not reachable; check the proxy in Settings";
+            _latestError = ex is TimeoutException ? "PyPI timed out; check the proxy in Options" : "PyPI not reachable; check the proxy in Optiogs";
             AppLog.Error("plaso latest-version check failed", ex);
         }
         finally
@@ -884,7 +904,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
                 if (venvJob.State == JobState.Cancelled || ct.IsCancellationRequested) { await CleanupFailedInstallAsync(loc, "Install cancelled."); return; }
                 if (venvJob.State != JobState.Succeeded || !File.Exists(venvPython))
                 {
-                    await CleanupFailedInstallAsync(loc, $"Creating the venv failed: {venvJob.StatusReason}. See the log below or the Jobs page, then click Install to retry.");
+                    await CleanupFailedInstallAsync(loc, $"Creating the venv failed: {venvJob.StatusReason}. See the log below, then click Install to retry.");
                     return;
                 }
             }
@@ -957,7 +977,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
             if (docker == null) { ShowMessage("Docker is not available.", InfoSeverity.Warning); return; }
             step = PlasoSetup.DockerPullStep(docker);
         }
-        else if (loc.IsManaged(current) && File.Exists(loc.ManagedPython)) step = PlasoSetup.PipStep(loc, update: true);
+        else if (loc.IsManaged(current) && File.Exists(loc.ManagedPython)) step = PlasoSetup.PipStep(loc, update: true, _latest?.Version);
         else
         {
             ShowMessage($"plaso at {current.Location} was not installed by EZ Forensics, so EZ Forensics does not update it. Update it the way it was installed, or click Install to add EZ Forensics' own copy (it is then used automatically).", InfoSeverity.Warning);
@@ -971,7 +991,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
             if (job.State == JobState.Cancelled) { ShowMessage("Update cancelled. The installed plaso was not changed if pip had not started replacing files; click Detect again to check.", InfoSeverity.Warning); return; }
             if (job.State != JobState.Succeeded)
             {
-                ShowMessage($"Update failed: {job.StatusReason}. See the log below or the Jobs page.", InfoSeverity.Error);
+                ShowMessage($"Update failed: {job.StatusReason}. See the log below.", InfoSeverity.Error);
                 return;
             }
             _toolVersionsKey = null;
@@ -994,7 +1014,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
         if (targets.Count == 0) { ShowMessage("EZ Forensics has no managed plaso or private Python to remove.", InfoSeverity.Info); return; }
         if (S.HasActiveJob("plaso"))
         {
-            ShowMessage("A plaso job is still running. Wait for it or cancel it on the Jobs page, then click Uninstall again.", InfoSeverity.Warning);
+            ShowMessage("A plaso job is still running. Wait for it or cancel it in the Jobs list on Ingest, then click Uninstall again.", InfoSeverity.Warning);
             return;
         }
         if (!EzForensics.App.Services.Dialogs.Confirm("Uninstall plaso?", "Removes EZ Forensics' copy of log2timeline / plaso. Your timelines are kept.", "Uninstall",

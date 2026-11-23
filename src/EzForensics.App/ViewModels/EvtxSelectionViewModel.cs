@@ -95,7 +95,7 @@ public sealed partial class EvtxSelectionViewModel : ObservableObject
     {
         var f = Dialogs.SaveFile("Export event selection", "Event selection (JSON)|*.json", "evtx-event-selection.json");
         if (string.IsNullOrEmpty(f)) return;
-        try { File.WriteAllText(f, _s.Evtx.ToJson(selectedOnly: true)); Message = $"Exported {_s.Evtx.SelectedCount} events to {Path.GetFileName(f)}."; }
+        try { File.WriteAllText(f, _s.Evtx.ToJson(selectedOnly: true)); Message = $"Exported {EzForensics.Core.Common.Plural.Of(_s.Evtx.SelectedCount, "event")} to {Path.GetFileName(f)}."; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Message = "Could not export: " + ex.Message; }
     }
 

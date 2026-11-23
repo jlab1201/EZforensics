@@ -15,11 +15,16 @@ public sealed class PidCandidateViewModel
         var n = node.Node;
         var name = string.IsNullOrWhiteSpace(n.Name) ? "(no name)" : n.Name;
         var started = n.CreateTime is { } t ? t.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " UTC" : "unknown";
-        Text = $"{name} · started {started}";
+        var exited = n.ExitTime is { } x ? x.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " UTC" : "still running / unknown";
+        _text = $"{name} · started {started} · exited {exited}";
     }
 
+    /// <summary>The instance that was alive when the child started (the most likely parent); set by the chooser.</summary>
+    public bool IsLikely { get; init; }
+
     public ProcessNodeViewModel Node { get; }
-    public string Text { get; }
+    private readonly string _text;
+    public string Text => IsLikely ? _text + " · most likely (alive when the child started)" : _text;
 }
 
 /// <summary>Clickable PIDs: selects the process instance a grid row's PID belongs to (<see cref="ProcessPidResolver"/>), or offers the candidates when facts cannot tell.</summary>
@@ -39,12 +44,30 @@ public sealed partial class ProcessTreeViewModel
     /// Selects the instance of <paramref name="pid"/> a row points at: Found = the path view (Trace up) of it, selected and centred; Ambiguous = the chooser strip, nothing selected;
     /// NotFound = the status line says so and the graph stays as it was. <paramref name="sourceCsv"/> / <paramref name="rowCreateTime"/>: see <see cref="ProcessPidResolver.Resolve"/>.
     /// </summary>
-    public PidResolutionKind? SelectPid(int pid, DateTime? rowTime, string? sourceCsv, DateTime? rowCreateTime)
+    public PidResolutionKind? SelectPid(int pid, DateTime? rowTime, string? sourceCsv, DateTime? rowCreateTime, ProcessNode? child = null)
     {
         DismissPidChooser();
         if (_disposed || _graph == null) return null;
         var r = ProcessPidResolver.Resolve(_all.Select(v => v.Node), pid, rowTime, sourceCsv, rowCreateTime);
         var p = pid.ToString(CultureInfo.InvariantCulture);
+        if (child != null && child.Ppid == pid)
+        {
+            // a PPID link: the parent edge the tree already draws wins; otherwise only the instances alive when the child started are plausible
+            if (child.Parent is { IsGhost: false } par && par.Pid == pid && ViewModelOf(par) is { } pvm)
+            {
+                if (ReferenceEquals(Selected?.Node, child)) RevealAndSelect(pvm); else OpenPath(pvm);
+                return PidResolutionKind.Found;
+            }
+            if (r.Kind == PidResolutionKind.Ambiguous)
+            {
+                var alive = r.Nodes.Where(n => AliveAt(n, child.CreateTime)).ToList();
+                if (alive.Count == 1 && ViewModelOf(alive[0]) is { } avm) { OpenPath(avm); return PidResolutionKind.Found; }
+                foreach (var n in r.Nodes.OrderBy(n => n.CreateTime ?? DateTime.MaxValue))
+                    if (ViewModelOf(n) is { } c) PidCandidates.Add(new PidCandidateViewModel(c) { IsLikely = alive.Contains(n) });
+                PidChooserTitle = $"PID {p} matches {PidCandidates.Count:N0} processes:";
+                return r.Kind;
+            }
+        }
         switch (r.Kind)
         {
             case PidResolutionKind.Found:
@@ -60,6 +83,21 @@ public sealed partial class ProcessTreeViewModel
                 break;
         }
         return r.Kind;
+    }
+
+    /// <summary>Started before (or at) <paramref name="at"/> and not exited before it; unknown times do not rule a node out only when no time is known for the child.</summary>
+    internal static bool AliveAt(ProcessNode n, DateTime? at)
+    {
+        if (at is not { } t) return false;
+        return n.CreateTime is { } c && c <= t && (n.ExitTime is not { } x || x >= t);
+    }
+
+    /// <summary>The single instance of <paramref name="pid"/> a row points at (null when none or several).</summary>
+    public ProcessNode? FindNode(int pid, DateTime? rowTime, string? sourceCsv, DateTime? rowCreateTime)
+    {
+        if (_disposed || _graph == null) return null;
+        var r = ProcessPidResolver.Resolve(_all.Select(v => v.Node), pid, rowTime, sourceCsv, rowCreateTime);
+        return r.Kind == PidResolutionKind.Found ? r.Nodes[0] : null;
     }
 
     private ProcessNodeViewModel? ViewModelOf(ProcessNode node)
@@ -89,6 +127,7 @@ public sealed partial class ProcessTreeViewModel
     public void SelectPidFromCard(int pid, ProcessActivityRow? row, IReadOnlyList<string>? headers)
     {
         DateTime? create = row != null && headers != null ? PidLinks.RowCreateTime(headers, row.Cells) : null;
-        SelectPid(pid, row?.Time, row?.Origin?.CsvPath, create);
+        var child = Selected?.Node is { } sel && sel.Ppid == pid && !(row != null && headers != null && PidLinks.RowChildPid(headers, row.Cells, pid) is { } cp && cp != sel.Pid) ? sel : null;
+        SelectPid(pid, row?.Time, row?.Origin?.CsvPath, create, child);
     }
 }

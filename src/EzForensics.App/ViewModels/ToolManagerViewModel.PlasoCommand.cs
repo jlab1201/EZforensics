@@ -29,7 +29,7 @@ public sealed partial class ToolManagerViewModel
             SourceHelp = "A KAPE target output, mounted drive or extracted triage folder, or a disk image (E01, raw / dd, VHD(X), VMDK).",
             AllowFile = true, AllowFolder = true,
             FileFilter = "Disk images|*.e01;*.ex01;*.raw;*.dd;*.img;*.001;*.vhd;*.vhdx;*.vmdk|All files|*.*",
-            OutputHelp = "Auto uses a new folder under the case root for every run; the timeline goes to its Timeline folder.",
+            OutputHelp = "Auto uses a new folder under the case folder for every run; the timeline goes to its Timeline folder.",
             RunText = "Build timeline",
             Caption = "Run builds one super timeline: log2timeline, then psort. Timeline options above apply to both.",
         };
@@ -91,11 +91,11 @@ public sealed partial class ToolManagerViewModel
             S.Queue.SourcePath = o.Source;
             S.LastCaseDir = o.CaseDir;
             tile.RollAutoOutputDir();
-            ShowMessage($"Queued the super timeline of {o.Source}. Follow it on the Jobs page; the CSV goes to {o.TimelineDir}.", InfoSeverity.Info);
+            ShowMessage($"Queued the super timeline of {o.Source}. Follow it in the Jobs list on Ingest; the CSV goes to {o.TimelineDir}.", InfoSeverity.Info);
             var r = await PlasoTimelineRunner.RunAsync(S.Queue, install, o);
             if (r.Succeeded) ShowMessage($"Super timeline built: {r.Events:N0} event(s) in {r.OutputCsv}. Open it on the Analyze page.", InfoSeverity.Success);
             else if (r.Cancelled) ShowMessage("The super timeline was cancelled.", InfoSeverity.Warning);
-            else ShowMessage($"The super timeline failed: {r.Error}. See the Jobs page for the log.", InfoSeverity.Error);
+            else ShowMessage($"The super timeline failed: {r.Error}. See the Jobs list on Ingest for the log.", InfoSeverity.Error);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {

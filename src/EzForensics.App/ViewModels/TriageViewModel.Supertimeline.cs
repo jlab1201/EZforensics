@@ -55,6 +55,9 @@ public sealed partial class TriageViewModel
             if (sources.Count == 0 || caseDir.Length == 0 || tools.Count == 0) return;
             var added = IngestSteps.Supertimelines(caseDir, tools, sources);
             if (added.Count == 0) return;
+            // before the Process tree data row (always the last one)
+            int at = plan.FindIndex(p => p.IsProcessTree);
+            if (at < 0) at = plan.Count;
             foreach (var p in added)
             {
                 var item = new PlannedJobItem(p);
@@ -62,7 +65,7 @@ public sealed partial class TriageViewModel
                 if (_restoredTicks != null && _restoredTicks.TryGetValue(item.Key, out var on)) item.IsSelected = on;
                 item.PropertyChanged += OnItemChanged;
                 Planned.Add(item);
-                plan.Add(item);
+                plan.Insert(at++, item);
             }
         }
         AfterPlanChanged(plan);
@@ -134,7 +137,7 @@ public sealed partial class TriageViewModel
             var job = PlasoTimelineRunner.EnqueueNotStarted(S.Queue, caseDir, row.Planned.Spec.OutputDir, host, reason);
             AppServices.OnUi(() => { row.AttachJob(job); _timelineJobs.Add(job); });
         }
-        catch (Exception ex) { AppLog.Error("Could not list the super timeline that did not start on the Jobs page", ex); }
+        catch (Exception ex) { AppLog.Error("Could not list the super timeline that did not start in the Jobs list on Ingest", ex); }
     }
 
     private async Task<SupertimelineOutcome> BuildSupertimelineAsync(PlannedJobItem row, string caseDir)

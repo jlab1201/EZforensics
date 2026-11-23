@@ -84,6 +84,34 @@ public static class ProcessRoles
         return key.Length > 0 && !role.Dirs.Contains(DirOf(key), StringComparer.Ordinal);
     }
 
+    /// <summary>Suffix of <see cref="RoleLabel"/> when the roles.json <c>parents</c> rule is broken.</summary>
+    public const string UnexpectedParentSuffix = " · unexpected parent";
+
+    /// <summary>
+    /// The known image has a roles.json <c>parents</c> rule and its captured parent is not one of them (svchost.exe started by explorer.exe). No parent, a ghost
+    /// parent (not captured) or a parent without a name: nothing is known, so false.
+    /// </summary>
+    public static bool HasUnexpectedParent(ProcessNode n) => UnexpectedParentRole(n) != null;
+
+    /// <summary>The image's roles.json entry when <see cref="HasUnexpectedParent"/>, else null.</summary>
+    public static ImageRole? UnexpectedParentRole(ProcessNode n)
+    {
+        if (n.IsGhost || n.Parent is not { IsGhost: false } p) return null;
+        var role = Find(n);
+        if (role == null || role.Parents.Count == 0) return null;
+        var parent = ImageName(p);
+        if (parent.Length == 0) return null;
+        return role.Parents.Contains(parent, StringComparer.Ordinal) ? null : role;
+    }
+
+    /// <summary>The role shown on the card and the node: <see cref="ProcessNode.Role"/> (Other when empty) plus <see cref="UnexpectedParentSuffix"/> when the parent rule is broken; empty for a ghost.</summary>
+    public static string RoleLabel(ProcessNode n)
+    {
+        if (n.IsGhost) return "";
+        var role = string.IsNullOrEmpty(n.Role) ? OtherRole : n.Role;
+        return HasUnexpectedParent(n) ? role + UnexpectedParentSuffix : role;
+    }
+
     /// <summary>
     /// Known name + path in an expected directory: the role, <see cref="RoleBasis.NamePath"/>. Known name + no stated path: the role, <see cref="RoleBasis.NameOnly"/>.
     /// Known name running elsewhere, or an unknown name: <see cref="OtherRole"/>, <see cref="RoleBasis.None"/>.

@@ -9,9 +9,9 @@ namespace EzForensics.App.ViewModels;
 
 /// <summary>
 /// One row of the Ingest planned jobs: the planned job, its tick and, once Run selected queued it, its job(s) for the Progress and Result
-/// columns (a computer details row has one job per system, the super timeline row log2timeline then psort).
+/// columns (a computer details row has one job per system, the super timeline row log2timeline then psort, Process tree data one per host).
 /// </summary>
-public sealed partial class PlannedJobItem : ObservableObject
+public sealed partial class PlannedJobItem : ObservableObject, IJobListRow
 {
     private readonly List<Job> _jobs = new();
 
@@ -51,6 +51,10 @@ public sealed partial class PlannedJobItem : ObservableObject
     public string Key => KeyOf(Planned);
     /// <summary>The row key of a planned job (ticks survive a re-plan by it).</summary>
     public static string KeyOf(PlannedJob p) => p.Artifact.RuleId + "|" + p.Artifact.MatchedPath + "|" + p.Spec.Label;
+    /// <summary>The row has a tick (jobs started elsewhere, listed below the planned rows, have none).</summary>
+    public bool ShowTick => true;
+    /// <summary>Raised when a job is attached (the page remembers every job Ingest queued, so it does not list it again as another job).</summary>
+    public Action<Job>? JobAttached { get; set; }
     public bool IsAvailable => UnavailableReason == null;
     public bool IsExcluded => ExcludedReason != null;
     /// <summary>The row checkbox is enabled: available, not excluded by a card and no run going on.</summary>
@@ -88,6 +92,7 @@ public sealed partial class PlannedJobItem : ObservableObject
     public bool IsComputerDetails => IngestSteps.IsComputerDetails(Planned);
     public bool IsSupertimeline => IngestSteps.IsSupertimeline(Planned);
     public bool IsMacbTimeline => IngestSteps.IsMacbTimeline(Planned);
+    public bool IsProcessTree => IngestSteps.IsProcessTree(Planned);
 
     /// <summary>The jobs queued for this row in the last run.</summary>
     public IReadOnlyList<Job> Jobs => _jobs;
@@ -102,8 +107,21 @@ public sealed partial class PlannedJobItem : ObservableObject
         }
     }
 
+    /// <summary>The job the row's columns, details and context menu act on (same as <see cref="Job"/>).</summary>
+    public Job? LatestJob => Job;
+    /// <summary>Cancel applies while the latest job is queued or running; Retry once it has finished.</summary>
+    public bool CanCancelJob => LatestJob is { IsFinished: false };
+    public bool CanRetryJob => LatestJob is { IsFinished: true };
+    /// <summary>Duration column (live while the job runs; <see cref="TickDuration"/> refreshes it).</summary>
+    public string Duration => LatestJob is { } j ? JobRow.FormatDuration(j) : "";
+    public string Result => LatestJob?.StatusReason ?? NotQueuedReason ?? "";
+    public string OutputDir => LatestJob?.Spec.OutputDir ?? Planned.Spec.OutputDir ?? "";
+    /// <summary>A job of the row is running: its Duration changes every second.</summary>
+    public bool HasRunningJob => _jobs.Any(j => j.State == JobState.Running);
+    public void TickDuration() => OnPropertyChanged(nameof(Duration));
+
     public bool HasJob => _jobs.Count > 0;
-    /// <summary>The not-clickable Result badge (no job, but a status such as Waiting or Skipped).</summary>
+    /// <summary>The not-clickable Status badge (no job, but a status such as Waiting or Skipped).</summary>
     public bool ShowStatusBadge => !HasJob && Status.Length > 0;
     private bool IsRunning => IsBusy || _jobs.Any(j => j.State == JobState.Running);
     private bool IsDone => !IsBusy && !IsWaiting && _jobs.Count > 0 && _jobs.All(j => j.IsFinished);
@@ -114,7 +132,7 @@ public sealed partial class PlannedJobItem : ObservableObject
     public bool ProgressIndeterminate => IsRunning;
     public double ProgressValue => IsDone ? 1 : 0;
 
-    /// <summary>Result column text: Done / Failed (exit 2) / Cancelled / Skipped / Running / Queued / Waiting; empty before the run.</summary>
+    /// <summary>Status column text: Done / Failed (exit 2) / Cancelled / Skipped / Running / Queued / Waiting; empty before the run.</summary>
     public string Status =>
         NotQueuedReason != null ? JobResultText.Text(JobState.Skipped, null)
         : Job is { } j ? (IsBusy || IsWaiting) && j.IsFinished ? JobResultText.Text(JobState.Running, null) : JobResultText.Text(j.State, j.ExitCode)
@@ -122,7 +140,7 @@ public sealed partial class PlannedJobItem : ObservableObject
         : IsWaiting ? "Waiting"
         : "";
 
-    /// <summary>Colour of the Result badge: Success (done), Error (failed / timed out), Warning (cancelled / skipped / not queued), Info (queued /
+    /// <summary>Colour of the Status badge: Success (done), Error (failed / timed out), Warning (cancelled / skipped / not queued), Info (queued /
     /// running / waiting).</summary>
     public InfoSeverity StatusSeverity =>
         NotQueuedReason != null ? InfoSeverity.Warning
@@ -137,13 +155,14 @@ public sealed partial class PlannedJobItem : ObservableObject
         : InfoSeverity.Info;
 
     public string StatusToolTip =>
-        NotQueuedReason ?? (Job is { } j ? (string.IsNullOrEmpty(j.StatusReason) ? "" : j.StatusReason + Environment.NewLine) + "Click to open this job on the Jobs page"
+        NotQueuedReason ?? (Job is { } j ? (string.IsNullOrEmpty(j.StatusReason) ? "" : j.StatusReason + Environment.NewLine) + "Click to show this job's log below"
         : IsWaiting ? "Starts when the other jobs of the run have finished" : "");
 
     public void AttachJob(Job job)
     {
         _jobs.Add(job);
         job.PropertyChanged += OnJobChanged;
+        JobAttached?.Invoke(job);
         RaiseRun();
     }
 
@@ -168,7 +187,7 @@ public sealed partial class PlannedJobItem : ObservableObject
 
     private void OnJobChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(Core.Execution.Job.State) or nameof(Core.Execution.Job.ExitCode) or nameof(Core.Execution.Job.StatusReason))
+        if (e.PropertyName is nameof(Core.Execution.Job.State) or nameof(Core.Execution.Job.ExitCode) or nameof(Core.Execution.Job.StatusReason) or nameof(Core.Execution.Job.StartUtc) or nameof(Core.Execution.Job.EndUtc))
             AppServices.OnUi(RaiseRun);
     }
 
@@ -206,6 +225,12 @@ public sealed partial class PlannedJobItem : ObservableObject
         if (Phase == RunPhase.Finished) _finishedStamp ??= RunOrder.NextStamp();
         else _finishedStamp = null;
         OnPropertyChanged(nameof(Job));
+        OnPropertyChanged(nameof(LatestJob));
+        OnPropertyChanged(nameof(CanCancelJob));
+        OnPropertyChanged(nameof(CanRetryJob));
+        OnPropertyChanged(nameof(Duration));
+        OnPropertyChanged(nameof(Result));
+        OnPropertyChanged(nameof(OutputDir));
         OnPropertyChanged(nameof(HasJob));
         OnPropertyChanged(nameof(ShowProgress));
         OnPropertyChanged(nameof(ProgressIndeterminate));

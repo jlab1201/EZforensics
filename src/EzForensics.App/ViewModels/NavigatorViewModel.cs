@@ -71,11 +71,19 @@ public sealed class NavigatorMemberViewModel : NavigatorTreeItem
     public ProcessNodeViewModel Node { get; }
     public string Name => Node.Name;
     public string PidText => Node.PidText;
-    public string StartText => Node.Node.CreateTime?.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) ?? "start unknown";
+    public string StartText => Node.Node.CreateTime?.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) is { } s ? s + " UTC" : "start unknown";
     /// <summary>Indicator / data gap text (empty for roles and sessions).</summary>
     public string Evidence { get; }
     public bool HasEvidence => Evidence.Length > 0;
     public string ToolTipText => Evidence.Length > 0 ? Evidence : Node.ToolTipText;
+    /// <summary>Flagged (injected, hidden, suspicious parent, orphan ...): the row is marked so a group's "N flagged" can be found.</summary>
+    public bool IsFlagged => ProcessNavigatorGroups.IsFlagged(Node.Node);
+
+    /// <summary>Navigator search: name, PID, user, command line or path contains <paramref name="q"/> (case-insensitive).</summary>
+    public static bool Matches(ProcessNodeViewModel n, string q) =>
+        n.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || n.Node.Pid.ToString(CultureInfo.InvariantCulture) == q
+        || n.Node.User.Contains(q, StringComparison.OrdinalIgnoreCase) || n.Node.CmdLine.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || n.Node.Path.Contains(q, StringComparison.OrdinalIgnoreCase);
     public override string DisplayName => Name;
     public override string AutomationId => "Results.ProcessTree.Navigator.Member." + Node.Pid.ToString(CultureInfo.InvariantCulture);
     public IRelayCommand SelectCommand { get; }
@@ -96,13 +104,33 @@ public sealed class NavigatorGroupViewModel : NavigatorTreeItem
         Title = group.Title;
         Count = nodes.Count;
         FlaggedCount = group.FlaggedCount;
-        for (int i = 0; i < nodes.Count && i < MaxListedMembers; i++) Members.Add(new NavigatorMemberViewModel(nodes[i], evidence[i], selectMember));
-        MoreText = nodes.Count > MaxListedMembers ? $"+ {nodes.Count - MaxListedMembers:N0} more (all are highlighted on the canvas)" : "";
-        var children = new List<NavigatorTreeItem>(Members);
-        if (HasMore) children.Add(new NavigatorNoteViewModel(MoreText, $"Results.ProcessTree.Navigator.More.{group.Section}.{group.Key}"));
-        MarkSiblings(children);
-        Children = children;
+        _all = nodes.Select((n, i) => new NavigatorMemberViewModel(n, evidence[i], selectMember)).ToList();
         SelectCommand = new RelayCommand(() => select(this));
+        ApplyFilter(null);
+    }
+
+    private readonly List<NavigatorMemberViewModel> _all;
+    private IReadOnlyList<NavigatorTreeItem> _children = Array.Empty<NavigatorTreeItem>();
+    private bool _filtered;
+
+    /// <summary>Members matching the Navigator search now (all without a search).</summary>
+    public int VisibleCount { get; private set; }
+
+    /// <summary>Lists the members matching <paramref name="query"/> (null / blank = all), at most <see cref="MaxListedMembers"/>.</summary>
+    public void ApplyFilter(string? query)
+    {
+        var q = query?.Trim() ?? "";
+        var hits = q.Length == 0 ? _all : _all.Where(m => NavigatorMemberViewModel.Matches(m.Node, q)).ToList();
+        _filtered = q.Length > 0;
+        VisibleCount = hits.Count;
+        Members.Clear();
+        Members.AddRange(hits.Take(MaxListedMembers));
+        MoreText = hits.Count > MaxListedMembers ? $"+ {hits.Count - MaxListedMembers:N0} more (all are highlighted on the canvas)" : "";
+        var children = new List<NavigatorTreeItem>(Members);
+        if (HasMore) children.Add(new NavigatorNoteViewModel(MoreText, $"Results.ProcessTree.Navigator.More.{Group.Section}.{Group.Key}"));
+        MarkSiblings(children);
+        _children = children;
+        OnPropertyChanged(nameof(Children)); OnPropertyChanged(nameof(MoreText)); OnPropertyChanged(nameof(HasMore)); OnPropertyChanged(nameof(CountText));
     }
 
     public NavigatorGroup Group { get; }
@@ -111,14 +139,15 @@ public sealed class NavigatorGroupViewModel : NavigatorTreeItem
     public string Title { get; }
     public int Count { get; }
     public int FlaggedCount { get; }
-    public string CountText => FlaggedCount > 0 && Group.Section == NavigatorSection.Roles
+    public string CountText => _filtered ? $"{VisibleCount:N0} of {Count:N0}"
+        : FlaggedCount > 0 && Group.Section is NavigatorSection.Roles or NavigatorSection.Sessions
         ? $"{Count:N0} ({FlaggedCount:N0} flagged)" : Count.ToString("N0", CultureInfo.InvariantCulture);
     public List<NavigatorMemberViewModel> Members { get; } = new();
-    public string MoreText { get; }
+    public string MoreText { get; private set; } = "";
     public bool HasMore => MoreText.Length > 0;
     public override string DisplayName => Title;
     public override string AutomationId => $"Results.ProcessTree.Navigator.Group.{Group.Section}.{Group.Key}";
-    public override IReadOnlyList<NavigatorTreeItem> Children { get; }
+    public override IReadOnlyList<NavigatorTreeItem> Children => _children;
     public override bool IsOpenHighlighted => IsSelected;
     /// <summary>Roles section: the role's key (<see cref="ProcessNodeViewModel.RoleKeyOf"/>), so the row shows the diamond fill colour as a swatch (the legend); else empty.</summary>
     public string RoleKey => Group.Section == NavigatorSection.Roles ? ProcessNodeViewModel.RoleKeyOf(Title) : "";
@@ -138,10 +167,41 @@ public sealed class NavigatorSectionViewModel : NavigatorTreeItem
         IsExpanded = expanded;
         IsTopLevel = true;
         EmptyText = section == NavigatorSection.Indicators ? "No indicators" : "Nothing here";
-        MarkSiblings(groups);
-        Children = groups.Count > 0
-            ? groups
-            : new NavigatorTreeItem[] { new NavigatorNoteViewModel(EmptyText, "Results.ProcessTree.Navigator.Empty." + section) { IsFirst = true, IsLast = true } };
+        ApplyFilter(null);
+    }
+
+    /// <summary>The Indicators section with at least one group: its header carries the "Flag all" button.</summary>
+    public bool CanFlagAll => Section == NavigatorSection.Indicators && Groups.Count > 0;
+
+    private IReadOnlyList<NavigatorTreeItem> _children = Array.Empty<NavigatorTreeItem>();
+    private bool? _expandedBeforeSearch;
+
+    /// <summary>
+    /// Navigator search: only groups with a matching member stay, opened with the section while there is a search; clearing it restores
+    /// how the section was open before.
+    /// </summary>
+    public void ApplyFilter(string? query)
+    {
+        var searching = !string.IsNullOrWhiteSpace(query);
+        foreach (var g in Groups) g.ApplyFilter(query);
+        var visible = searching ? Groups.Where(g => g.VisibleCount > 0).ToList() : Groups.ToList();
+        MarkSiblings(visible);
+        _children = visible.Count > 0
+            ? visible
+            : new NavigatorTreeItem[] { new NavigatorNoteViewModel(searching ? "No match" : EmptyText, "Results.ProcessTree.Navigator.Empty." + Section) { IsFirst = true, IsLast = true } };
+        OnPropertyChanged(nameof(Children));
+        if (searching)
+        {
+            _expandedBeforeSearch ??= IsExpanded;
+            IsExpanded = visible.Count > 0;
+            foreach (var g in visible) g.IsExpanded = true;
+        }
+        else if (_expandedBeforeSearch is { } was)
+        {
+            IsExpanded = was;
+            _expandedBeforeSearch = null;
+            foreach (var g in Groups) g.IsExpanded = false;
+        }
     }
 
     /// <summary>Marks IsFirst / IsLast on the section list (the sections are top level).</summary>
@@ -158,6 +218,6 @@ public sealed class NavigatorSectionViewModel : NavigatorTreeItem
         ? $"{Title} ({Total:N0})" : $"{Title} ({Groups.Count:N0})";
     public override string DisplayName => Title;
     public override string AutomationId => "Results.ProcessTree.Navigator.Section." + Section;
-    public override IReadOnlyList<NavigatorTreeItem> Children { get; }
+    public override IReadOnlyList<NavigatorTreeItem> Children => _children;
     public override void Activate() => IsExpanded = !IsExpanded;
 }

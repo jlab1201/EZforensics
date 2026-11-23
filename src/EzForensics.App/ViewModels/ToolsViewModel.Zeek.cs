@@ -39,7 +39,7 @@ public sealed partial class ToolsViewModel
             SourceHelp = ZeekInputHelp,
             AllowFile = true, AllowFolder = true,
             FileFilter = "Packet captures|*.pcap;*.pcapng;*.cap;*.dmp;*.pcap*|All files|*.*",
-            OutputHelp = "The case folder: logs and CSVs go to <case>\\Network (per host in a case made by Ingest). Auto uses a new folder under the case root for every run.",
+            OutputHelp = "The case folder: logs and CSVs go to <case>\\Network (per host in a case made by Ingest). Auto uses a new folder under the case folder for every run.",
             Caption = "One job per capture (found by its pcap / pcapng header): Zeek logs (conn, dns, http, ssl, files, x509, notice, weird, ...) and CSV copies with a DateTimeUtc column.",
             SecondaryText = "Open in Analyze",
             SecondaryCommand = OpenZeekResultsCommand,
@@ -132,7 +132,7 @@ public sealed partial class ToolsViewModel
         int ok = _zeekJobs.Count(x => x.State == JobState.Succeeded);
         ShowMessage(ok == _zeekJobs.Count
                 ? $"Zeek finished: {ok} capture(s) processed. Open it on the Analyze page ({_zeekCaseDir}\\Network\\Zeek) to review the CSVs."
-                : $"Zeek finished: {_zeekJobs.Count - ok} of {_zeekJobs.Count} job(s) did not succeed. See the Jobs page for logs.",
+                : $"Zeek finished: {_zeekJobs.Count - ok} of {_zeekJobs.Count} job(s) did not succeed. See the Jobs list on Ingest for logs.",
             ok == _zeekJobs.Count ? InfoSeverity.Success : InfoSeverity.Warning);
     }
 

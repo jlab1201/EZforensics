@@ -298,7 +298,7 @@ public class MemoryGateSafeguardTests
         q.Enqueue(f.Spec("info"), f.Case);
         var ps = q.Enqueue(f.Spec("pslist"), f.Case);
         await q.WhenAllAsync().WaitAsync(Limit);
-        var retry = q.Enqueue(ps.Spec, f.Case);              // Jobs page Retry: same spec, same (decided) gate
+        var retry = q.Enqueue(ps.Spec, f.Case);              // Ingest job list Retry: same spec, same (decided) gate
         await q.WhenAllAsync().WaitAsync(Limit);
         retry.State.Should().Be(JobState.Succeeded, retry.StatusReason);
         Log(retry).Should().NotContain("Waiting for the windows.info");

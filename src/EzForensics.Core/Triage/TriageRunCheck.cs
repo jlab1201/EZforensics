@@ -40,7 +40,7 @@ public static class TriageRunCheck
         if (g.SelectedCount == 0) return "No jobs are ticked: tick the jobs to run (or click Defaults).";
         if (!string.IsNullOrEmpty(g.SystemErrorText)) return "Fix the system name first: " + g.SystemErrorText;
         if (g.CaseFolderEmpty) return "The case folder is empty: choose a case folder.";
-        if (g.CaseRunActive) return "A run of this case folder is still in progress: wait for it to finish (Jobs page) or pick another case folder.";
+        if (g.CaseRunActive) return "A run of this case folder is still in progress: wait for it to finish (the Jobs list on Ingest) or pick another case folder.";
         if (g.MemoryPlanning) return "Planning the memory image jobs… Run selected is available in a moment.";
         return null;
     }

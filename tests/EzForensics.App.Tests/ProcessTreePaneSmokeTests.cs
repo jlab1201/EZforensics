@@ -10,6 +10,7 @@ using FluentAssertions;
 namespace EzForensics.App.Tests;
 
 /// <summary>The process tree pane parses, lays out and binds without errors (floating chips, View popover, left rail, toast), in Tree and Focus mode.</summary>
+[Collection("WpfApp")]
 public sealed class ProcessTreePaneSmokeTests
 {
     private sealed class Collector : TraceListener
@@ -65,6 +66,7 @@ public sealed class ProcessTreePaneSmokeTests
     }
 
     [Fact]
+    [Trait("Category", "Flaky")]   // raw mouse input / shown window: timing-sensitive under load
     public async Task Navigator_row_press_runs_its_action_once()
     {
         var g = new ProcessGraph();
@@ -173,6 +175,7 @@ public sealed class ProcessTreePaneSmokeTests
     }
 
     [Fact]
+    [Trait("Category", "Flaky")]   // raw mouse input / shown window: timing-sensitive under load
     public async Task Navigator_rows_respond_to_a_real_click_in_a_shown_window()
     {
         var g = new ProcessGraph();
@@ -405,7 +408,7 @@ public sealed class ProcessTreePaneSmokeTests
                 {
                     "Results.ProcessTree.HostChip", "Results.ProcessTree.Title",
                     "Results.ProcessTree.ViewMenu", "Results.ProcessTree.ShowExited", "Results.ProcessTree.ShowGrid",
-                    "Results.ProcessTree.ShowWholeTree", "Results.ProcessTree.Toast", "Results.ProcessTree.Status",
+                    "Results.ProcessTree.ViewMenu.ShowWholeTree", "Results.ProcessTree.Toast", "Results.ProcessTree.Status",
                     "Results.ProcessTree.ZoomIn", "Results.ProcessTree.ZoomOut", "Results.ProcessTree.ZoomSlider", "Results.ProcessTree.Fit", "Results.ProcessTree.Close",
                     "Results.ProcessTree.Navigator.Toggle", "Results.ProcessTree.Canvas", "Results.ProcessTree.ZoomBar",
                 });
@@ -443,6 +446,7 @@ public sealed class ProcessTreePaneSmokeTests
     }
 
     [Fact]
+    [Trait("Category", "Flaky")]   // raw mouse input / shown window: timing-sensitive under load
     public async Task Long_detail_value_clamps_and_more_less_respond_to_a_real_click()
     {
         var g = new ProcessGraph();

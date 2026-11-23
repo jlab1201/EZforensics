@@ -75,6 +75,12 @@ public sealed class JobQueue
     /// <summary>Tool logging (Options > Installation): <see cref="ToolLogLevel.Debug"/> adds <see cref="ToolDebugLog"/> lines to every job log. Read when a job starts.</summary>
     public ToolLogLevel LogLevel { get; set; } = ToolLogLevel.Normal;
 
+    /// <summary>
+    /// Folder of the analyst's own EvtxECmd maps (<see cref="EventLogs.EvtxCustomMaps"/>); null = off. When set, every EvtxECmd job copies them
+    /// into the tool's Maps folder before it runs, and a <c>--sync</c> job copies them again after the sync.
+    /// </summary>
+    public string? EvtxCustomMapsDir { get; set; }
+
     /// <summary>Source path recorded in the manifests (the path the user chose). Setting it clears <see cref="SourceRoots"/>.</summary>
     public string? SourcePath
     {
@@ -130,7 +136,7 @@ public sealed class JobQueue
     }
 
     /// <summary>
-    /// Lists a job that could not be started (its tool is missing, its source is gone...) as already finished on the Jobs page, with the
+    /// Lists a job that could not be started (its tool is missing, its source is gone...) as already finished in the Jobs list on Ingest, with the
     /// reason as its status and log, and records it in the run manifest. Nothing is run.
     /// </summary>
     public Job EnqueueRejected(JobSpec spec, string caseDir, string reason, JobState state = JobState.Failed)
@@ -151,7 +157,7 @@ public sealed class JobQueue
         job.StatusReason = reason;
         job.State = state;
         PostOrRun(() => Jobs.Add(job));
-        try { GetManifest(caseDir).RecordAndWrite(job); } catch { }
+        try { GetManifest(caseDir).RecordAndWrite(job); } catch (Exception ex) { job.Log("# Run manifest write failed: " + ex.Message); }
         job.MarkRecorded();
         return job;
     }
@@ -288,7 +294,7 @@ public sealed class JobQueue
             // A PrepareOutsideSlot job that failed before its preparation step never set its start time.
             if (job.StartUtc == null && job.EndUtc != null) job.StartUtc = job.EndUtc;
             job.CloseLog();
-            try { GetManifest(job.CaseDir).RecordAndWrite(job); } catch { }
+            try { GetManifest(job.CaseDir).RecordAndWrite(job); } catch (Exception ex) { job.Log("# Run manifest write failed: " + ex.Message); }
             job.MarkRecorded();
         }
     }
@@ -313,6 +319,7 @@ public sealed class JobQueue
         bool outsideSlot = spec.PrepareOutsideSlot && spec.PreProcess != null && !spec.Exclusive;
         // A job that waits in PreProcess (memory jobs behind the symbol check) starts its clock only once it really runs.
         if (!outsideSlot) { job.StartUtc = DateTime.UtcNow; job.State = JobState.Running; }
+        if (spec.InProcess != null) { await ExecuteInProcessAsync(job, spec.InProcess).ConfigureAwait(false); return; }
 
         var tool = spec.ExePath != null
             ? new InstalledTool(Path.GetFileName(spec.ExePath), spec.ExePath, BuildFlavor.Net9, spec.ExeVersion)
@@ -321,7 +328,7 @@ public sealed class JobQueue
         {
             job.Log(spec.ExePath != null
                 ? $"ERROR: {spec.ExePath} was not found."
-                : $"ERROR: {spec.ExeName} was not found under the tools root. Install or update the tools in Tools, or set the tools folder in Settings.");
+                : $"ERROR: {spec.ExeName} was not found under the tools root. Install or update the tools in Tools, or set the tools folder in Options.");
             job.EndUtc = DateTime.UtcNow;
             job.StatusReason = JobOutcomeClassifier.Classify(0, false, false, Array.Empty<string>(), Array.Empty<string>(), toolMissing: true).Reason;
             job.State = JobState.Failed;
@@ -338,6 +345,11 @@ public sealed class JobQueue
         job.Log(JobLogFormat.JobPrefix + job.Id, raise: false);
         if (job.StartUtc is { } started0) job.Log("# Started (UTC): " + started0.ToString("o"), raise: false);
         foreach (var hl in JobLogFormat.CommandHeaderLines(job.CommandLine)) job.Log(hl);
+        var customMaps = spec.ExePath == null && EvtxCustomMapsDir is { } cmd
+                         && (string.Equals(spec.ToolId, "EvtxECmd", StringComparison.OrdinalIgnoreCase) || string.Equals(tool.ExeName, "EvtxECmd.exe", StringComparison.OrdinalIgnoreCase))
+            ? cmd : null;
+        bool isSync = args.Any(a => string.Equals(a, "--sync", StringComparison.OrdinalIgnoreCase));
+        if (customMaps != null && !isSync) ApplyCustomMaps(job, args, toolDir, customMaps);
 
         try { Directory.CreateDirectory(spec.OutputDir); }
         catch (Exception ex)
@@ -489,6 +501,9 @@ public sealed class JobQueue
             return;
         }
 
+        // --sync rewrites the Maps folder: the custom maps go back in afterwards.
+        if (customMaps != null && isSync && !res.Cancelled && !res.TimedOut) ApplyCustomMaps(job, args, toolDir, customMaps);
+
         // Post-processing (e.g. Zeek log -> CSV conversion) runs before the outputs are classified and hashed.
         string? postError = null;
         if (spec.PostProcess != null && !res.Cancelled && !res.TimedOut)
@@ -566,6 +581,48 @@ public sealed class JobQueue
         if (job.StagingLeftovers.Count > 0) reason += $" {job.StagingLeftovers.Count} output file(s) left in staging: {spec.Output!.StagingDir}";
         job.StatusReason = reason.Trim();
         job.State = outcome.State;
+    }
+
+    private static void ApplyCustomMaps(Job job, IReadOnlyList<string> args, string toolDir, string customDir)
+    {
+        try { foreach (var l in EventLogs.EvtxCustomMaps.ApplyForRun(args, toolDir, customDir)) job.Log(l, raise: false); }
+        catch (Exception ex) { job.Log("# Custom event maps not copied: " + ex.Message); }
+    }
+
+    /// <summary>Runs a <see cref="JobSpec.InProcess"/> job: the delegate replaces the tool process; everything around it is the normal job life cycle.</summary>
+    private async Task ExecuteInProcessAsync(Job job, Func<JobPostProcessContext, CancellationToken, Task> work)
+    {
+        var spec = job.Spec;
+        job.Log(JobLogFormat.JobPrefix + job.Id, raise: false);
+        job.Log("# Started (UTC): " + job.StartUtc!.Value.ToString("o"), raise: false);
+        var timeout = spec.Timeout ?? Timeout;
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(job.Token);
+        if (timeout > TimeSpan.Zero && timeout != System.Threading.Timeout.InfiniteTimeSpan) cts.CancelAfter(timeout);
+        var ctx = new JobPostProcessContext(job, 0);
+        JobState state; string? reason;
+        try
+        {
+            await work(ctx, cts.Token).ConfigureAwait(false);
+            state = JobState.Succeeded; reason = ctx.Summary;
+        }
+        catch (OperationCanceledException)
+        {
+            bool byUser = job.Token.IsCancellationRequested;
+            state = byUser ? JobState.Cancelled : JobState.TimedOut;
+            reason = byUser ? JobOutcomeClassifier.CancelledReason : "Timed out after " + timeout;
+            job.Log("# " + reason);
+            if (spec.CancelCommand is { Count: > 0 } cancelCmd) await RunCancelCommandAsync(job, cancelCmd).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            state = JobState.Failed; reason = ex.Message;
+            job.Log("ERROR: " + ex.Message);
+        }
+        job.EndUtc = DateTime.UtcNow;
+        job.ExitCode = state == JobState.Succeeded ? 0 : null;
+        job.Log("# Finished (UTC): " + job.EndUtc.Value.ToString("o"), raise: false);
+        job.StatusReason = reason;
+        job.State = state;
     }
 
     /// <summary>The job's own log, anything under a <c>logs</c> folder next to it, and run manifests are bookkeeping, not tool output.</summary>

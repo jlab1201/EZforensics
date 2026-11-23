@@ -1,0 +1,159 @@
+<UserControl x:Class="EzForensics.App.Views.Assistant.AssistantChatPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EzForensics.App.ViewModels"
+             xmlns:c="clr-namespace:EzForensics.App.Controls"
+             AutomationProperties.AutomationId="Assistant.Panel">
+    <Border Style="{DynamicResource Card}" Padding="10">
+        <DockPanel>
+            <!-- header: title + provider/model, Auto, New chat, Dock/Undock, Close -->
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="New chat" Command="{Binding NewChatCommand}" Padding="8,2" Margin="6,0,0,0" ToolTip="Forget this conversation and start again"
+                            AutomationProperties.AutomationId="Assistant.NewChat" AutomationProperties.Name="New chat"/>
+                    <Button x:Name="ModeButton" Margin="6,0,0,0" MinWidth="28" Padding="4,2" ToolTip="Where Spectre shows" Click="ModeButton_Click"
+                            AutomationProperties.AutomationId="Assistant.Mode" AutomationProperties.Name="Spectre display mode">
+                        <TextBlock Style="{DynamicResource Icon}" Text="&#xE8A7;" FontSize="13"/>
+                        <Button.ContextMenu>
+                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                <MenuItem Header="Pop-up" Command="{Binding SetModeCommand}" CommandParameter="popup" IsChecked="{Binding IsPopupMode, Mode=OneWay}"
+                                          AutomationProperties.AutomationId="Assistant.Mode.Popup"/>
+                                <MenuItem Header="Dock to side" Command="{Binding SetModeCommand}" CommandParameter="docked" IsChecked="{Binding IsDockedMode, Mode=OneWay}"
+                                          AutomationProperties.AutomationId="Assistant.Mode.Docked"/>
+                                <MenuItem Header="Open in window" Command="{Binding SetModeCommand}" CommandParameter="window" IsChecked="{Binding IsWindowMode, Mode=OneWay}"
+                                          AutomationProperties.AutomationId="Assistant.Mode.Window"/>
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                    <Button Command="{Binding MinimizeCommand}" Margin="6,0,0,0" MinWidth="28" Padding="4,2" ToolTip="Minimize to the Spectre icon"
+                            Visibility="{Binding CanMinimize, Converter={StaticResource BoolToVis}}"
+                            AutomationProperties.AutomationId="Assistant.Minimize" AutomationProperties.Name="Minimize Spectre">
+                        <TextBlock Style="{DynamicResource Icon}" Text="&#xE921;" FontSize="13"/>
+                    </Button>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Spectre" Style="{DynamicResource SectionTitle}" Margin="0"/>
+                    <TextBlock Text="{Binding ModelLabel}" Style="{DynamicResource Caption}" TextTrimming="CharacterEllipsis" ToolTip="Change it in Options &gt; AI"
+                               AutomationProperties.AutomationId="Assistant.Model"/>
+<StackPanel Orientation="Horizontal" Margin="0,6,0,0">                        <ToggleButton Style="{DynamicResource SwitchToggle}" Content="Auto-mode" IsChecked="{Binding AutoMode, Mode=TwoWay}"                                      AutomationProperties.AutomationId="Assistant.AutoMode" AutomationProperties.Name="Auto-mode"/>                        <c:HelpTip Margin="6,0,0,0" VerticalAlignment="Center" AutomationProperties.AutomationId="Assistant.AutoModeHelp"                                   Text="Off: Spectre suggests filters, flags and files; nothing changes until you click Apply. On: Spectre applies them itself; each action shows in the chat with Undo. Cloud consent and changes to Spectre's case data are always asked."/>                    </StackPanel>
+                </StackPanel>
+            </DockPanel>
+
+            <!-- first run: the local model is missing -->
+            <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="10,8" CornerRadius="6" BorderThickness="1"
+                    BorderBrush="{DynamicResource Brush.Accent}" Background="{DynamicResource Brush.SurfaceAlt}"
+                    Visibility="{Binding ShowLocalAiCard, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Assistant.LocalAiCard">
+                <StackPanel>
+                    <TextBlock Text="{x:Static vm:AssistantChatViewModel.LocalAiCardText}" TextWrapping="Wrap" AutomationProperties.AutomationId="Assistant.LocalAiCard.Text"/>
+                    <Button Content="Set up local AI" Style="{DynamicResource AccentButton}" Command="{Binding SetUpLocalAiCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" Padding="10,3"
+                            AutomationProperties.AutomationId="Assistant.LocalAiCard.Setup" AutomationProperties.Name="Set up local AI"/>
+                    <TextBlock Text="{Binding LocalAiStatus}" Style="{DynamicResource Caption}" TextWrapping="Wrap" Margin="0,6,0,0"
+                               Visibility="{Binding LocalAiStatus, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Assistant.LocalAiCard.Status"/>
+                </StackPanel>
+            </Border>
+
+            <!-- empty chat: three starter prompts -->
+            <ItemsControl DockPanel.Dock="Top" Margin="0,0,0,8" ItemsSource="{x:Static vm:AssistantChatViewModel.StarterPrompts}" Focusable="False"
+                          Visibility="{Binding ShowStarters, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Assistant.Starters">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Content="{Binding}" Margin="0,0,6,6" Padding="10,3"
+                                Command="{Binding DataContext.SendStarterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                AutomationProperties.AutomationId="Assistant.Starter" AutomationProperties.Name="{Binding}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- input -->
+            <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="InputBox" Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap"
+                         MinHeight="52" MaxHeight="120" VerticalScrollBarVisibility="Auto" Tag="Ask about the case (Enter sends, Shift+Enter adds a line)"
+                         PreviewKeyDown="Input_PreviewKeyDown" AutomationProperties.AutomationId="Assistant.Input" AutomationProperties.Name="Message"/>
+                <Button Grid.Column="1" Content="Send" Style="{DynamicResource AccentButton}" Command="{Binding SendCommand}" Margin="6,0,0,0" VerticalAlignment="Bottom" MinWidth="64"
+                        Visibility="{Binding IsIdle, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Assistant.Send" AutomationProperties.Name="Send"/>
+                <Button Grid.Column="1" Content="Stop" Command="{Binding StopCommand}" Margin="6,0,0,0" VerticalAlignment="Bottom" MinWidth="64"
+                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Assistant.Stop" AutomationProperties.Name="Stop"/>
+            </Grid>
+
+            <!-- page switched mid-conversation: keep it or start over (going back to the page removes it) -->
+            <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="10,8" CornerRadius="6" BorderThickness="1"
+                    BorderBrush="{DynamicResource Brush.Accent}" Background="{DynamicResource Brush.SurfaceAlt}"
+                    Visibility="{Binding HasPageSwitchNotice, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Assistant.PageSwitch">
+                <StackPanel>
+                    <TextBlock Text="{Binding PageSwitchNotice}" TextWrapping="Wrap" AutomationProperties.AutomationId="Assistant.PageSwitch.Text"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="New conversation" Style="{DynamicResource AccentButton}" Command="{Binding NewChatCommand}" Padding="10,3"
+                                AutomationProperties.AutomationId="Assistant.PageSwitch.New" AutomationProperties.Name="New conversation"/>
+                        <Button Content="Keep this one" Command="{Binding KeepConversationCommand}" Margin="6,0,0,0" Padding="10,3"
+                                AutomationProperties.AutomationId="Assistant.PageSwitch.Keep" AutomationProperties.Name="Keep this conversation"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- typing caption: only for the WPF fallback list (the transcript page shows animated dots itself) -->
+            <StackPanel x:Name="BusyLine" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,6,0,0">
+                <TextBlock Text="Spectre is typing…" Style="{DynamicResource Caption}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding StatusText}" Style="{DynamicResource Caption}" Margin="0,2,0,0" AutomationProperties.AutomationId="Assistant.Status"/>
+            </StackPanel>
+
+            <!-- messages -->
+            <Grid>
+            <!-- transcript page (WebView2, added at load); the WPF list below is the fallback when the WebView2 runtime is missing -->
+            <Grid x:Name="WebHost" Visibility="Collapsed" AutomationProperties.AutomationId="Assistant.Transcript"/>
+            <ScrollViewer x:Name="MessageScroll" VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="Assistant.Messages" AutomationProperties.Name="Messages">
+                <ItemsControl ItemsSource="{Binding Messages}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:ChatMessage}">
+                            <Border x:Name="Bubble" Margin="0,0,0,8" Padding="8,6" CornerRadius="6" Background="{DynamicResource Brush.SurfaceAlt}">
+                                <StackPanel>
+                                    <TextBlock x:Name="RoleText" Text="{Binding RoleLabel}" Style="{DynamicResource Caption}" FontWeight="SemiBold"/>
+                                    <TextBox x:Name="Body" Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"/>
+                                    <!-- proposal card: nothing happens until Apply is clicked -->
+                                    <StackPanel x:Name="Card" DataContext="{Binding Card}" Visibility="Collapsed">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Text}" TextWrapping="Wrap"/>
+                                        <TextBox Text="{Binding Detail, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0" Margin="0,2,0,0"
+                                                 FontFamily="{DynamicResource Font.Mono}"/>
+                                        <TextBlock Text="{Binding Reason}" Style="{DynamicResource Caption}" Margin="0,2,0,0" Visibility="{Binding HasReason, Converter={StaticResource BoolToVis}}"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding IsPending, Converter={StaticResource BoolToVis}}">
+                                            <Button Content="Apply" Style="{DynamicResource AccentButton}" Command="{Binding ApplyCommand}" Padding="10,2"
+                                                    AutomationProperties.AutomationId="Assistant.Apply" AutomationProperties.Name="Apply"/>
+                                            <Button Content="Dismiss" Command="{Binding DismissCommand}" Padding="10,2" Margin="6,0,0,0"
+                                                    AutomationProperties.AutomationId="Assistant.Dismiss" AutomationProperties.Name="Dismiss"/>
+                                        </StackPanel>
+<Button Content="Undo" Command="{Binding UndoCommand}" Padding="10,2" HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="{Binding CanUndo, Converter={StaticResource BoolToVis}}"                                                AutomationProperties.AutomationId="Assistant.Undo" AutomationProperties.Name="Undo"/>
+                                        <TextBlock Text="{Binding Note}" Style="{DynamicResource Caption}" Margin="0,4,0,0" Visibility="{Binding Note, Converter={StaticResource BoolToVis}}"
+                                                   AutomationProperties.AutomationId="Assistant.CardNote"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsProposal}" Value="True">
+                                    <Setter TargetName="Card" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="Body" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="RoleText" Property="Text" Value="Suggestion"/>
+                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                                    <Setter TargetName="Bubble" Property="BorderThickness" Value="1"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Role}" Value="You">
+                                    <Setter TargetName="Bubble" Property="Background" Value="{DynamicResource Brush.Selection}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Role}" Value="Status">
+                                    <Setter TargetName="Bubble" Property="Background" Value="Transparent"/>
+                                    <Setter TargetName="Bubble" Property="Padding" Value="2,0"/>
+                                    <Setter TargetName="RoleText" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="Body" Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            </Grid>
+        </DockPanel>
+    </Border>
+</UserControl>

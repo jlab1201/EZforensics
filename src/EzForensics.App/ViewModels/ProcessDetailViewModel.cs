@@ -33,6 +33,8 @@ public sealed partial class ProcessDetailField : ObservableObject
     public bool IsLink { get; }
     public string Id { get; }
     public string Hint { get; }
+    /// <summary>Drawn in the warning colour (a role whose parent breaks the roles.json rule).</summary>
+    public bool IsWarning { get; init; }
 
     /// <summary>Puts the text on the clipboard (the card sets it; null = the copy does nothing).</summary>
     public Action<string>? Copier { get; set; }
@@ -85,7 +87,7 @@ public sealed partial class RowSetViewModel : ObservableObject
         Spec = new ProcessGridSpec(set.Headers, set.Rows.Any(r => r.HasTier));
         var src = set.SourceLabel.Length > 0 ? "Source: " + set.SourceLabel + " · " : "";
         Note = !set.HasRows ? "" : (set.Truncated
-            ? $"{src}showing the first {set.Rows.Count:N0} of {set.TotalRows:N0} rows — open them in the grid to see all."
+            ? $"{src}showing the first {set.Rows.Count:N0} of {set.TotalRows:N0} rows — open them in the table to see all."
             : $"{src}{set.TotalRows:N0} rows") + (set.Remark.Length > 0 ? " · " + set.Remark : "");
     }
 
@@ -129,7 +131,7 @@ public sealed partial class DetailTabViewModel : ObservableObject
     public bool HasSubTabs => Sets.Count > 1;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CountText), nameof(IsDim), nameof(ToolTipText), nameof(HasCount))]
+    [NotifyPropertyChangedFor(nameof(CountText), nameof(IsDim), nameof(ToolTipText), nameof(HasCount), nameof(HasData))]
     private int? _count;
 
     [ObservableProperty] private RowSetViewModel? _selectedSet;
@@ -140,6 +142,8 @@ public sealed partial class DetailTabViewModel : ObservableObject
     public string CountText => Count is { } c ? (c > 999 ? "999+" : c.ToString(CultureInfo.InvariantCulture)) : "";
     /// <summary>A data tab with nothing linked: drawn dimmed, never hidden.</summary>
     public bool IsDim => Count == 0 && Tab != ProcessTab.Overview;
+    /// <summary>A data tab with linked rows: its count is drawn in the accent colour.</summary>
+    public bool HasData => Count > 0 && Tab != ProcessTab.Overview;
     public string ToolTipText => Count is { } c && Tab != ProcessTab.Overview ? $"{Title} ({c:N0})" : Title;
 
     /// <summary>Raised when the visible sub-tab changes (the card refreshes Open rows in grid).</summary>
@@ -201,13 +205,22 @@ public sealed partial class ProcessDetailViewModel : ObservableObject
     private IProcessDetailSource? _activity;
     private int _generation;
 
+    private readonly Func<ProcessNodeViewModel, Task>? _flagRows;
+    /// <summary>The card shows a tab someone asked for (a chip, the user's last rail pick, a rail click): the first-tab-with-data pick no longer applies.</summary>
+    private bool _tabFixed;
+    private bool _settingTab;
+
+    /// <param name="initialTab">Open on this tab (a node's data chip, or the tab the user last picked); null = the first data tab with rows once the counts are known, else Overview.</param>
+    /// <param name="flagRows">"Flag rows": flags every source row of the process (null = the button is disabled).</param>
     public ProcessDetailViewModel(ProcessNodeViewModel node, IProcessDetailSource? activity, Action<string, FilterNode> openRowsInGrid,
-        Action<ProcessNodeViewModel> selectNode, Action<string>? copyText = null)
+        Action<ProcessNodeViewModel> selectNode, Action<string>? copyText = null, ProcessTab? initialTab = null, Func<ProcessNodeViewModel, Task>? flagRows = null,
+        ProcessTab? preferredTab = null)
     {
         Node = node;
         _activity = activity;
         _openRowsInGrid = openRowsInGrid;
         _selectNode = selectNode;
+        _flagRows = flagRows;
         _copyText = copyText ?? CopyToClipboard;
         var n = node.Node;
         PidLine = $"PID {n.Pid.ToString(CultureInfo.InvariantCulture)} · PPID {n.Ppid.ToString(CultureInfo.InvariantCulture)}"
@@ -215,7 +228,9 @@ public sealed partial class ProcessDetailViewModel : ObservableObject
             + (n.Wow64 == true ? " · Wow64" : "");
         CreateText = Format(n.CreateTime);
         ExitText = Format(n.ExitTime);
-        MarkerLines = Enum.GetValues<ProcessMarkers>().Where(v => v != ProcessMarkers.None && n.Markers.HasFlag(v)).Select(ProcessNodeViewModel.MarkerText).ToList();
+        // badges up top; one explanation per marker: a marker with an Indicator row (which quotes the evidence) gets no generic box
+        var withEvidence = n.Indicators.Select(i => i.Kind.ToString()).ToHashSet();
+        MarkerLines = Enum.GetValues<ProcessMarkers>().Where(v => v != ProcessMarkers.None && n.Markers.HasFlag(v) && !withEvidence.Contains(v.ToString())).Select(ProcessNodeViewModel.MarkerText).ToList();
         Badges = node.Badges;
 
         foreach (var (tab, glyph) in RailTabs)
@@ -225,8 +240,82 @@ public sealed partial class ProcessDetailViewModel : ObservableObject
             Tabs.Add(t);
         }
         _selectedTab = Tabs[0];
+        _preferred = preferredTab is { } pt ? Tabs.FirstOrDefault(t => t.Tab == pt) : null;
+        if (initialTab is { } it && Tabs.FirstOrDefault(t => t.Tab == it) is { } chosen)
+        {
+            _selectedTab = chosen;
+            _tabFixed = true;
+        }
+        else if (_preferred != null) _selectedTab = _preferred;
+        // the tree's count pass already knows the rail counts: show them and pick the tab before anything is read
+        _constructing = true;
+        if (node.DataCounts is { } known) ApplyCounts(known);
+        _constructing = false;
         BuildFields(null, null, null);
         Reload();
+    }
+
+    private readonly DetailTabViewModel? _preferred;
+    private bool _constructing;
+
+    /// <summary>The user picked a tab on the rail (not a programmatic pick): the tree opens the next card on it.</summary>
+    public event Action<ProcessTab>? TabChosen;
+
+    /// <summary>Sum of the rail's data tab counts (null until known): the coloured total at the top right of the title bar.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TotalText), nameof(HasTotal), nameof(TotalToolTip))]
+    private int? _totalCount;
+    public bool HasTotal => TotalCount != null;
+    public string TotalText => TotalCount is { } c ? c.ToString("N0", CultureInfo.InvariantCulture) : "";
+    public string TotalToolTip => TotalCount is { } c
+        ? $"{c:N0} linked row{(c == 1 ? "" : "s")}: " + string.Join(" · ", Tabs.Where(t => t.IsRows).Select(t => $"{t.Title} {(t.Count ?? 0):N0}"))
+        : "";
+
+    /// <summary>Shows <paramref name="tab"/> (a node's data chip on the selected process).</summary>
+    public void ShowTab(ProcessTab tab)
+    {
+        if (Tabs.FirstOrDefault(t => t.Tab == tab) is not { } t) return;
+        _tabFixed = true;
+        SetTab(t);
+    }
+
+    private void SetTab(DetailTabViewModel t)
+    {
+        _settingTab = true;
+        try { SelectedTab = t; }
+        finally { _settingTab = false; }
+    }
+
+    /// <summary>
+    /// Rail counts and total. Without a tab asked for, the card shows the user's last rail pick when that is Overview or has rows, else the first data tab with rows,
+    /// else Overview.
+    /// </summary>
+    private void ApplyCounts(IReadOnlyDictionary<ProcessTab, int> counts)
+    {
+        foreach (var t in Tabs) t.Count = counts.GetValueOrDefault(t.Tab);
+        TotalCount = Tabs.Where(t => t.IsRows).Sum(t => t.Count ?? 0);
+        if (_tabFixed) return;
+        _tabFixed = true;
+        var pick = _preferred is { } p && (p.IsOverview || p.HasData) ? p : Tabs.FirstOrDefault(t => t.HasData) ?? Tabs[0];
+        if (ReferenceEquals(pick, SelectedTab)) return;
+        if (_constructing) _selectedTab = pick;   // the constructor's Reload loads it
+        else SetTab(pick);
+    }
+
+    private bool CanFlagRows() => _flagRows != null && !IsFlagging;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(FlagRowsCommand))]
+    private bool _isFlagging;
+
+    /// <summary>"Flag rows": every source row of this process (all tabs, the process lists) gets the last used flag in its CSV.</summary>
+    [RelayCommand(CanExecute = nameof(CanFlagRows))]
+    private async Task FlagRows()
+    {
+        if (_flagRows == null) return;
+        IsFlagging = true;
+        try { await _flagRows(Node); }
+        finally { IsFlagging = false; }
     }
 
     public ProcessNodeViewModel Node { get; }
@@ -247,7 +336,15 @@ public sealed partial class ProcessDetailViewModel : ObservableObject
     private DetailTabViewModel _selectedTab;
 
 
-    partial void OnSelectedTabChanged(DetailTabViewModel value) => LoadVisible();
+    partial void OnSelectedTabChanged(DetailTabViewModel value)
+    {
+        if (!_settingTab && value != null)
+        {
+            _tabFixed = true;
+            TabChosen?.Invoke(value.Tab);
+        }
+        LoadVisible();
+    }
 
     /// <summary>A new source of the card data: every tab is read again.</summary>
     internal void Attach(IProcessDetailSource activity)
@@ -289,7 +386,7 @@ public sealed partial class ProcessDetailViewModel : ObservableObject
         {
             var (counts, sig, timeline) = await Task.Run(() => (activity.Counts(node), activity.SignatureText(node), activity.Timeline(node)));
             if (gen != _generation) return;
-            foreach (var t in Tabs) t.Count = counts.GetValueOrDefault(t.Tab);
+            ApplyCounts(counts);
             var (first, last) = ProcessActivity.Seen(timeline);
             BuildFields(sig, first, last);
         }
@@ -309,11 +406,16 @@ public sealed partial class ProcessDetailViewModel : ObservableObject
         else if (n.Sources.HasFlag(ProcessSources.PsList)) fields.Add(ProcessDetailField.Of("End Time", "No exit time (in the active process list at capture)", "EndTime"));
         if (n.User.Length > 0)
             fields.Add(ProcessDetailField.Of("User", n.User + (n.UserSource.Length > 0 ? " (" + n.UserSource + ")" : ""), "User"));
-        if (n.Integrity.Length > 0) fields.Add(ProcessDetailField.Of("Integrity", n.Integrity, "Integrity"));
+        if (n.Integrity.Trim() is { Length: > 0 } integ && integ is not ("-" or "?") && !integ.Equals("unknown", StringComparison.OrdinalIgnoreCase) && !integ.Equals("N/A", StringComparison.OrdinalIgnoreCase)) fields.Add(ProcessDetailField.Of("Integrity", n.Integrity, "Integrity"));
         fields.Add(ProcessDetailField.Of("Process Path", n.Path, "Path", hint: "Filled by windows.pstree or a Security 4688 / Sysmon 1 event"));
         // role and indicators (facts from roles.json and the process rules, each with its evidence); a role says "by name only" when no path backed it
         if (n.Role.Length > 0)
-            fields.Add(ProcessDetailField.Of("Role", n.Role + (n.RoleBasis == RoleBasis.NameOnly ? " (by name only)" : ""), "Role"));
+        {
+            var role = ProcessDetailField.Of("Role", ProcessRoles.RoleLabel(n) + (n.RoleBasis == RoleBasis.NameOnly ? " (by name only)" : ""), "Role",
+                hint: "");
+            fields.Add(ProcessRoles.HasUnexpectedParent(n) ? new ProcessDetailField(role.Label, role.Value, false, role.Id,
+                "The parent is not one roles.json expects (see the Suspicious parent indicator)") { IsWarning = true } : role);
+        }
         fields.Add(ProcessDetailField.Of("Command Line", n.CmdLine, "CmdLine", hint: "Filled by windows.cmdline or a Security 4688 / Sysmon 1 event"));
         fields.Add(ProcessDetailField.Of("Parent Process", parent == null
             ? (n.Ppid > 0 ? $"{(n.ParentImage.Length > 0 ? ProcessLogText.FileNameOf(n.ParentImage) + " " : "")}PID {n.Ppid.ToString(CultureInfo.InvariantCulture)} ({(n.Markers.HasFlag(ProcessMarkers.FromLogsOnly) ? "not in the logs" : "not in the image")})" : null)

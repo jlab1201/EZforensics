@@ -173,7 +173,7 @@ public sealed class MemorySymbolGate
     }
 
     /// <summary>
-    /// Plugin job queued after the gate failed (Retry on the Jobs page, Run selected again after importing symbols): the failure is from an
+    /// Plugin job queued after the gate failed (Retry in the Jobs list on Ingest, Run selected again after importing symbols): the failure is from an
     /// earlier symbol check, so the job must not fail fast on it.
     /// </summary>
     public bool FailedBefore(Job job)

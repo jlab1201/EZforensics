@@ -53,6 +53,30 @@ public static class Dialogs
         string? details = null, bool defaultNo = false, Window? owner = null, bool plain = false) =>
         Show(title, message, severity, details, new[] { yes, no }, defaultNo ? 1 : 0, 1, owner, plain) == 0;
 
+    /// <summary>Asks for one line of text (a rationale, a reason). Null when cancelled; the text can be empty unless <paramref name="required"/>.</summary>
+    public static string? Prompt(string title, string message, string? initial = null, string ok = "OK", bool required = true, Window? owner = null)
+    {
+        var app = Application.Current;
+        if (app == null) return null;
+        if (!app.Dispatcher.CheckAccess()) return app.Dispatcher.Invoke(() => Prompt(title, message, initial, ok, required, owner));
+        owner ??= app.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? app.MainWindow;
+        if (owner != null && !owner.IsVisible) owner = null;
+        var dlg = new EzDialog(title, message, EzDialogSeverity.Question, null, new[] { ok, "Cancel" }, 0, 1);
+        dlg.EnableInput(initial);
+        if (owner != null) dlg.Owner = owner; else dlg.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        while (true)
+        {
+            dlg.ShowDialog();
+            if (dlg.Result != 0) return null;
+            var text = dlg.InputText.Trim();
+            if (text.Length > 0 || !required) return text;
+            // required and empty: ask again with a fresh dialog (a closed window cannot be shown twice)
+            dlg = new EzDialog(title, message + "\n(Please give a short reason.)", EzDialogSeverity.Question, null, new[] { ok, "Cancel" }, 0, 1);
+            dlg.EnableInput(initial);
+            if (owner != null) dlg.Owner = owner; else dlg.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+    }
+
     public static string? PickFolder(string title, string? initial = null)
     {
         var dlg = new OpenFolderDialog { Title = title, Multiselect = false };

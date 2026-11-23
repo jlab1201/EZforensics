@@ -10,7 +10,7 @@ public sealed record IngestCardSelection(IReadOnlyList<SystemChoice> Systems, IR
 /// Card ticks of the Ingest page never remove planned rows: the plan is built from every detected artifact, and an unchecked card item only
 /// marks its rows as excluded (greyed, unticked, disabled, with this reason as tooltip). Memory and network rows follow only their own card;
 /// computer details, the disk rows, persistence and a host's super timeline follow their system; computer details and the super timeline of
-/// unattributed evidence (<c>_Case</c>) are excluded when no Disk system is checked.
+/// unattributed evidence (<c>_Case</c>) are excluded when no Disk system is checked; Process tree data is never excluded.
 /// </summary>
 public static class IngestExclusion
 {
@@ -33,6 +33,8 @@ public static class IngestExclusion
         IReadOnlyList<PlannedJob> zeekOn, bool anySystem)
     {
         var rule = p.Artifact.RuleId;
+        // Process tree data covers every host of the plan: the run only correlates the hosts of rows still planned in
+        if (IngestSteps.IsProcessTree(p)) return null;
         // a host's super timeline and MACB timeline follow its system (below); computer details and the _Case timeline follow every system
         if (IngestSteps.IsStep(p) && !((IngestSteps.IsSupertimeline(p) || IngestSteps.IsMacbTimeline(p)) && p.Artifact.System != null)) return anySystem ? null : DiskReason;
         if (rule == MemoryTriage.RuleId) return memoryOff.Contains(p.Artifact.MatchedPath) ? MemoryReason : null;

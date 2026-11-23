@@ -108,7 +108,7 @@ public sealed partial class ResultsViewModel : PageViewModel
     public bool HasFile => Rows != null;
     /// <summary>Any filter is active: search text, column filters, filter builder or flag filter.</summary>
     public bool HasSearchText => !string.IsNullOrEmpty(GlobalText);
-    public bool HasAnyFilter => FilterDisplayText.Length > 0 || !string.IsNullOrEmpty(GlobalText) || FlagFilter != null;
+    public bool HasAnyFilter => FilterDisplayText.Length > 0 || !string.IsNullOrEmpty(GlobalText) || FlagFilter != null || _evidenceRows != null || _keyEventRows != null;
     public string FlaggedText => $"{FlaggedCount:N0} flagged";
     /// <summary>Flags (Settings order) with their counts in the open file (flag filter dropdown, Flag menu).</summary>
     public ObservableCollection<FlagOption> FlagOptions { get; } = new();
@@ -169,6 +169,7 @@ public sealed partial class ResultsViewModel : PageViewModel
         }
         if (!string.IsNullOrEmpty(last) && !string.Equals(last, CaseFolder, StringComparison.OrdinalIgnoreCase) && Directory.Exists(last))
         {
+            LeaveFileOutside(last); // e.g. a new Ingest run: the old case's file and filters must not stay on screen
             CaseFolder = last;
             _ = RefreshTreeAsync();
         }
@@ -236,16 +237,78 @@ public sealed partial class ResultsViewModel : PageViewModel
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
     }
 
+    /// <summary>Opens <paramref name="dir"/> as the case without a file (Load demo case); the tree reloads even while another page is on screen.</summary>
+    public async Task OpenCaseFolderAsync(string dir)
+    {
+        _treeLoadedOnce = true;
+        LeaveFileOutside(dir);
+        CaseFolder = dir;
+        await RefreshTreeAsync();
+    }
+
     [RelayCommand]
     private async Task BrowseCaseAsync()
     {
         var d = Dialogs.PickFolder("Select a case folder", CaseFolder ?? S.Settings.CaseRoot);
         if (d == null) return;
+        LeaveFileOutside(d);
         CaseFolder = d;
         await RefreshTreeAsync();
     }
 
-    partial void OnCaseFolderChanged(string? value) { _ = Details.LoadAsync(value); MarkSessionDirty(); }
+    /// <summary>
+    /// Switching to another case: when the open file is not in <paramref name="newCase"/>, its view is saved (restored if it is opened again),
+    /// then the file is closed and the search, filters, flag filter, sort and pivot are cleared, so nothing carries over to the new case.
+    /// </summary>
+    internal void LeaveFileOutside(string newCase)
+    {
+        var file = CurrentFile;
+        if (file == null || IsUnder(file, newCase)) return;
+        StashCurrentFile();
+        _openCts?.Cancel();
+        _suspendApply = true;
+        try
+        {
+            GlobalText = "";
+            FiltersEnabled = true;
+            _syncingFlagOptions = true;
+            try
+            {
+                foreach (var o in FlagOptions) o.IsSelected = false;
+                FlagFilter = null;
+            }
+            finally { _syncingFlagOptions = false; }
+            UpdateFlagFilterText();
+            Extra = new FilterGroup();
+            ActiveSavedFilter = null;
+            ActiveSavedView = null;
+            SortColumn = null;
+            SortDescending = false;
+            ResetPivotForNewFile();
+        }
+        finally { _suspendApply = false; }
+        _evidenceRows = null; NotifyEvidenceRows();
+        _pendingView = null;
+        _viewOrder = Array.Empty<int>(); _viewSelPos = -1; _viewSelSource = -1; _viewScroll = 0;
+        _fileFp = null;
+        ClearAdvisories();
+        Banner = null;
+        CloseCurrentFile();
+        RefreshFilterState();
+        MarkSessionDirty();
+    }
+
+    private static bool IsUnder(string path, string folder)
+    {
+        try
+        {
+            var f = Path.GetFullPath(folder).TrimEnd('\\') + "\\";
+            return Path.GetFullPath(path).StartsWith(f, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
+    }
+
+    partial void OnCaseFolderChanged(string? value) { _ = Details.LoadAsync(value); MarkSessionDirty(); RefreshFindings(); }
 
     partial void OnSelectedNodeChanged(FileNode? value)
     {

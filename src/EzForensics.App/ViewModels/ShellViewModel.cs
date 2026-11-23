@@ -4,6 +4,9 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EzForensics.App.Services;
+using EzForensics.App.ViewModels.Explore;
+using EzForensics.App.ViewModels.Findings;
+using EzForensics.App.ViewModels.Learn;
 using EzForensics.Core.Execution;
 using EzForensics.Core.Settings;
 
@@ -21,7 +24,7 @@ public sealed partial class NavItem : ObservableObject
     public string Key => Page.GetType().Name;
     /// <summary>Red dot on the icon (e.g. new results are ready on Analyze).</summary>
     [ObservableProperty] private bool _hasAttention;
-    /// <summary>Spinning arc on the icon while jobs run (Jobs).</summary>
+    /// <summary>Spinning arc on the icon while jobs run (Ingest).</summary>
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Tip))]
@@ -35,19 +38,12 @@ public sealed partial class ShellViewModel : ObservableObject
     private readonly AppServices _s;
 
     [ObservableProperty] private NavItem? _selected;
-    /// <summary>Selection of the main list only (null while a gear-menu page is current).</summary>
+    /// <summary>Selection of the main list only (null while a bottom-zone page is current).</summary>
     [ObservableProperty] private NavItem? _selectedMain;
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSettingsParentActive))]
-    private bool _isFooterPageActive;
-    /// <summary>The Settings flyout (Tools / Options) is open.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSettingsParentActive))]
-    private bool _isSettingsExpanded;
+    [ObservableProperty] private bool _isFooterPageActive;
+    [ObservableProperty] private bool _isAiActive;
     [ObservableProperty] private bool _isToolsActive;
     [ObservableProperty] private bool _isOptionsActive;
-    /// <summary>Highlight the Settings entry while Tools or Options is the current page.</summary>
-    public bool IsSettingsParentActive => IsFooterPageActive;
 
     [ObservableProperty] private string _themeGlyph = "";
     [ObservableProperty] private string _themeTip = "";
@@ -55,7 +51,7 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty] private int _runningJobs;
     [ObservableProperty] private int _queuedJobs;
     [ObservableProperty] private string _toolsRoot = "";
-    [ObservableProperty] private string _net9Text = ".NET 9: checking…";
+    [ObservableProperty] private string _net9Text = ".NET 9 and 10: checking…";
     [ObservableProperty] private string _toolCountText = "";
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNavCompact), nameof(NavWidth), nameof(NavColumnWidth), nameof(IsNavOverlay))]
@@ -83,6 +79,10 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>Current UI zoom for the status bar ("110%").</summary>
     [ObservableProperty] private string _zoomText = "100%";
 
+    /// <summary>Opens Ingest (the status bar's running / queued counts, Spectre's "jobs" page).</summary>
+    [RelayCommand]
+    private void ShowJobs() => Selected = _jobsItem;
+
     [RelayCommand] private void ZoomIn() => Appearance.ZoomIn();
     [RelayCommand] private void ZoomOut() => Appearance.ZoomOut();
     [RelayCommand] private void ZoomReset() => Appearance.ZoomReset();
@@ -92,6 +92,10 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         if (!NavPinned) NavExpanded = !NavExpanded;
     }
+
+    /// <summary>The edge handle: pin the drawer open (from the rail or the hover overlay) or collapse it back to the rail.</summary>
+    [RelayCommand]
+    private void ToggleNavPinned() => NavPinned = !NavPinned;
 
     // navigation state from before focus mode, restored on exit (null = not in focus mode)
     private bool? _navExpandedBeforeFocus;
@@ -116,6 +120,8 @@ public sealed partial class ShellViewModel : ObservableObject
         _navExpandedBeforeFocus = null;
     }
 
+    partial void OnCurrentPageChanged(PageViewModel? value) => Assistant?.OnPageChanged();
+
     partial void OnNavPinnedChanged(bool value)
     {
         NavExpanded = false;
@@ -130,22 +136,30 @@ public sealed partial class ShellViewModel : ObservableObject
         _navPinned = s.Settings.NavPinned;
         Triage = new TriageViewModel();
         Tools = new ToolsViewModel();
-        Jobs = new JobsViewModel();
         Results = new ResultsViewModel();
+        Explore = new ExploreViewModel();
+        Findings = new FindingsViewModel(() => CaseDir);
+        Learn = new LearnViewModel();
         Settings = new SettingsViewModel();
+        Assistant = new AssistantChatViewModel(s.Settings, new ApiKeyStore(), s.CreateHttpClient, () => CaseDir, () => CurrentPage,
+            allPages: () => new PageViewModel[] { Triage, Results, Explore, Findings, Learn, Tools, Settings });
+        Findings.AskSpectreHandler = Assistant.Ask;
 
-        // Main list: Ingest, Jobs, Analyze. Settings drawer entry: Tools and Options (footer pages).
+        // Top: Ingest, Analyze, Explore, Review. Bottom zone: AI (the Learn page), Tools, Options.
         Items = new ObservableCollection<NavItem>
         {
             new(PageNames.Ingest, "", Triage),
-            new("Jobs", "", Jobs),
             new("Analyze", "", Results),
+            new(PageNames.Explore, "", Explore),
+            new(PageNames.Findings, "", Findings),
+            new(PageNames.Learn, "", Learn),
             new("Tools", "", Tools),
             new("Options", "", Settings),
         };
-        MainItems = new ObservableCollection<NavItem>(Items.Take(3));
-        FooterItems = new ObservableCollection<NavItem>(Items.Skip(3));
-        _jobsItem = Items.First(i => i.Page == Jobs);
+        MainItems = new ObservableCollection<NavItem>(Items.Take(4));
+        FooterItems = new ObservableCollection<NavItem>(Items.Skip(4));
+        _jobsItem = Items.First(i => i.Page == Triage);
+        AiItem = Items.First(i => i.Page == Learn);
         ToolsItem = Items.First(i => i.Page == Tools);
         OptionsItem = Items.First(i => i.Page == Settings);
         _analyzeItem = Items.First(i => i.Page == Results);
@@ -162,12 +176,27 @@ public sealed partial class ShellViewModel : ObservableObject
         s.NavigationRequested += t => Selected = Items.FirstOrDefault(i => i.Page.GetType() == t) ?? Selected;
         s.JobRequested += j =>
         {
-            Selected = Items.First(i => i.Page == Jobs);
-            Jobs.ShowJob(j);
+            Selected = _jobsItem;
+            Triage.ShowJob(j);
         };
+        s.JobsRequested += ShowJobs;
+        s.LearnInboxRequested += () => Learn.SelectedTab = LearnTab.Inbox;
+        s.CaseOpenRequested += dir => _ = Results.OpenCaseFolderAsync(dir);
         s.OpenCsvRequested += (caseDir, csv) =>
         {
             var open = Results.ShowCsvAsync(caseDir, csv);
+            Selected = _analyzeItem;
+            _ = open;
+        };
+        s.OpenRecordRequested += (caseDir, csv, record) =>
+        {
+            var open = Results.ShowRecordAsync(caseDir, csv, record);
+            Selected = _analyzeItem;
+            _ = open;
+        };
+        s.ShowEvidenceRequested += (caseDir, targets, title) =>
+        {
+            var open = Results.ShowEvidenceAsync(caseDir, targets, title);
             Selected = _analyzeItem;
             _ = open;
         };
@@ -252,14 +281,22 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public TriageViewModel Triage { get; }
     public ToolsViewModel Tools { get; }
-    public JobsViewModel Jobs { get; }
     public ResultsViewModel Results { get; }
+    public ExploreViewModel Explore { get; }
+    public FindingsViewModel Findings { get; }
+    public LearnViewModel Learn { get; }
+    /// <summary>Spectre, the app-wide assistant: one conversation that follows the page on screen.</summary>
+    public AssistantChatViewModel Assistant { get; }
+
+    /// <summary>The case Spectre works on: the one Explore shows while on Explore, otherwise the one open in Analyze, then the last ingested.</summary>
+    private string? CaseDir => (CurrentPage == Explore ? Explore.CaseDir : null) ?? Results.CaseFolder ?? Explore.CaseDir ?? _s.LastCaseDir;
     public SettingsViewModel Settings { get; }
 
     public ObservableCollection<NavItem> Items { get; }
     public ObservableCollection<NavItem> MainItems { get; }
     public ObservableCollection<NavItem> FooterItems { get; }
     private readonly NavItem _jobsItem;
+    public NavItem AiItem { get; }
     public NavItem ToolsItem { get; }
     public NavItem OptionsItem { get; }
     private readonly NavItem _analyzeItem;
@@ -280,7 +317,7 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         bool dark = _s.Settings.Theme == AppTheme.Dark;
         ThemeGlyph = dark ? "\uE706" : "\uE708"; // sun while dark (switch to light), moon while light
-        ThemeTip = dark ? "Switch to light theme" : "Switch to dark theme";
+        ThemeTip = "Switch theme";
     }
 
     /// <summary>Flips light/dark, applies it, keeps the Options page in sync and saves.</summary>
@@ -317,14 +354,14 @@ public sealed partial class ShellViewModel : ObservableObject
             // Status bar only (no banner): the setup installs a private .NET 9 by default, and the net4 builds work without it.
             // A tool that exists only as a net9 build is simply not installed without .NET 9 (its job fails with "Tool not installed").
             var has = await _s.ProbeNet9Async();
-            Net9Text = has ? ".NET 9: installed" : ".NET 9: not installed (using compatible builds)";
+            Net9Text = has ? ".NET 9 and 10: installed" : ".NET 9 and 10: not installed (using compatible builds)";
             Net9Tip = has ? "The net9 builds of the EZ tools can run."
-                : "Without .NET 9 the EZ tools run as their net4 builds, which need only the .NET Framework that ships with Windows. " +
-                  "A few net9-only tools need .NET 9: Run setup installs a private copy (no admin rights).";
+                : "Without .NET 9 and 10 the EZ tools run as their net4 builds, which need only the .NET Framework that ships with Windows. " +
+                  "A few net9-only tools need .NET 9 and 10: Run setup installs a private copy (no admin rights).";
         }
         catch (Exception ex)
         {
-            Net9Text = ".NET 9: unknown";
+            Net9Text = ".NET 9 and 10: unknown";
             AppLog.Error("Runtime probe failed", ex);
         }
     }
@@ -354,9 +391,9 @@ public sealed partial class ShellViewModel : ObservableObject
         NavExpanded = false;
         SelectedMain = MainItems.Contains(value) ? value : null;
         IsFooterPageActive = FooterItems.Contains(value);
+        IsAiActive = value == AiItem;
         IsToolsActive = value == ToolsItem;
         IsOptionsActive = value == OptionsItem;
-        IsSettingsExpanded = false;
         if (value == _analyzeItem) { value.HasAttention = false; value.BadgeTip = null; }
         CurrentPage = value.Page;
         try { value.Page.OnNavigatedTo(); }
@@ -380,13 +417,13 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         if (e.PropertyName != nameof(Job.State)) return;
         RecountJobs();
-        if (sender is Job { State: JobState.Succeeded }) MarkResultsReady();
+        if (sender is Job { State: JobState.Succeeded, Hidden: false }) MarkResultsReady();
     }
 
     private void RecountJobs()
     {
-        RunningJobs = _s.Queue.Jobs.Count(j => j.State == JobState.Running);
-        QueuedJobs = _s.Queue.Jobs.Count(j => j.State == JobState.Queued);
+        RunningJobs = _s.Queue.Jobs.Count(j => !j.Hidden && j.State == JobState.Running);
+        QueuedJobs = _s.Queue.Jobs.Count(j => !j.Hidden && j.State == JobState.Queued);
         _jobsItem.IsBusy = RunningJobs > 0;
         _jobsItem.BadgeTip = RunningJobs > 0 ? $"{RunningJobs} running, {QueuedJobs} queued" : null;
     }

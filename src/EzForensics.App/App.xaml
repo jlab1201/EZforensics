@@ -17,7 +17,6 @@
             <local:JobStateBrushConverter x:Key="StateFg"/>
             <local:JobStateBrushConverter x:Key="StateBg" Background="True"/>
             <local:SeverityGlyphConverter x:Key="SevGlyph"/>
-            <local:LocalTimeConverter x:Key="LocalTime"/>
             <local:EqualsConverter x:Key="EqBool"/>
             <local:EqualsConverter x:Key="EqVis" ToVisibility="True"/>
             <local:TextOverflowToVisibilityConverter x:Key="TextOverflowVis"/>
@@ -71,7 +70,7 @@
                                 Command="{Binding DataContext.DismissBannerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                         <ToggleButton x:Name="more" DockPanel.Dock="Right" Style="{StaticResource ExpanderHeaderToggle}" Margin="8,0,4,0" VerticalAlignment="Center"
                                       AutomationProperties.AutomationId="InfoBar.More" AutomationProperties.Name="Show the whole message">
-                            <TextBlock x:Name="moreText" Text="More" FontWeight="Normal" FontSize="12"/>
+                            <TextBlock x:Name="moreText" Text="More" FontWeight="Normal" FontSize="{DynamicResource FontSize.Caption}"/>
                             <ToggleButton.Visibility>
                                 <MultiBinding Converter="{StaticResource TextOverflowVis}">
                                     <Binding Path="Message"/>

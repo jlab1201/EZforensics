@@ -80,6 +80,36 @@ public class ResultsCsvTests
         finally { File.Delete(p); }
     }
 
+    private static async Task<int[]> SortCsv(string csv, bool desc = false)
+    {
+        var p = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(p, csv);
+            using var idx = await CsvIndex.OpenAsync(p, null, default);
+            await idx.IndexingCompleted;
+            return await FilterEngine.SortAsync(idx, Enumerable.Range(0, (int)idx.RowCount).ToArray(), "V", desc);
+        }
+        finally { File.Delete(p); }
+    }
+
+    [Fact]
+    public async Task Sort_keeps_numeric_order_with_a_few_unparseable_cells_after_the_numbers()
+    {
+        // 9 numbers + one N/A (90%): numeric order, N/A last ascending, first descending
+        var csv = "V\n9\n10\nN/A\n100\n2\n3\n4\n5\n6\n7\n";
+        (await SortCsv(csv)).Should().Equal(4, 5, 6, 7, 8, 9, 0, 1, 3, 2);
+        (await SortCsv(csv, desc: true)).Should().Equal(2, 3, 1, 0, 9, 8, 7, 6, 5, 4);
+    }
+
+    [Fact]
+    public async Task Sort_orders_unparsed_cells_as_text_stably_and_text_columns_stay_text()
+    {
+        (await SortCsv("V\n5\nzz\n1\naa\nzz\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n")).Take(2).Should().Equal(2, 5);
+        // mostly text: plain ordinal sort ("10" < "9")
+        (await SortCsv("V\n9\nb\n10\na\n")).Should().Equal(2, 0, 3, 1);
+    }
+
     [Fact]
     public async Task Rows_readable_while_indexing_and_cancel_is_honoured()
     {

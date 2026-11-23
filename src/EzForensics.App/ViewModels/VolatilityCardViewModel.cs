@@ -301,7 +301,7 @@ public sealed partial class VolatilityCardViewModel : ObservableObject
         var outDir = MaintenanceDir();
         if (S.HasActiveJob("volatility"))
         {
-            _onMessage("A Volatility job is still running. Wait for it or cancel it on the Jobs page, then try again.", InfoSeverity.Warning);
+            _onMessage("A Volatility job is still running. Wait for it or cancel it in the Jobs list on Ingest, then try again.", InfoSeverity.Warning);
             End();
             return;
         }
@@ -337,7 +337,7 @@ public sealed partial class VolatilityCardViewModel : ObservableObject
                 {
                     await Task.Run(() => PrivatePython.TryDelete(vl.ManagedVenv));
                     _onMessage(venvJob.State == JobState.Cancelled ? "Install cancelled. Nothing was left behind; click Install to start again."
-                        : $"Creating the environment failed: {venvJob.StatusReason}. See the log below or the Jobs page, then click Install to retry.", InfoSeverity.Warning);
+                        : $"Creating the environment failed: {venvJob.StatusReason}. See the log below, then click Install to retry.", InfoSeverity.Warning);
                     return;
                 }
                 venvCreated = true;
@@ -406,13 +406,14 @@ public sealed partial class VolatilityCardViewModel : ObservableObject
             ProgressDeterminate = true;
             StepText = $"Downloading windows.zip (≈{VolatilitySetup.SymbolPackDownloadMB} MB)";
             var log = Log!;
+            string sha;
             using (var http = S.CreateHttpClient())
             {
                 http.Timeout = Timeout.InfiniteTimeSpan;
-                await VolatilitySetup.DownloadFileAsync(http, VolatilitySetup.SymbolPackUrl, zip, new Progress<double>(p => Progress = p * 0.8), log.Enqueue, ct);
+                sha = await VolatilitySetup.DownloadFileAsync(http, VolatilitySetup.SymbolPackUrl, zip, new Progress<double>(p => Progress = p * 0.8), log.Enqueue, ct);
             }
             StepText = $"Extracting into {dir}";
-            int n = await Task.Run(() => VolatilitySetup.ExtractSymbolPack(zip, dir, new Progress<double>(p => Progress = 0.8 + p * 0.2), ct), ct);
+            int n = await Task.Run(() => VolatilitySetup.ExtractSymbolPack(zip, dir, new Progress<double>(p => Progress = 0.8 + p * 0.2), ct, sha), ct);
             log.Enqueue($"Extracted {n:N0} files into {dir}");
             _onMessage($"Windows symbol pack installed ({n:N0} files). Memory images can now be analysed offline.", InfoSeverity.Success);
             S.RaiseVolatilityChanged();
@@ -470,7 +471,7 @@ public sealed partial class VolatilityCardViewModel : ObservableObject
         if (targets.Count == 0) { _onMessage("EZ Forensics has no Volatility environment to remove.", InfoSeverity.Info); return; }
         if (S.HasActiveJob("volatility"))
         {
-            _onMessage("A Volatility job is still running. Wait for it or cancel it on the Jobs page, then click Uninstall again.", InfoSeverity.Warning);
+            _onMessage("A Volatility job is still running. Wait for it or cancel it in the Jobs list on Ingest, then click Uninstall again.", InfoSeverity.Warning);
             return;
         }
         if (!EzForensics.App.Services.Dialogs.Confirm("Uninstall Volatility 3?", KeepSymbolsOnUninstall ? "Removes EZ Forensics' copy. The symbols folder is kept." : "Removes EZ Forensics' copy and its symbols folder.",

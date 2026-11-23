@@ -72,4 +72,17 @@ public class SettingsStoreTests
         EzForensics.Core.Memory.MemoryPlugins.SelectedFor(EzForensics.Core.Memory.MemoryOs.Windows, loaded).Should().BeEquivalentTo("info", "pslist");
         EzForensics.Core.Memory.MemoryPlugins.SelectedFor(EzForensics.Core.Memory.MemoryOs.Linux, loaded).Should().BeEmpty("no Linux plugin chosen");
     }
+
+    [Fact]
+    public void Old_per_tab_ingest_columns_load_as_defaults()
+    {
+        using var t = new TempDir();
+        var path = Path.Combine(t.Path, "settings.json");
+        File.WriteAllText(path, "{\"ingestColumns\":{\"thisRun\":{\"showStarted\":true,\"showExit\":true},\"allJobs\":{\"showDuration\":false}}}");
+        var c = new JsonSettingsStore(path).Load().IngestColumns;
+        c.ShowMatchedPath.Should().BeFalse();
+        c.ShowDuration.Should().BeTrue();
+        c.ShowResult.Should().BeTrue();
+        c.ShowOutput.Should().BeFalse();
+    }
 }

@@ -18,10 +18,12 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _navEnterTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
     private readonly DispatcherTimer _navLeaveTimer = new() { Interval = TimeSpan.FromMilliseconds(280) };
     private ShellViewModel? _hooked;
+    private readonly Assistant.SpectreLayout _spectre;
 
     public MainWindow()
     {
         InitializeComponent();
+        EzForensics.App.Controls.WindowSizing.FitToWorkArea(this);
         Appearance.Attach(this);
         TitleBarTheme.Attach(this); // follows ThemeManager (startup, toggle, settings preview); other windows via TitleBarTheme.Register
         _navEnterTimer.Tick += (_, _) =>
@@ -37,13 +39,25 @@ public partial class MainWindow : Window
             _navLeaveTimer.Stop();
             s.NavExpanded = false;
         };
-        DataContextChanged += (_, _) => HookShell();
-        Loaded += (_, _) => { HookShell(); HookHotKeys(); };
+        _spectre = new Assistant.SpectreLayout(ContentArea, () => Shell?.Assistant, () => Shell?.CurrentPage, SpectreSplitColumn, SpectreDockColumn, SpectreSplitter, SpectreDockPanel, SpectrePopup, SpectreGrip, SpectreLauncher);
+        DataContextChanged += (_, _) => { HookShell(); if (IsLoaded) _spectre.Attach(); };
+        Loaded += (_, _) =>
+        {
+            HookShell(); HookHotKeys();
+            // after startup settles: load the Learn graph page invisibly so the page opens with it ready
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(4));
+                // an empty graph does not need the browser engine yet; Learn starts it on demand once notes exist
+                if (Shell?.Learn is { } learn && !await Task.Run(learn.HasAcceptedNotes)) return;
+                await EzForensics.App.Views.Learn.BrainView.PrewarmAsync();
+            });
+        };
     }
 
     private ShellViewModel? Shell => DataContext as ShellViewModel;
 
-    // ---- Back: customizable hot key (App.Back, default Alt+Left) and the mouse back button
+    // ---- App hot keys: Back (App.Back, default Alt+Left) and Toggle sidebar (App.ToggleNav, default Ctrl+B) and the mouse back button
     private IReadOnlyDictionary<string, string> _hotKeyMap = HotKeys.Resolve(null);
     private AppSettings? _hookedSettings;
 
@@ -68,9 +82,18 @@ public partial class MainWindow : Window
         if (e.Handled || Shell is not { } s) return;
         if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase or System.Windows.Controls.PasswordBox or System.Windows.Controls.ComboBox { IsEditable: true }) return;
         if (HotKeyInput.FromEvent(e) is not { } g) return;
-        if (HotKeys.ActionFor(_hotKeyMap, g) != HotKeys.Back) return;
-        if (s.GoBackCommand.CanExecute(null)) s.GoBackCommand.Execute(null);
-        e.Handled = true;
+        var action = HotKeys.ActionFor(_hotKeyMap, g);
+        if (action == HotKeys.ToggleNav)
+        {
+            if (s.IsFocusMode) return;
+            s.ToggleNavPinnedCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (action == HotKeys.Back)
+        {
+            if (s.GoBackCommand.CanExecute(null)) s.GoBackCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     protected override void OnPreviewMouseDown(MouseButtonEventArgs e)
@@ -108,7 +131,7 @@ public partial class MainWindow : Window
 
     private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ShellViewModel.CurrentPage)) ShowPage();
+        if (e.PropertyName == nameof(ShellViewModel.CurrentPage)) { ShowPage(); _spectre.Refresh(); }
         else if (e.PropertyName == nameof(ShellViewModel.NavWidth))
             UpdateNavWidth(animate: Shell is { NavPinned: false });
         else if (e.PropertyName == nameof(ShellViewModel.IsFocusMode))
@@ -149,35 +172,7 @@ public partial class MainWindow : Window
     }
 
     private bool NavHasOpenPopup() =>
-        Shell is { IsSettingsExpanded: true } ||
         Mouse.Captured is DependencyObject c && (c is System.Windows.Controls.ContextMenu || NavPanel.IsAncestorOf(c));
-
-    // Settings flyout. StaysOpen=False closes it on the mouse-down that also lands on the Settings button; ignore that click's reopen.
-    private DateTime _flyoutClosedAt = DateTime.MinValue;
-
-    private void Gear_Click(object sender, RoutedEventArgs e)
-    {
-        if (Shell is not { } s) return;
-        if (DateTime.UtcNow - _flyoutClosedAt < TimeSpan.FromMilliseconds(250)) return;
-        s.IsSettingsExpanded = !s.IsSettingsExpanded;
-    }
-
-    private void SettingsFlyout_Opened(object? sender, EventArgs e) =>
-        Dispatcher.BeginInvoke(new Action(() => FlyoutToolsButton.Focus()), DispatcherPriority.Input);
-
-    private void SettingsFlyout_Closed(object? sender, EventArgs e)
-    {
-        _flyoutClosedAt = DateTime.UtcNow;
-        if (Shell is { NavPinned: false, NavExpanded: true } && !NavPanel.IsMouseOver) _navLeaveTimer.Start();
-    }
-
-    private void SettingsFlyout_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Escape) return;
-        if (Shell is { } s) s.IsSettingsExpanded = false;
-        GearButton.Focus();
-        e.Handled = true;
-    }
 
     // Unpinned nav: hover (after a short delay) or keyboard focus expands the rail as an overlay; leaving collapses it after a delay.
     private void Nav_MouseEnter(object sender, MouseEventArgs e)
@@ -197,6 +192,12 @@ public partial class MainWindow : Window
         if (Shell is { NavPinned: false, NavExpanded: false } s && InputManager.Current.MostRecentInputDevice is KeyboardDevice)
             s.NavExpanded = true;
     }
+
+    // Sidebar toggle: only keyboard focus keeps it visible while pinned (start-up and mouse focus must not).
+    private void NavPin_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
+        ((FrameworkElement)sender).Tag = InputManager.Current.MostRecentInputDevice is KeyboardDevice ? "kbd" : null;
+
+    private void NavPin_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => ((FrameworkElement)sender).Tag = null;
 
     private void Nav_FocusWithinChanged(object sender, DependencyPropertyChangedEventArgs e)
     {

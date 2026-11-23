@@ -132,25 +132,53 @@ public sealed class ProcessCorrelatorTests : IDisposable
             new DetectedArtifact(rule, rule, "T", "X", @"E:\" + host, false), false);
 
     [Fact]
-    public void Compose_has_no_process_row_and_ProcessHosts_lists_the_hosts_with_a_process_source()
+    public void ProcessHosts_lists_the_hosts_with_a_process_source_and_a_plan_with_one_gets_a_Process_tree_data_row()
     {
         var plan = IngestSteps.Compose(new[]
         {
             Tool("evtx", "WS01"), Tool(MemoryTriage.RuleId, "WS01"), Tool(MemoryTriage.RuleId, "MEM01"), Tool("prefetch", "DC01"), Tool("mft", "WS01"),
         }, _case, new[] { @"E:\" }, plasoAvailable: true);
 
-        plan.Should().NotContain(p => p.Artifact.RuleId == "ingest-process-correlation" || p.Spec.ToolId == ProcessCorrelator.ToolId);
-        IngestSelections.AllRules().Select(r => r.Id).Should().NotContain("ingest-process-correlation");
-        IngestDefaults.FastForensicsRuleIds.Should().NotContain("ingest-process-correlation");
         IngestSteps.ProcessHosts(_case, plan).Should().BeEquivalentTo(new[] { Path.Combine(_case, "WS01"), Path.Combine(_case, "MEM01") });
+        var row = IngestSteps.ProcessTree(_case, plan);
+        row.Should().NotBeNull();
+        row!.Spec.Label.Should().Be("Process tree data");
+        row.Spec.ToolId.Should().Be(ProcessCorrelator.ToolId);
+        row.Spec.Category.Should().Be(ProcessCorrelator.JobCategory);
+        row.Spec.Args.Should().BeEmpty();
+        row.SelectedByDefault.Should().BeTrue();
+        row.RequiresAdmin.Should().BeFalse();
+        row.Artifact.RuleId.Should().Be(IngestSteps.ProcessTreeRuleId);
+        row.Artifact.MatchedPath.Should().BeEmpty("the row key (rule id | matched path | label) must not depend on the hosts");
+        IngestSteps.IsStep(row).Should().BeTrue();
+        IngestSteps.IsProcessTree(row).Should().BeTrue();
+        // the row itself is never a host
+        IngestSteps.ProcessHosts(_case, plan.Append(row).ToList()).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Process_tree_data_row_is_last_built_in_never_excluded_and_part_of_the_default_selection()
+    {
+        var plan = IngestSteps.Compose(new[] { Tool("evtx", "WS01"), Tool("mft", "WS01") }, _case, new[] { @"E:\" }, plasoAvailable: true);
+        var row = IngestSteps.ProcessTree(_case, plan)!;
+        var ordered = IngestSteps.Order(new[] { row }.Concat(plan), p => p);
+        ordered[^1].Should().BeSameAs(row);
+        ToolAvailability.RowReason(row, new ToolStatus(true, true, true, true), null).Should().BeNull("the correlator is built in");
+        ToolAvailability.IsEzRow(row).Should().BeFalse();
+        var noSystem = new IngestCardSelection(new[] { new SystemChoice(new DiscoveredSystem { RootPath = @"E:\", HostName = "WS01", HostNameSource = "x" }, false, "WS01") }, Array.Empty<string>(), Array.Empty<string>());
+        IngestExclusion.Reasons(new[] { row }, noSystem).Should().Equal(new string?[] { null });
+        IngestSelections.AllRules().Select(r => r.Id).Should().Contain(IngestSteps.ProcessTreeRuleId);
+        IngestDefaults.FastForensicsRuleIds.Should().Contain(IngestSteps.ProcessTreeRuleId);
     }
 
     [Fact]
     public void ProcessHosts_includes_a_host_whose_folder_already_has_process_lists()
     {
         IngestSteps.ProcessHosts(_case, new[] { Tool("prefetch", "PC1") }).Should().BeEmpty();
+        IngestSteps.ProcessTree(_case, new[] { Tool("prefetch", "PC1") }).Should().BeNull("no process source in the plan or the case");
         WriteHost();
         IngestSteps.ProcessHosts(_case, new[] { Tool("prefetch", "PC1") }).Should().ContainSingle().Which.Should().Be(Host);
+        IngestSteps.ProcessTree(_case, new[] { Tool("prefetch", "PC1") }).Should().NotBeNull("the case already holds process lists of the host");
     }
 
     // ------------------------------------------------------------------ hidden folder / legacy cleanup / category
@@ -160,7 +188,7 @@ public sealed class ProcessCorrelatorTests : IDisposable
     {
         WriteHost();
         ProcessCorrelator.FolderFor(Host).Should().Be(Path.Combine(Host, ".ezprocesses"));
-        ProcessCorrelator.FormatVersion.Should().Be(7);
+        ProcessCorrelator.FormatVersion.Should().Be(8);
         (await ProcessCorrelator.RunAsync(Host)).State.Should().Be(ProcessCorrelationState.Built);
         Directory.GetFiles(Path.Combine(Host, "Processes")).Select(Path.GetFileName).Should().Equal("Processes.csv");
         File.Exists(Path.Combine(Host, ".ezprocesses", "Processes.csv")).Should().BeTrue();
@@ -235,7 +263,7 @@ public sealed class ProcessCorrelatorTests : IDisposable
     {
         WriteHost();
         Memory("Memory_GetSids.csv", "TreeDepth,PID,Process,SID,Name\r\n0,3000,chrome.exe,S-1-5-21-1-2-3-1001,bob\r\n0,3000,chrome.exe,S-1-16-8192,Medium Mandatory Level\r\n");
-        ProcessCorrelator.FormatVersion.Should().Be(7);
+        ProcessCorrelator.FormatVersion.Should().Be(8);
         ProcessCorrelator.InputFiles(Host).Should().Contain(p => p.EndsWith("Memory_GetSids.csv"));
         (await ProcessCorrelator.RunAsync(Host)).State.Should().Be(ProcessCorrelationState.Built);
         var n = ProcessCorrelator.LoadGraph(Host)!.AllNodes.Single(x => x.Pid == 3000);

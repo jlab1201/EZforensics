@@ -30,9 +30,22 @@ public partial class ProcessTreePane : UserControl
         NavigatorPanel.Height = s_navHeight;
         NavTree.AddHandler(MouseLeftButtonDownEvent, new MouseButtonEventHandler(NavTree_MouseLeftButtonDown), handledEventsToo: true);
         CanvasHost.SizeChanged += (_, _) => { ClampCard(); ClampNavigator(); PidChooser.MaxWidth = Math.Max(240, CanvasHost.ActualWidth * 0.6); };
+        NavigatorPanel.SizeChanged += (_, _) => UpdateFitInsets();
+        DetailCard.SizeChanged += (_, _) => UpdateFitInsets();
         _toastTimer.Tick += (_, _) => { _toastTimer.Stop(); if (_vm is not { IsLoading: true }) HideToast(); };
         DataContextChanged += (_, _) => Attach(DataContext as ProcessTreeViewModel);
         Unloaded += (_, _) => _toastTimer.Stop();    }
+
+    /// <summary>Tells the canvas how much width the open Navigator / Details card cover, and refits when "Fit to screen" is on.</summary>
+    private void UpdateFitInsets()
+    {
+        double left = NavigatorHost.Visibility == Visibility.Visible ? NavigatorPanel.ActualWidth + 12 : 0;
+        double right = DetailHost.Visibility == Visibility.Visible ? DetailCard.ActualWidth + 20 : 0;
+        if (Math.Abs(left - Canvas.FitLeftInset) < 0.5 && Math.Abs(right - Canvas.FitRightInset) < 0.5) return;
+        Canvas.FitLeftInset = left;
+        Canvas.FitRightInset = right;
+        if (Canvas.FitToScreen) Canvas.Fit();
+    }
 
     private ProcessTreeViewModel? Vm => DataContext as ProcessTreeViewModel;
 
@@ -49,6 +62,9 @@ public partial class ProcessTreePane : UserControl
     {
         switch (e.PropertyName)
         {
+            case nameof(ProcessTreeViewModel.IsNavigatorOpen) or nameof(ProcessTreeViewModel.Detail):
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(UpdateFitInsets));
+                break;
             case nameof(ProcessTreeViewModel.StatusText) or nameof(ProcessTreeViewModel.IsLoading):
                 if (_vm is { } vm && (vm.IsLoading || !string.IsNullOrEmpty(vm.StatusText))) ShowToast();
                 else HideToast();
@@ -93,7 +109,7 @@ public partial class ProcessTreePane : UserControl
         if (e.ClickCount > 1 || e.OriginalSource is not DependencyObject src) return;
         for (DependencyObject? d = src; d != null && !ReferenceEquals(d, NavTree); d = d is System.Windows.Media.Visual ? (System.Windows.Media.VisualTreeHelper.GetParent(d) ?? LogicalTreeHelper.GetParent(d)) : LogicalTreeHelper.GetParent(d))
         {
-            if (d is ToggleButton) return;
+            if (d is System.Windows.Controls.Primitives.ButtonBase) return;   // the chevron, "Flag all"
             if (d is TreeViewItem item)
             {
                 if (!item.IsEnabled || item.DataContext is not NavigatorTreeItem row) return;
@@ -194,6 +210,18 @@ public partial class ProcessTreePane : UserControl
 /// </summary>
 public static class FacetGridColumns
 {
+    /// <summary>Fills the row gutter with the 1-based position of each row (the detail rows carry no CSV row index).</summary>
+    public static readonly DependencyProperty RowNumbersProperty = DependencyProperty.RegisterAttached("RowNumbers", typeof(bool), typeof(FacetGridColumns),
+        new PropertyMetadata(false, (d, e) =>
+        {
+            if (d is not DataGrid g) return;
+            g.LoadingRow -= NumberRow;
+            if (e.NewValue is true) g.LoadingRow += NumberRow;
+        }));
+    public static bool GetRowNumbers(DependencyObject d) => (bool)d.GetValue(RowNumbersProperty);
+    public static void SetRowNumbers(DependencyObject d, bool value) => d.SetValue(RowNumbersProperty, value);
+    private static void NumberRow(object? sender, DataGridRowEventArgs e) => e.Row.Header = (e.Row.GetIndex() + 1).ToString();
+
     public static readonly DependencyProperty SpecProperty = DependencyProperty.RegisterAttached("Spec", typeof(ProcessGridSpec), typeof(FacetGridColumns),
         new PropertyMetadata(null, OnSpecChanged));
 

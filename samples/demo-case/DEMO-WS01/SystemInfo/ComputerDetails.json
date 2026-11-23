@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "source": "",
+  "generatedUtc": "2026-03-14T10:10:00Z",
+  "generator": "EZ Forensics demo case (synthetic)",
+  "systems": [
+    {
+      "systemRoot": "",
+      "title": "DEMO-WS01",
+      "host": "DEMO-WS01",
+      "summary": "DEMO-WS01 · Windows 10 Pro 22H2 (19045) · 10.20.30.15",
+      "fields": [
+        {
+          "category": "Operating system",
+          "field": "Computer name",
+          "value": "DEMO-WS01",
+          "source": "SYSTEM\\ControlSet001\\Control\\ComputerName\\ComputerName\\ComputerName"
+        },
+        {
+          "category": "Operating system",
+          "field": "Product name",
+          "value": "Windows 10 Pro",
+          "source": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProductName"
+        },
+        {
+          "category": "Operating system",
+          "field": "Version",
+          "value": "22H2 (build 19045)",
+          "source": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\DisplayVersion"
+        },
+        {
+          "category": "Operating system",
+          "field": "Install date",
+          "value": "2025-09-02 08:14:31 UTC",
+          "source": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\InstallDate"
+        },
+        {
+          "category": "Time",
+          "field": "Time zone",
+          "value": "UTC",
+          "source": "SYSTEM\\ControlSet001\\Control\\TimeZoneInformation\\TimeZoneKeyName"
+        },
+        {
+          "category": "Hardware",
+          "field": "Machine type",
+          "value": "Virtual machine",
+          "source": "SYSTEM\\ControlSet001\\Control\\SystemInformation"
+        },
+        {
+          "category": "Network: Ethernet0",
+          "field": "IP address (DHCP)",
+          "value": "10.20.30.15",
+          "source": "SYSTEM\\ControlSet001\\Services\\Tcpip\\Parameters\\Interfaces"
+        },
+        {
+          "category": "Users",
+          "field": "Local users",
+          "value": "demo.user, Administrator",
+          "source": "SAM\\Domains\\Account\\Users"
+        }
+      ],
+      "hives": [],
+      "notes": [
+        "Synthetic demo data."
+      ]
+    }
+  ],
+  "notes": []
+}

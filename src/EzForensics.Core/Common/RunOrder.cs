@@ -16,7 +16,7 @@ public enum RunPhase
 }
 
 /// <summary>
-/// The one live order of the Ingest planned jobs, the Jobs tab and the setup wizard's install list: running, then queued (in run sequence),
+/// The one live order of the Ingest planned jobs, the Jobs list and the setup wizard's install list: running, then queued (in run sequence),
 /// then finished (in the order they finished), then inactive rows (in plan order). Pure; <see cref="Apply{T}"/> moves the items of an
 /// <see cref="ObservableCollection{T}"/> into that order (never rebuilds it, so item state and selection survive).
 /// </summary>

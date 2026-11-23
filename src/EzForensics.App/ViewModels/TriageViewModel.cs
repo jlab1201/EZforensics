@@ -56,9 +56,9 @@ public sealed partial class TriageViewModel : PageViewModel
     private bool _stopRequested;
     /// <summary>The plaso jobs of the super timelines (started after the run's jobs); Stop cancels them too.</summary>
     private readonly List<Job> _timelineJobs = new();
-    /// <summary>The background "Process tree data" jobs queued after the run (not counted in the run message, not part of the Stop-mode gate); Stop cancels them too.</summary>
+    /// <summary>The "Process tree data" correlator jobs queued after the run onto its row (not counted in the run message); Stop cancels them too.</summary>
     private readonly List<Job> _processJobs = new();
-    /// <summary>The planned jobs of the current run (hosts for the post-run process tree data).</summary>
+    /// <summary>The plan's rows not left out by a card when the current run started (hosts for the post-run process tree data).</summary>
     private List<PlannedJob> _runPlanned = new();
     /// <summary>Planned row of every run job (Resume re-queues a cancelled job onto its row).</summary>
     private readonly Dictionary<Job, PlannedJobItem> _jobRows = new();
@@ -78,6 +78,7 @@ public sealed partial class TriageViewModel : PageViewModel
         InitMemory();
         InitSupertimeline();
         InitAvailability();
+        InitJobs();
     }
 
     // ------------------------------------------------------------------ packet captures (Zeek)
@@ -381,6 +382,7 @@ public sealed partial class TriageViewModel : PageViewModel
     private void SetPlan(IReadOnlyList<(PlannedJob Planned, bool Selected)> rows)
     {
         if (RefuseWhileRunning("re-plan")) return;
+        rows = WithProcessTree(rows);
         foreach (var p in Planned) { p.PropertyChanged -= OnItemChanged; p.ResetRun(); }
         Planned.Clear();
         foreach (var (p, selected) in IngestSteps.Order(rows, r => r.Planned))
@@ -440,6 +442,7 @@ public sealed partial class TriageViewModel : PageViewModel
 
     private void OnItemChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(PlannedJobItem.LatestJob) && sender == SelectedRow && SelectedRow?.LatestJob is { } lj && Jobs.Selected?.Job != lj) Jobs.ShowJob(lj);
         if (e.PropertyName == nameof(PlannedJobItem.IsSelected)) UpdateSelectionSummary();
         else if (e.PropertyName is nameof(PlannedJobItem.ExcludedReason) or nameof(PlannedJobItem.UnavailableReason)) OnPropertyChanged(nameof(SelectAllState));
         if (e.PropertyName is nameof(PlannedJobItem.IsSelected) or nameof(PlannedJobItem.Status) or nameof(PlannedJobItem.ExcludedReason)
@@ -539,7 +542,7 @@ public sealed partial class TriageViewModel : PageViewModel
 
     /// <summary>Jobs queued by this Ingest run are still Queued or Running: the Run button shows Stop (and stays enabled although the plan is locked).</summary>
     public bool IsStopMode => _runJobs.Any(j => j.State is JobState.Queued or JobState.Running)
-        || _timelineJobs.Any(j => !j.IsFinished) || (IsBuildingTimeline && !_stopRequested);
+        || _timelineJobs.Any(j => !j.IsFinished) || (IsBuildingTimeline && !_stopRequested) || (ProcessTreeActive && !_stopRequested);
     public string RunButtonText => IsStopMode ? "Stop" : "Run selected";
     public string RunButtonGlyph => IsStopMode ? "" : "";
 
@@ -552,6 +555,7 @@ public sealed partial class TriageViewModel : PageViewModel
         AppLog.Info($"Ingest: Stop clicked ({jobs.Count} jobs).");
         // Job.Cancel -> the queue's token -> ProcessRunner kills the whole process tree of a running job; queued jobs end as Cancelled.
         foreach (var j in jobs) j.Cancel();
+        OnProcessTreeStopped(jobs);
         RefreshRunGate();
     }
 
@@ -562,9 +566,20 @@ public sealed partial class TriageViewModel : PageViewModel
         try
         {
             var cancelled = _runJobs.Where(j => j.State is JobState.Cancelled or JobState.Skipped).ToList();
-            if (cancelled.Count == 0 || _runCaseDir == null) { CanResumeCancelled = false; return; }
-            AppLog.Info($"Ingest: resuming {cancelled.Count} cancelled jobs.");
+            if (_runCaseDir == null) { CanResumeCancelled = false; return; }
             _stopRequested = false;
+            var (processResumed, processWaits) = ResumeProcessTree();
+            if (cancelled.Count == 0)
+            {
+                CanResumeCancelled = false;
+                if (!processResumed) return;
+                // only the Process tree data step was stopped: its jobs run again (or are queued now when none had been queued)
+                ClearRunStatus("resuming the process tree data.");
+                if (processWaits) QueueProcessTreeData(_runCaseDir);
+                RefreshRunGate();
+                return;
+            }
+            AppLog.Info($"Ingest: resuming {cancelled.Count} cancelled jobs.");
             _runFinished = false;
             CanResumeCancelled = false;
             ClearRunStatus($"resuming {cancelled.Count} cancelled jobs.");
@@ -586,7 +601,6 @@ public sealed partial class TriageViewModel : PageViewModel
         catch (Exception ex) { ReportRunError(ex); }
     }
 
-    [RelayCommand] private void OpenJobsPage() => S.Navigate<JobsViewModel>();
     [RelayCommand] private void OpenAnalyzePage() => S.Navigate<ResultsViewModel>();
 
     /// <summary>Why Run selected is disabled (tooltip and the line next to the button), or null when it can run.</summary>
@@ -602,7 +616,21 @@ public sealed partial class TriageViewModel : PageViewModel
 
     /// <summary>Line next to Run selected: a blocking issue, else the last run's problem or its completion (the page's one run message).</summary>
     public string RunHint => RunIssue ?? RunStatus;
-    public bool HasRunHint => !string.IsNullOrEmpty(RunHint);
+    public bool HasRunHint => !string.IsNullOrEmpty(RunHint) && RunHint != _dismissedRunHint;
+    /// <summary>The run hint text the user dismissed; the hint stays hidden until its text changes.</summary>
+    private string? _dismissedRunHint;
+
+    /// <summary>Dismiss on the run hint (not offered while the Administrator choice is shown).</summary>
+    [RelayCommand]
+    private void DismissRunHint()
+    {
+        _dismissedRunHint = RunHint;
+        OnPropertyChanged(nameof(HasRunHint));
+    }
+
+    /// <summary>Dismiss on the green next-steps hint; the next finished run shows it again.</summary>
+    [RelayCommand]
+    private void DismissNextSteps() => ShowNextSteps = false;
     public InfoSeverity RunHintSeverity => RunIssue != null ? InfoSeverity.Warning : RunStatusSeverity;
     public string RunButtonToolTip => IsStopMode ? "Cancel the running and queued jobs of this ingest run" : RunBlockedReason ?? "Queue the ticked jobs (output goes to the case folder)";
 
@@ -611,7 +639,9 @@ public sealed partial class TriageViewModel : PageViewModel
     /// <summary>Re-evaluates Run selected (enabled state, tooltip, hint line).</summary>
     private void RefreshRunGate()
     {
+        var wasLocked = IsRunLocked;
         IsRunLocked = RunActive();
+        if (IsRunLocked && !wasLocked) OnRunStartedUi();
         RunSelectedCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsStopMode));
         OnPropertyChanged(nameof(RunButtonText));
@@ -664,8 +694,8 @@ public sealed partial class TriageViewModel : PageViewModel
         return S.Queue.Jobs.Any(j => !j.IsFinished && j.Spec.Output != null && SameDir(j.CaseDir, caseDir));
     }
 
-    /// <summary>A run is still going on: jobs of this case queued / running, or a super timeline waiting / building.</summary>
-    private bool RunActive() => CaseHasActiveTriageJobs() || !_runFinished || IsBuildingTimeline;
+    /// <summary>A run is still going on: jobs of this case queued / running, a super timeline waiting / building, or the process tree data waiting / running.</summary>
+    private bool RunActive() => CaseHasActiveTriageJobs() || !_runFinished || IsBuildingTimeline || ProcessTreeActive;
 
     /// <summary>Same folder (full paths, trailing separators and case ignored).</summary>
     internal static bool SameDir(string? a, string? b)
@@ -760,6 +790,7 @@ public sealed partial class TriageViewModel : PageViewModel
         var computerDetails = selected.FirstOrDefault(p => p.IsComputerDetails);
         var timelines = selected.Where(p => p.IsSupertimeline).ToList();
         var macb = selected.Where(p => p.IsMacbTimeline).ToList();
+        var processTree = selected.FirstOrDefault(p => p.IsProcessTree);
 
         // Resolve every selected row first (Zeek / memory placeholders), then check the tools, before anything is queued.
         var zeek = S.Zeek?.Selected;
@@ -768,7 +799,7 @@ public sealed partial class TriageViewModel : PageViewModel
         {
             var spec = p.Planned.Spec;
             // Computer details is queued first and the super timelines after every other job (below); RITA rows wait for this run's Zeek
-            // jobs: queued after them (EnqueueRita below).
+            // jobs: queued after them (EnqueueRita below). Process tree data has no tool of its own: its jobs are built after the run.
             if (IngestSteps.IsStep(p.Planned) || NetworkTriage.IsRita(p.Planned)) continue;
             if (p.Planned.Artifact.RuleId == NetworkTriage.RuleId)
             {
@@ -808,7 +839,7 @@ public sealed partial class TriageViewModel : PageViewModel
             toQueue = toQueue.Except(missing).ToList();
         }
 
-        if (toQueue.Count == 0 && computerDetails == null && timelines.Count == 0)
+        if (toQueue.Count == 0 && computerDetails == null && timelines.Count == 0 && processTree == null)
         {
             if (selected.Any(p => NetworkTriage.IsRita(p.Planned)))
                 skips.RitaNotes.Add("the RITA jobs read this run's Zeek output, and no Zeek job could be queued.");
@@ -846,8 +877,10 @@ public sealed partial class TriageViewModel : PageViewModel
         _runJobs.Clear();
         _jobRows.Clear();
         _timelineJobs.Clear();
+        foreach (var j in _processJobs) j.PropertyChanged -= OnProcessJobChanged;
         _processJobs.Clear();
-        _runPlanned = selected.Select(p => p.Planned).ToList();
+        _runPlanned = Planned.Where(p => !p.IsExcluded).OrderBy(p => p.Sequence).Select(p => p.Planned).ToList();
+        _runProcessTree = processTree;
         _stopRequested = false;
         _runFinished = true;   // no end-of-run handling while the jobs are being queued (_runCaseDir is set below)
         _runCaseDir = null;
@@ -868,6 +901,7 @@ public sealed partial class TriageViewModel : PageViewModel
         // The super timelines are the last steps: they start when every job above has finished (OnRunJobChanged → CheckRunFinished).
         // Only skipped jobs are reported at the start (the rows show the progress; the completion is reported once, at the end).
         foreach (var t in macb.Concat(timelines)) t.IsWaiting = true;
+        if (processTree != null) processTree.IsWaiting = true;
         if (skips.Any) ReportRun(TriageRunCheck.Describe(_runJobs.Count, skips, caseDir), InfoSeverity.Warning, offerSetup: skips.MissingToolJobs > 0);
         else ClearRunStatus(TriageRunCheck.Describe(_runJobs.Count, skips, caseDir));
         _runSkipped = skips.Any;
@@ -903,11 +937,11 @@ public sealed partial class TriageViewModel : PageViewModel
         _jobRows[job] = row;
     }
 
-    /// <summary>Result link of a planned row: opens its job on the Jobs page.</summary>
+    /// <summary>Result link of a planned row: selects its job in place (the details pane shows its log).</summary>
     [RelayCommand]
-    private void OpenRowJob(PlannedJobItem? row)
+    private void OpenRowJob(IJobListRow? row)
     {
-        if (row?.Job is { } job) S.ShowJob(job);
+        if (row?.LatestJob is { } job) ShowJob(job);
     }
 
     private void OnRunJobChanged(object? sender, PropertyChangedEventArgs e)
@@ -938,6 +972,7 @@ public sealed partial class TriageViewModel : PageViewModel
                 ReportRun($"{total - cancelled} completed, {cancelled} cancelled.", InfoSeverity.Warning);
                 CanResumeCancelled = true;
                 foreach (var t in macb.Concat(timelines)) t.IsWaiting = false;
+                if (_runProcessTree is { IsWaiting: true } pt) EndProcessTreeStopped(pt);
                 _ = AfterRunAsync(_runCaseDir, _runJobs.ToList(), _runComputerDetails, Array.Empty<PlannedJobItem>(), stopped: true);
                 RefreshRunGate();
                 return;
@@ -960,8 +995,8 @@ public sealed partial class TriageViewModel : PageViewModel
     internal static (string Text, InfoSeverity Severity) RunOutcome(int total, int failed, bool skipped)
     {
         if (total == 0) return ("", skipped ? InfoSeverity.Warning : InfoSeverity.Success);
-        var text = failed == 0 ? $"All {total} jobs succeeded. See Jobs for execution details."
-                               : $"{failed} of {total} jobs did not succeed. See Jobs for execution details.";
+        var text = failed == 0 ? $"All {total} jobs succeeded. Select a row for its log."
+                               : $"{failed} of {total} jobs did not succeed. Select a row for its log.";
         return (text, failed == 0 && !skipped ? InfoSeverity.Info : InfoSeverity.Warning);
     }
 
@@ -985,13 +1020,32 @@ public sealed partial class TriageViewModel : PageViewModel
             // The MACB timelines go first and hand over to the super timelines when they are done.
             if (macb.Count > 0) _ = BuildMacbTimelinesAsync(macb, timelines, caseDir);
             else if (timelines.Count > 0) _ = BuildSupertimelinesAsync(timelines, caseDir);
-            if (!stopped) QueueProcessTreeData(caseDir, jobs);
+            if (!stopped) QueueProcessTreeData(caseDir);
             if (!stopped) ScheduleExtractedCleanup();
+            if (!stopped) _ = QueueSpectreAfterIngestAsync(caseDir);
         }
         catch (Exception ex)
         {
             if (timelines.Count > 0 || macb.Count > 0) { foreach (var t in macb.Concat(timelines)) t.IsWaiting = false; IsBuildingTimeline = false; }
+            if (_runProcessTree is { IsWaiting: true } pt) EndProcessTreeWait(pt, "Not queued: " + ex.Message);
             ShowError("Post-run steps failed", ex);
         }
+    }
+
+    /// <summary>
+    /// Options → AI "Run Spectre after Ingest": once the run's super timelines and process tree data are done, queues the Spectre analysis
+    /// job (it shows in the Jobs list). Skipped after Stop, when the option is off, or when the engine is not installed.
+    /// </summary>
+    private async Task QueueSpectreAfterIngestAsync(string caseDir)
+    {
+        try
+        {
+            if (S.Settings.RunSpectreAfterIngest != true) return;
+            while ((IsBuildingTimeline || ProcessTreeActive) && !_stopRequested) await Task.Delay(1000);
+            if (_stopRequested) return;
+            var (job, reason) = await SpectreAnalysisQueue.EnqueueAsync(S.Queue, caseDir, CancellationToken.None);
+            if (job == null) AppLog.Info("Spectre analysis after Ingest not queued: " + reason);
+        }
+        catch (Exception ex) { AppLog.Warn("Could not queue the Spectre analysis after Ingest: " + ex.Message); }
     }
 }

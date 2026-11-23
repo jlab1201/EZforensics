@@ -45,6 +45,7 @@ public class CsvMergerTests : IDisposable
         var r = await CsvMerger.MergeAsync(new[] { new CsvMergeInput(a, "H1"), new CsvMergeInput(b, "H2") }, o);
         r.RowsWritten.Should().Be(3);
         r.Headers.Should().Equal("SourceFile", "Host", "A", "B");
+        r.SourceFileColumnName.Should().Be("SourceFile");
         File.ReadAllText(o).Should().Be("SourceFile,Host,A,B\r\na.csv,H1,1,2\r\nb.csv,H2,3,4\r\nb.csv,H2,5,6\r\n");
     }
 
@@ -121,12 +122,13 @@ public class CsvMergerTests : IDisposable
     }
 
     [Fact]
-    public async Task Merge_ColumnNamedSourceFile_IsRenamedNotMerged()
+    public async Task Merge_ColumnNamedSourceFile_KeepsItsNameAndValues_AddedColumnYields()
     {
         var a = Write("a.csv", "SourceFile,B\r\norig,2\r\n");
         var o = Path.Combine(_dir, "out.csv");
         var r = await CsvMerger.MergeAsync(new[] { new CsvMergeInput(a) }, o);
-        r.Headers.Should().Equal("SourceFile", "Host", "SourceFile (2)", "B");
-        File.ReadAllText(o).Should().Be("SourceFile,Host,SourceFile (2),B\r\na.csv,,orig,2\r\n");
+        r.Headers.Should().Equal("SourceCsv", "Host", "SourceFile", "B");
+        r.SourceFileColumnName.Should().Be("SourceCsv");
+        File.ReadAllText(o).Should().Be("SourceCsv,Host,SourceFile,B\r\na.csv,,orig,2\r\n");
     }
 }

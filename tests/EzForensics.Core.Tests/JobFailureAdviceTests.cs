@@ -21,7 +21,7 @@ public class JobFailureAdviceTests
         JobFailureAdvice.Advise("rita", 1, "x", "ClickHouse did not start").Should().Contain("wsl --shutdown");
 
     [Fact] public void Timeout() =>
-        JobFailureAdvice.Advise("x", -1, "Timed out after 30 min", null).Should().Be("Increase the timeout in Settings or narrow the input.");
+        JobFailureAdvice.Advise("x", -1, "Timed out after 30 min", null).Should().Be("Increase the timeout in Options or narrow the input.");
 
     [Fact] public void FileInUse() =>
         JobFailureAdvice.Advise("x", 1, "Exited with code 1", "The process cannot access the file because it is being used by another process").Should().StartWith("Close programs");

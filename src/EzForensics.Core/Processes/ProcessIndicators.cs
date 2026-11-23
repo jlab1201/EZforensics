@@ -52,14 +52,24 @@ public static class ProcessIndicators
         return list;
     }
 
-    /// <summary>Orphans and nodes seen only in event logs.</summary>
+    /// <summary>
+    /// Orphans and nodes seen only in event logs. An orphan is every process whose parent was not captured, so the count matches the
+    /// canvas's Orphaned trees: marked orphans, roots whose parent PID was reused by a later process, and log-only roots whose parent
+    /// predates the logs. Idle, System and processes with parent PID 0 are natural roots, never orphans.
+    /// </summary>
     public static List<ProcessDataGap> DataGaps(ProcessGraph graph)
     {
         var list = new List<ProcessDataGap>();
         foreach (var n in graph.AllNodes)
         {
+            var parentMissing = (n.Parent == null || n.Parent.IsGhost) && n.Pid is not (0 or 4) && n.Ppid > 0;
+            string image = n.ParentImage.Length > 0 ? $" (event log names its parent image: {n.ParentImage})" : "";
             if (n.Markers.HasFlag(ProcessMarkers.Orphan))
-                list.Add(new ProcessDataGap(n, DataGapKind.Orphan, $"Parent PID {n.Ppid} is not in any source" + (n.ParentImage.Length > 0 ? $" (event log names its parent image: {n.ParentImage})" : "") + "."));
+                list.Add(new ProcessDataGap(n, DataGapKind.Orphan, $"Parent PID {n.Ppid} is not in any source{image}."));
+            else if (parentMissing && n.Markers.HasFlag(ProcessMarkers.ParentPidReused))
+                list.Add(new ProcessDataGap(n, DataGapKind.Orphan, $"Parent PID {n.Ppid} only belongs to a later process (PID reused); the real parent was not captured{image}."));
+            else if (parentMissing && n.Markers.HasFlag(ProcessMarkers.FromLogsOnly))
+                list.Add(new ProcessDataGap(n, DataGapKind.Orphan, $"Parent PID {n.Ppid} is in no source: it probably started before the logs begin{image}."));
             if (n.Markers.HasFlag(ProcessMarkers.FromLogsOnly))
                 list.Add(new ProcessDataGap(n, DataGapKind.FromLogsOnly, "Only seen in event logs, not in a memory image."));
         }
@@ -98,6 +108,10 @@ public static class ProcessIndicators
         if (ProcessRoles.IsUnexpectedLocation(n, role, out var actual))
             list.Add(new ProcessIndicator(n, IndicatorKind.UnexpectedLocation,
                 $"{role.Name} runs from \"{actual}\"; expected {string.Join(" or ", role.Dirs.Select(d => "\"" + d + "\""))}."));
+        // a broken roles.json parents rule is always listed, also when the graph's markers lack it (SuspiciousParent from Markers() otherwise covers it)
+        if (!n.Markers.HasFlag(ProcessMarkers.SuspiciousParent) && ProcessRoles.HasUnexpectedParent(n) && n.Parent is { } p)
+            list.Add(new ProcessIndicator(n, IndicatorKind.SuspiciousParent,
+                $"{role.Name} should be started by {string.Join(" or ", role.Parents)}: {Who(p)} started {Who(n)}."));
         if (role.Session0 && n.SessionId is int s && s != 0)
             list.Add(new ProcessIndicator(n, IndicatorKind.UnexpectedSession, $"{role.Name} normally runs in session 0; this one has SessionId {s}."));
     }

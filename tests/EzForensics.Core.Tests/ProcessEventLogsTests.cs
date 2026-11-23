@@ -79,6 +79,23 @@ public class ProcessEventLogsTests : IDisposable
         a.Path.Should().Be(@"C:\tools\a.exe");
     }
 
+    [Fact]
+    public void Log_payload_fills_integrity_session_and_version_info_of_log_only_processes()
+    {
+        var sysmon = Row("2024-03-01 09:00:00", 1, Sys, @"PC1\bob", AExe,
+            new[] { PidTag("100", GA), "RuleName: -", "SHA1=AA", @"ParentProcess: C:\Windows\explorer.exe", $"ParentProcessID: 4, ParentProcessGUID: {GB}", "ParentCommandLine: x" },
+            payload: Json(("IntegrityLevel", "High"), ("TerminalSessionId", "1"), ("Company", "Contoso Ltd."), ("Product", "Tool")));
+        var sec = Row("2024-03-01 09:05:00", 4688, Sec, @"PC1\bob", @"C:\tools\b.exe",
+            new[] { @"Parent process: C:\Windows\explorer.exe", "PID: 0x1f4", "Parent PID: 0x4", "Mandatory label: S-1-16-8192", @"Target User: -\-" },
+            payload: Json(("MandatoryLabel", "S-1-16-8192")));
+        var g = Build(sysmon + sec);
+
+        var a = ByGuid(g, GA);
+        (a.Integrity, a.SessionId, a.Company, a.Product).Should().Be(("High", 1, "Contoso Ltd.", "Tool"));
+        a.VersionInfoSource.Should().Be(ProcessGraphBuilder.SysmonVersionInfoLabel);
+        g.AllNodes.Single(n => n.Pid == 500).Integrity.Should().Be("Medium");
+    }
+
     // ---- Sysmon -------------------------------------------------------------------------------------------------------------------------------------
 
     [Fact]

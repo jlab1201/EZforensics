@@ -52,6 +52,22 @@ public static class ProcessNavigatorGroups
         _ => k.ToString(),
     };
 
+    /// <summary>The Orphans title also says how many processes their trees hold (as the canvas's Orphaned region counts them).</summary>
+    private static string GapTitle(DataGapKind k, IEnumerable<ProcessNode> members)
+    {
+        if (k != DataGapKind.Orphan) return GapTitle(k);
+        var roots = members.Distinct().ToList();
+        var seen = new HashSet<ProcessNode>(ReferenceEqualityComparer.Instance);
+        var stack = new Stack<ProcessNode>(roots);
+        while (stack.Count > 0)
+        {
+            var n = stack.Pop();
+            if (n.IsGhost || !seen.Add(n)) continue;
+            foreach (var c in n.Children) stack.Push(c);
+        }
+        return seen.Count > roots.Count ? $"{GapTitle(k)} · {seen.Count:N0} processes in their trees" : GapTitle(k);
+    }
+
     public static NavigatorGroups Build(ProcessGraph graph)
     {
         var real = graph.AllNodes.Where(n => !n.IsGhost).ToList();
@@ -63,12 +79,12 @@ public static class ProcessNavigatorGroups
 
         var gaps = ProcessIndicators.DataGaps(graph).Where(i => !i.Node.IsGhost)
             .GroupBy(i => i.Kind).OrderBy(g => g.Key)
-            .Select(g => Make(NavigatorSection.DataGaps, g.Key.ToString(), GapTitle(g.Key), g.Select(i => new NavigatorMember(i.Node, i.Text))))
+            .Select(g => Make(NavigatorSection.DataGaps, g.Key.ToString(), GapTitle(g.Key, g.Select(i => i.Node)), g.Select(i => new NavigatorMember(i.Node, i.Text))))
             .ToList();
 
         var roles = real.Where(n => n.Role.Length > 0).GroupBy(n => n.Role)
             .OrderBy(g => g.Key == ProcessRoles.OtherRole ? 1 : 0).ThenByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(g => Make(NavigatorSection.Roles, Slug(g.Key), g.Key, g.Select(n => new NavigatorMember(n, ""))))
+            .Select(g => Make(NavigatorSection.Roles, Slug(g.Key), g.Key, g.Select(n => new NavigatorMember(n, "")), flaggedFirst: true))
             .ToList();
 
         var sessions = real.GroupBy(n => (n.SessionId, User: n.User.Trim()))
@@ -77,7 +93,7 @@ public static class ProcessNavigatorGroups
             {
                 var s = g.Key.SessionId is { } id ? id.ToString(CultureInfo.InvariantCulture) : "?";
                 var u = g.Key.User.Length > 0 ? g.Key.User : "(unknown user)";
-                return Make(NavigatorSection.Sessions, Slug(s + "_" + u), $"Session {s} · {u}", g.Select(n => new NavigatorMember(n, "")));
+                return Make(NavigatorSection.Sessions, Slug(s + "_" + u), $"Session {s} · {u}", g.Select(n => new NavigatorMember(n, "")), flaggedFirst: true);
             })
             .ToList();
 
@@ -97,11 +113,12 @@ public static class ProcessNavigatorGroups
         return groups;
     }
 
-    private static NavigatorGroup Make(NavigatorSection section, string key, string title, IEnumerable<NavigatorMember> members)
+    private static NavigatorGroup Make(NavigatorSection section, string key, string title, IEnumerable<NavigatorMember> members, bool flaggedFirst = false)
     {
-        // one row per process (a process can carry the same kind twice only by construction mistakes); creation order
+        // one row per process (a process can carry the same kind twice only by construction mistakes); creation order (roles and sessions: flagged first)
         var list = members.GroupBy(m => m.Node).Select(g => g.First())
-            .OrderBy(m => m.Node.CreateTime ?? DateTime.MaxValue).ThenBy(m => m.Node.Pid).ToList();
+            .OrderBy(m => flaggedFirst && IsFlagged(m.Node) ? 0 : 1)
+            .ThenBy(m => m.Node.CreateTime ?? DateTime.MaxValue).ThenBy(m => m.Node.Pid).ToList();
         return new NavigatorGroup(section, key, title, list, list.Count(m => IsFlagged(m.Node)));
     }
 

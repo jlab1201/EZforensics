@@ -163,6 +163,31 @@ public sealed class VolatilitySetupTests : IDisposable
         VolatilitySetup.SymbolPackInstalled(sym2).Should().BeFalse();
     }
 
+    private sealed class BodyHandler(byte[] body) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new ByteArrayContent(body), RequestMessage = request });
+    }
+
+    [Fact]
+    public async Task Symbol_pack_download_returns_logs_and_marks_the_sha256()
+    {
+        var body = System.Text.Encoding.UTF8.GetBytes("symbol pack bytes");
+        var expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(body));
+        var dest = Path.Combine(_tmp.Path, "dl", "windows.zip");
+        var lines = new List<string>();
+        var sha = await VolatilitySetup.DownloadFileAsync(new HttpClient(new BodyHandler(body)), VolatilitySetup.SymbolPackUrl, dest, null, lines.Add, CancellationToken.None);
+        sha.Should().Be(expected);
+        lines.Should().Contain(l => l.Contains(expected));
+
+        var zip = Path.Combine(_tmp.Path, "w.zip");
+        using (var z = ZipFile.Open(zip, ZipArchiveMode.Create))
+        using (var w = new StreamWriter(z.CreateEntry("windows/a.json.xz").Open())) w.Write("x");
+        var sym = Path.Combine(_tmp.Path, "symbols-sha");
+        VolatilitySetup.ExtractSymbolPack(zip, sym, sha256: sha);
+        File.ReadAllText(Path.Combine(sym, VolatilitySetup.SymbolPackMarker)).Should().Contain("sha256=" + expected);
+    }
+
     [Theory]
     [InlineData("https://downloads.volatilityfoundation.org/volatility3/symbols/windows.zip", true)]
     [InlineData("http://downloads.volatilityfoundation.org/volatility3/symbols/windows.zip", false)]
@@ -270,7 +295,7 @@ public sealed class VolatilitySetupPlanTests
     {
         var all = SetupSelection.ForProfile(SetupProfile.Everything, Cat, Sys());
         var expected = Cat.Bundles.Where(b => !b.ComingSoon).SelectMany(b => b.Items)
-            .Where(i => i.Selectable && !i.Hidden && i.Id != SetupIds.Dotnet9).Select(i => i.Id);
+            .Where(i => i.Selectable && !i.Hidden && i.Id != SetupIds.Dotnet9 && i.Id != SetupIds.LocalAi).Select(i => i.Id);
         all.Items.Should().Contain(expected, "Everything means every item shown in the wizard");
         SetupPlanner.Plan(Cat, all, Sys(python: "py")).Steps.Should().Contain(s => s.Kind == SetupStepKind.InstallVolatilitySymbols);
     }

@@ -35,7 +35,7 @@ public static class IngestSelections
 
     /// <summary>
     /// Every rule id an Ingest plan can contain, with a readable label and its group: computer details and the embedded disk rules (plus
-    /// persistence), memory images, packet captures (Zeek) and RITA, and the supertimeline.
+    /// persistence), memory images, packet captures (Zeek) and RITA, the timelines and Process tree data.
     /// </summary>
     public static IReadOnlyList<IngestRuleInfo> AllRules(IEnumerable<TriageRule>? rules = null)
     {
@@ -49,6 +49,7 @@ public static class IngestSelections
         list.Add(new(Rita.RitaJobs.RuleId, "RITA (beaconing analysis)", NetworkGroup));
         list.Add(new(IngestSteps.MacbTimelineRuleId, "Filesystem timeline (MACB)", TimelineGroup));
         list.Add(new(IngestSteps.SupertimelineRuleId, "Supertimeline (plaso)", TimelineGroup));
+        list.Add(new(IngestSteps.ProcessTreeRuleId, "Process tree data (event logs, memory)", TimelineGroup));
         return list;
     }
 

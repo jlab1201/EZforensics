@@ -11,6 +11,9 @@ public partial class ResultsView : UserControl
     private double _savedLeftMin = 180;
     private GridLength _savedSplitter = new(12);
     private bool _focusApplied;
+    /// <summary>Width of the case pane the examiner chose (splitter drag); the pane shrinks below it only while the events side would get narrower than its minimum.</summary>
+    private double _preferredLeft = 860;
+    private bool _draggingPane;
 
     /// <summary>Tree / events star heights of the split right pane, kept for the app session (restored when the tree is opened again, also after leaving the page).</summary>
     private static double s_treeStar = 55, s_eventsStar = 45;
@@ -33,6 +36,12 @@ public partial class ResultsView : UserControl
         PreviewKeyDown += OnPreviewKeyDown;
         DataContextChanged += (_, _) => HookVm();
         TreeSplitter.DragCompleted += (_, _) => RememberSplit();
+        PaneSplitter.DragStarted += (_, _) => _draggingPane = true;
+        PaneSplitter.DragCompleted += (_, _) =>
+        {
+            _draggingPane = false;
+            if (!_focusApplied && LeftColumn.ActualWidth > 0) _preferredLeft = LeftColumn.ActualWidth;
+        };
         Loaded += (_, _) => { HookVm(); ApplySplit(); };
     }
 
@@ -101,6 +110,22 @@ public partial class ResultsView : UserControl
             LeftColumn.Width = _savedLeft;
             SplitterColumn.Width = _savedSplitter;
         }
+    }
+
+    /// <summary>
+    /// The case pane keeps the examiner's width while there is room and gives way when the window (or the docked Spectre) leaves the
+    /// events grid less than its MinWidth. Done here because the grid itself only reports its desired width (a fixed-pixel column plus
+    /// the grid's minimum), which would push the grid off the page instead of shrinking the pane.
+    /// </summary>
+    protected override Size MeasureOverride(Size constraint)
+    {
+        if (!_focusApplied && !_draggingPane && !double.IsInfinity(constraint.Width) && constraint.Width > 0)
+        {
+            var max = constraint.Width - SplitterColumn.Width.Value - MainColumn.MinWidth;
+            var w = Math.Max(LeftColumn.MinWidth, Math.Min(_preferredLeft, max));
+            if (Math.Abs(LeftColumn.Width.Value - w) > 0.5 || !LeftColumn.Width.IsAbsolute) LeftColumn.Width = new GridLength(w);
+        }
+        return base.MeasureOverride(constraint);
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)

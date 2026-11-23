@@ -8,7 +8,7 @@ namespace EzForensics.App.Services;
 /// <summary>
 /// Computer details as a lightweight built-in job: EZ Forensics runs itself headless
 /// (<c>EzForensics.exe --computer-details --source &lt;src&gt; --out &lt;dir&gt; [--host &lt;host&gt;]</c>) through the normal job queue, so the
-/// step is logged like any tool, shows on the Jobs page, and the run manifest records its argv, exe hash and the SHA-256 of
+/// step is logged like any tool, shows in the Jobs list on Ingest, and the run manifest records its argv, exe hash and the SHA-256 of
 /// ComputerDetails.json / .csv. No Execution code is involved beyond <see cref="JobQueue.Enqueue"/>.
 /// Layout v2 case (<c>case.json</c>): one job per Windows system, written to <c>&lt;case&gt;\&lt;Host&gt;\SystemInfo</c>.
 /// Older case: one job for the whole source, written to <c>&lt;case&gt;\SystemInfo</c>.

@@ -75,6 +75,18 @@
                                                     <TextBlock Text="{Binding CountText, Mode=OneWay}" Style="{StaticResource Caption}" Margin="0,0,8,0"/>
                                                     <TextBlock Text="map unverified" Style="{StaticResource Caption}" Visibility="{Binding Unverified, Converter={StaticResource BoolToVis}}"
                                                                ToolTip="No EZ map was checked for this event: it may be parsed without named fields."/>
+                                                    <Border Style="{StaticResource Chip}" Margin="8,0,0,0" VerticalAlignment="Center" Background="{DynamicResource Brush.InfoBg}"
+                                                            TextElement.Foreground="{DynamicResource Brush.Info}"
+                                                            Visibility="{Binding HasCustomMap, Converter={StaticResource BoolToVis}}"
+                                                            ToolTip="EvtxECmd uses your custom map for this event instead of the stock map">
+                                                        <TextBlock Text="custom map" FontSize="{DynamicResource FontSize.Small}"/>
+                                                    </Border>
+                                                    <Button Content="Reset to stock" Command="{Binding ResetMapCommand}" Style="{StaticResource LinkButton}" Margin="8,0,0,0"
+                                                            Visibility="{Binding HasCustomMap, Converter={StaticResource BoolToVis}}"
+                                                            ToolTip="Delete your custom map: EvtxECmd uses the stock map again" AutomationProperties.AutomationId="EvtxCustomize.ResetMap"/>
+                                                    <Button Content="Edit fields…" Command="{Binding EditFieldsCommand}" Style="{StaticResource LinkButton}" Margin="8,0,0,0"
+                                                            ToolTip="Change which fields EvtxECmd extracts for this event, tried on sample records from the evidence"
+                                                            AutomationProperties.AutomationId="EvtxCustomize.EditFields"/>
                                                 </StackPanel>
                                             </Grid>
                                         </DataTemplate>

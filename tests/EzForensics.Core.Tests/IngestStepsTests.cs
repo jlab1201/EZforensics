@@ -39,9 +39,9 @@ public class IngestStepsTests
             .Should().BeEquivalentTo(new[] { IngestSteps.ComputerDetailsRuleId, IngestSteps.MacbTimelineRuleId }.Concat(fast));
         plan.Where(p => detected.Contains(p.Artifact.RuleId)).Should().HaveCount(3).And.OnlyContain(p => !p.SelectedByDefault);
         foreach (var rule in detected) IngestDefaults.IsDefault(Tool(rule, rule)).Should().BeFalse(rule + " is not a default");
-        IngestDefaults.FastForensicsRuleIds.Should().BeEquivalentTo(new[] { IngestSteps.ComputerDetailsRuleId, IngestSteps.MacbTimelineRuleId }.Concat(fast));
+        IngestDefaults.FastForensicsRuleIds.Should().BeEquivalentTo(new[] { IngestSteps.ComputerDetailsRuleId, IngestSteps.MacbTimelineRuleId, IngestSteps.ProcessTreeRuleId }.Concat(fast));
         // every listed rule id exists as a planned job (rules.json or an Ingest step)
-        var known = TriageRules.LoadEmbedded().Select(r => r.Id).Append(IngestSteps.ComputerDetailsRuleId).Append(IngestSteps.MacbTimelineRuleId);
+        var known = TriageRules.LoadEmbedded().Select(r => r.Id).Append(IngestSteps.ComputerDetailsRuleId).Append(IngestSteps.MacbTimelineRuleId).Append(IngestSteps.ProcessTreeRuleId);
         IngestDefaults.FastForensicsRuleIds.Should().BeSubsetOf(known);
     }
 

@@ -35,22 +35,6 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <Style x:Key="Mini" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
-            <Setter Property="MinHeight" Value="26"/>
-            <Setter Property="Padding" Value="8,2"/>
-            <Setter Property="Margin" Value="4,0,0,0"/>
-        </Style>
-
-
-        <Style x:Key="IconMini" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
-            <Setter Property="FontFamily" Value="{StaticResource Font.Icon}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="MinHeight" Value="22"/>
-            <Setter Property="MinWidth" Value="22"/>
-            <Setter Property="Padding" Value="4,2"/>
-            <Setter Property="Margin" Value="2,0,0,0"/>
-        </Style>
-
         <Style x:Key="ColumnCombo" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
             <Setter Property="Foreground" Value="{DynamicResource Filter.Column}"/>
             <Setter Property="ItemContainerStyle">
@@ -61,15 +45,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- "*" is the reserved any-column choice -->
-        <DataTemplate x:Key="ColumnItem">
-            <TextBlock x:Name="t" Text="{Binding}"/>
-            <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding}" Value="*">
-                    <Setter TargetName="t" Property="Text" Value="Any field"/>
-                </DataTrigger>
-            </DataTemplate.Triggers>
-        </DataTemplate>
         <Style x:Key="OperatorCombo" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
             <Setter Property="Foreground" Value="{DynamicResource Filter.Function}"/>
             <Setter Property="ItemContainerStyle">
@@ -100,6 +75,9 @@
                     <Setter Property="FontWeight" Value="Bold"/>
                 </Trigger>
             </Style.Triggers>
+        </Style>
+        <Style x:Key="ValueCombo" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="Foreground" Value="{DynamicResource Filter.String}"/>
         </Style>
         <Style x:Key="ValueBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Foreground" Value="{DynamicResource Filter.String}"/>
@@ -137,7 +115,7 @@
                         </ComboBox>
                         <Button Style="{StaticResource Mini}" Content="+ Condition" Command="{Binding AddConditionCommand}" AutomationProperties.AutomationId="FilterBuilder.Group.AddCondition"/>
                         <Button Style="{StaticResource Mini}" Content="+ Group" Command="{Binding AddGroupCommand}" AutomationProperties.AutomationId="FilterBuilder.Group.AddGroup"/>
-                        <Button Style="{StaticResource Mini}" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}" FontSize="10" ToolTip="Remove group"
+                        <Button Style="{StaticResource Mini}" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}" FontSize="11" ToolTip="Remove group"
                                 Command="{Binding RemoveCommand}" Visibility="{Binding CanRemove, Converter={StaticResource BoolToVis}}"
                                 AutomationProperties.Name="Remove group"/>
                     </StackPanel>
@@ -148,14 +126,22 @@
 
         <DataTemplate DataType="{x:Type vm:BuilderConditionViewModel}">
             <StackPanel Orientation="Horizontal" Margin="0,3">
-                <ComboBox Style="{StaticResource ColumnCombo}" ItemsSource="{Binding Root.Columns}" SelectedItem="{Binding Column}" Width="200" AutomationProperties.AutomationId="FilterBuilder.Condition.Column"
-                          ItemTemplate="{StaticResource ColumnItem}"/>
-                <ComboBox Style="{StaticResource OperatorCombo}" ItemsSource="{Binding Root.Ops}" SelectedItem="{Binding Op}" Width="150" Margin="6,0,0,0" AutomationProperties.AutomationId="FilterBuilder.Condition.Op"/>
+                <ComboBox Style="{StaticResource ColumnCombo}" IsEditable="True" IsTextSearchEnabled="False" StaysOpenOnEdit="True"
+                          ItemsSource="{Binding ColumnChoices}" Text="{Binding ColumnText, Mode=OneWay}" Width="200"
+                          AutomationProperties.AutomationId="FilterBuilder.Condition.Column" AutomationProperties.Name="Field"
+                          ToolTip="Type to search the fields; Enter picks, Esc cancels"
+                          TextBoxBase.TextChanged="Field_TextChanged" PreviewKeyDown="Field_PreviewKeyDown"
+                          DropDownOpened="Field_DropDownOpened" DropDownClosed="Field_DropDownClosed" LostKeyboardFocus="Field_LostKeyboardFocus"
+                          GotKeyboardFocus="Field_GotKeyboardFocus"/>
+                <ComboBox Style="{StaticResource OperatorCombo}" ItemsSource="{Binding AvailableOps}" SelectedItem="{Binding Op}" Width="150" Margin="6,0,0,0" AutomationProperties.AutomationId="FilterBuilder.Condition.Op"/>
                 <TextBox Style="{StaticResource ValueBox}" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="220" Margin="6,0,0,0" Tag="value"
-                         IsEnabled="{Binding NeedsValue}" AutomationProperties.AutomationId="FilterBuilder.Condition.Value"/>
+                         IsEnabled="{Binding NeedsValue}" Visibility="{Binding ShowTextValue, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="FilterBuilder.Condition.Value"/>
+                <ComboBox Style="{StaticResource ValueCombo}" ItemsSource="{Binding Root.FlagChoices}" SelectedValuePath="Id" DisplayMemberPath="Label"
+                          SelectedValue="{Binding Value}" Width="220" Margin="6,0,0,0" Visibility="{Binding ShowFlagValue, Converter={StaticResource BoolToVis}}"
+                          AutomationProperties.AutomationId="FilterBuilder.Condition.FlagValue" AutomationProperties.Name="Flag"/>
                 <TextBox Style="{StaticResource ValueBox}" Text="{Binding Value2, UpdateSourceTrigger=PropertyChanged}" Width="140" Margin="6,0,0,0" Tag="and"
                          Visibility="{Binding IsBetween, Converter={StaticResource BoolToVis}}"/>
-                <Button Style="{StaticResource Mini}" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}" FontSize="10" ToolTip="Remove condition"
+                <Button Style="{StaticResource Mini}" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}" FontSize="11" ToolTip="Remove condition"
                         Command="{Binding RemoveCommand}" AutomationProperties.Name="Remove condition"/>
             </StackPanel>
         </DataTemplate>
@@ -164,7 +150,7 @@
             <StackPanel Orientation="Horizontal" Margin="0,3">
                 <TextBlock hl:FilterHighlighter.Text="{Binding Text}" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}" VerticalAlignment="Center"
                            MaxWidth="600" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text}"/>
-                <Button Style="{StaticResource Mini}" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}" FontSize="10" ToolTip="Remove"
+                <Button Style="{StaticResource Mini}" Content="&#xE711;" FontFamily="{StaticResource Font.Icon}" FontSize="11" ToolTip="Remove"
                         Command="{Binding RemoveCommand}" AutomationProperties.Name="Remove"/>
             </StackPanel>
         </DataTemplate>
@@ -186,23 +172,32 @@
                     <DockPanel>
                         <Button DockPanel.Dock="Right" Style="{StaticResource IconMini}" Content="&#xE8C8;" Margin="6,0,0,0" VerticalAlignment="Top" Click="CopySyntax_Click"
                                 ToolTip="Copy syntax" AutomationProperties.AutomationId="FilterBuilder.Syntax.Copy" AutomationProperties.Name="Copy syntax"/>
-                        <TextBox x:Name="SyntaxBox" Text="{Binding SyntaxText, Mode=OneWay}" MinHeight="44" MaxHeight="120" Padding="8,6"
-                                 VerticalScrollBarVisibility="Auto" AcceptsReturn="False" SpellCheck.IsEnabled="False"
-                                 TextChanged="SyntaxBox_TextChanged" LostKeyboardFocus="SyntaxBox_LostKeyboardFocus"
-                                 AutomationProperties.AutomationId="FilterBuilder.Syntax" AutomationProperties.Name="Filter syntax"
-                                 ToolTip="Filter syntax. Edit or paste it here and the builder above follows.">
-                            <TextBox.Style>
-                                <Style TargetType="TextBox" BasedOn="{StaticResource MonoBox}">
-                                    <Setter Property="IsReadOnly" Value="False"/>
-                                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasSyntaxError}" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Error}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBox.Style>
-                        </TextBox>
+                        <!-- syntax colouring: the box's own text is transparent (caret and selection stay); the coloured copy is drawn over it, aligned in code-behind -->
+                        <Grid>
+                            <TextBox x:Name="SyntaxBox" CaretBrush="{DynamicResource Brush.Text}" Text="{Binding SyntaxText, Mode=OneWay}" MinHeight="44" MaxHeight="120" Padding="8,6"
+                                     VerticalScrollBarVisibility="Auto" AcceptsReturn="False" SpellCheck.IsEnabled="False"
+                                     TextChanged="SyntaxBox_TextChanged" LostKeyboardFocus="SyntaxBox_LostKeyboardFocus"
+                                     AutomationProperties.AutomationId="FilterBuilder.Syntax" AutomationProperties.Name="Filter syntax"
+                                     ToolTip="Filter syntax. Edit or paste it here and the builder above follows.">
+                                <TextBox.Style>
+                                    <Style TargetType="TextBox" BasedOn="{StaticResource MonoBox}">
+                                        <Setter Property="IsReadOnly" Value="False"/>
+                                        <Setter Property="Foreground" Value="Transparent"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasSyntaxError}" Value="True">
+                                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Error}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBox.Style>
+                            </TextBox>
+                            <Border x:Name="SyntaxOverlayHost" IsHitTestVisible="False" Background="Transparent" ClipToBounds="True">
+                                <TextBlock x:Name="SyntaxOverlay" TextWrapping="Wrap" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           FontFamily="{Binding FontFamily, ElementName=SyntaxBox}" FontSize="{Binding FontSize, ElementName=SyntaxBox}"
+                                           Foreground="{DynamicResource Brush.Text}"/>
+                            </Border>
+                        </Grid>
                     </DockPanel>
                     <TextBlock Text="{Binding SyntaxErrorText}" Foreground="{DynamicResource Brush.Error}" TextWrapping="Wrap" Margin="0,4,0,0"
                                Visibility="{Binding HasSyntaxError, Converter={StaticResource BoolToVis}}"
@@ -232,7 +227,7 @@
             </DockPanel>
         </StackPanel>
 
-        <TabControl SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}" AutomationProperties.AutomationId="FilterBuilder.Tabs">
+        <TabControl Style="{StaticResource FlatTabs}" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}" AutomationProperties.AutomationId="FilterBuilder.Tabs">
             <TabItem Header="Builder" AutomationProperties.AutomationId="FilterBuilder.Tab.Builder">
                 <DockPanel Margin="0,10,0,0">
                     <TextBlock DockPanel.Dock="Top" Style="{StaticResource Caption}" Margin="0,0,0,8" Text="{Binding SavedName, StringFormat=Saved filter: {0}}"

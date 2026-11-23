@@ -6,8 +6,8 @@ namespace EzForensics.Core.Triage;
 
 /// <summary>
 /// The Ingest steps planned around the tool jobs: Computer details (the first row, queued before every other job), the filesystem MACB
-/// timelines (one per host with an $MFT row, built from the $MFT after the tool jobs) and the plaso super timelines, one per host (the last
-/// rows, started once every other job of the run has finished, one plaso run at a time). Their rows are placeholders:
+/// timelines (one per host with an $MFT row, built from the $MFT after the tool jobs), the plaso super timelines, one per host (started once
+/// every other job of the run has finished, one plaso run at a time) and Process tree data (the last row, see <see cref="ProcessTree"/>). Their rows are placeholders:
 /// <see cref="JobSpec.Args"/> holds the source folders (the $MFT files for a MACB row), and the real jobs (one computer details job per
 /// system; MFTECmd per $MFT; log2timeline + psort per timeline) are built at run time.
 /// </summary>
@@ -26,12 +26,15 @@ public static class IngestSteps
     public const string SupertimelineToolId = "plaso";
     /// <summary>Rule id of the event log rows (<c>Resources/triage/rules.json</c>): EvtxECmd output is a process source.</summary>
     public const string EvtxRuleId = "evtx";
+    public const string ProcessTreeRuleId = "ingest-process-tree";
+    public const string ProcessTreeLabel = "Process tree data";
 
     public static bool IsComputerDetails(PlannedJob p) => p.Artifact.RuleId == ComputerDetailsRuleId;
     public static bool IsSupertimeline(PlannedJob p) => p.Artifact.RuleId == SupertimelineRuleId;
     public static bool IsMacbTimeline(PlannedJob p) => p.Artifact.RuleId == MacbTimelineRuleId;
+    public static bool IsProcessTree(PlannedJob p) => p.Artifact.RuleId == ProcessTreeRuleId;
     /// <summary>A step row (not a tool job of the plan).</summary>
-    public static bool IsStep(PlannedJob p) => IsComputerDetails(p) || IsMacbTimeline(p) || IsSupertimeline(p);
+    public static bool IsStep(PlannedJob p) => IsComputerDetails(p) || IsMacbTimeline(p) || IsSupertimeline(p) || IsProcessTree(p);
 
     /// <summary>The source folders a step row reads (its <see cref="JobSpec.Args"/>).</summary>
     public static IReadOnlyList<string> Sources(PlannedJob p) => p.Spec.Args;
@@ -104,8 +107,9 @@ public static class IngestSteps
 
     /// <summary>
     /// The host folders (absolute) of the plan that have a process source (the <c>CanShowProcessTree</c> rule): a host qualifies when the plan has an event log or
-    /// memory row for it, or when its case folder already holds a pslist / psscan / pstree or EventLogs CSV. Not an Ingest row: the App queues one
-    /// <see cref="Processes.ProcessCorrelator.Spec"/> job per returned folder after the run (skipping those where <see cref="Processes.ProcessCorrelator.IsUpToDate"/>).
+    /// memory row for it, or when its case folder already holds a pslist / psscan / pstree or EventLogs CSV. When the Process tree data row
+    /// (<see cref="ProcessTree"/>) is ticked, the App queues one <see cref="Processes.ProcessCorrelator.Spec"/> job per returned folder after the run
+    /// (skipping those where <see cref="Processes.ProcessCorrelator.IsUpToDate"/>). Step rows are ignored.
     /// </summary>
     public static List<string> ProcessHosts(string caseDir, IReadOnlyList<PlannedJob> jobs)
     {
@@ -121,6 +125,20 @@ public static class IngestSteps
         }
         return hosts.Where(x => x.Source || Processes.ProcessCorrelator.HasProcessSource(Path.Combine(caseDir, x.Host)))
             .Select(x => Path.Combine(caseDir, x.Host)).ToList();
+    }
+
+    /// <summary>
+    /// The "Process tree data" row of the plan, or null when <see cref="ProcessHosts"/> finds no host with a process source (an event log or
+    /// memory row, or process lists / EventLogs CSVs already in the case). One row for the whole plan (ticked by default, no arguments): its
+    /// built-in correlator jobs, one per host, are built after the run's other jobs. Its key (rule id, empty matched path, label) is stable.
+    /// </summary>
+    public static PlannedJob? ProcessTree(string caseDir, IReadOnlyList<PlannedJob> jobs)
+    {
+        if (ProcessHosts(caseDir, jobs).Count == 0) return null;
+        var spec = new JobSpec(Processes.ProcessCorrelator.ToolId, Processes.ProcessCorrelator.ToolId, Array.Empty<string>(), caseDir,
+            ProcessTreeLabel, Processes.ProcessCorrelator.JobCategory);
+        var artifact = new DetectedArtifact(ProcessTreeRuleId, ProcessTreeLabel, Processes.ProcessCorrelator.ToolId, Processes.ProcessCorrelator.JobCategory, "", false);
+        return new PlannedJob(spec, true, artifact, false);
     }
 
     private static PlannedJob MacbRow(string caseDir, string host, IReadOnlyList<string> mfts, DiscoveredSystem? system)
@@ -201,9 +219,9 @@ public static class IngestSteps
         return plan;
     }
 
-    /// <summary>Stable order of a plan: Computer details rows first, then the tool rows, the MACB timeline rows, the super timeline rows.</summary>
+    /// <summary>Stable order of a plan: Computer details rows first, then the tool rows, the MACB timeline rows, the super timeline rows, Process tree data.</summary>
     public static List<T> Order<T>(IEnumerable<T> items, Func<T, PlannedJob> planned) =>
         items.Select((x, i) => (x, i)).OrderBy(t => Rank(planned(t.x))).ThenBy(t => t.i).Select(t => t.x).ToList();
 
-    private static int Rank(PlannedJob p) => IsComputerDetails(p) ? 0 : IsMacbTimeline(p) ? 2 : IsSupertimeline(p) ? 3 : 1;
+    private static int Rank(PlannedJob p) => IsComputerDetails(p) ? 0 : IsMacbTimeline(p) ? 2 : IsSupertimeline(p) ? 3 : IsProcessTree(p) ? 4 : 1;
 }

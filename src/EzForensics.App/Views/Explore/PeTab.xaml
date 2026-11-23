@@ -1,0 +1,73 @@
+<UserControl x:Class="EzForensics.App.Views.Explore.PeTab"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="Explore.Pe">
+        <StackPanel Margin="0,0,8,8">
+            <ItemsControl ItemsSource="{Binding PeHeader}" AutomationProperties.AutomationId="Explore.Pe.Header" AutomationProperties.Name="PE header">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Margin="0,1">
+                            <TextBlock Text="{Binding Label}" Style="{DynamicResource Caption}" Width="100"/>
+                            <TextBlock Text="{Binding Value}" TextWrapping="Wrap" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"/>
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{Binding PeWarnings}" Foreground="{DynamicResource Brush.Warning}" TextWrapping="Wrap" Margin="0,6,0,0"
+                       Visibility="{Binding PeWarnings, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Explore.Pe.Warnings"/>
+
+            <TextBlock Text="Sections" Style="{DynamicResource SectionTitle}" Margin="0,12,0,4"/>
+            <DataGrid ItemsSource="{Binding PeSections}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False"
+                      CanUserSortColumns="False" SelectionMode="Single" AutomationProperties.AutomationId="Explore.Pe.Sections" AutomationProperties.Name="PE sections">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding WriteExecute}" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource Brush.ErrorBg}"/>
+                                <Setter Property="ToolTip" Value="Writable and executable section"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="90"/>
+                    <DataGridTextColumn Header="Virtual addr" Binding="{Binding VirtualAddress}" Width="100"/>
+                    <DataGridTextColumn Header="Virtual size" Binding="{Binding VirtualSize}" Width="100"/>
+                    <DataGridTextColumn Header="Raw size" Binding="{Binding RawSize}" Width="100"/>
+                    <DataGridTextColumn Header="Entropy" Binding="{Binding EntropyText}" Width="70"/>
+                    <DataGridTextColumn Header="X/W" Binding="{Binding Flags}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <TextBlock Text="Detect It Easy" Style="{DynamicResource SectionTitle}" Margin="0,12,0,4"/>
+            <ItemsControl ItemsSource="{Binding DieDetections}" AutomationProperties.AutomationId="Explore.Pe.Die" AutomationProperties.Name="Detect It Easy detections">
+                <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding Text}" Margin="0,1"/></DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{Binding DieNote}" Style="{DynamicResource Caption}" TextWrapping="Wrap" Visibility="{Binding DieNote, Converter={StaticResource BoolToVis}}"/>
+
+            <TextBlock Text="Imports" Style="{DynamicResource SectionTitle}" Margin="0,12,0,4"/>
+            <TreeView ItemsSource="{Binding PeImports}" MaxHeight="320" AutomationProperties.AutomationId="Explore.Pe.Imports" AutomationProperties.Name="Imports"
+                      VirtualizingPanel.IsVirtualizing="True">
+                <TreeView.ItemTemplate>
+                    <HierarchicalDataTemplate ItemsSource="{Binding Functions}">
+                        <TextBlock Text="{Binding Header}" FontWeight="SemiBold"/>
+                        <HierarchicalDataTemplate.ItemTemplate>
+                            <DataTemplate><TextBlock Text="{Binding}" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource FontSize.Mono}"/></DataTemplate>
+                        </HierarchicalDataTemplate.ItemTemplate>
+                    </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+
+            <TextBlock Text="Exports" Style="{DynamicResource SectionTitle}" Margin="0,12,0,4"/>
+            <DataGrid ItemsSource="{Binding PeExports}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False" MaxHeight="260"
+                      AutomationProperties.AutomationId="Explore.Pe.Exports" AutomationProperties.Name="Exports">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Ordinal" Binding="{Binding Ordinal}" Width="70"/>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>
+                    <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="100"/>
+                    <DataGridTextColumn Header="Forward" Binding="{Binding Forward}" Width="140"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -14,6 +14,7 @@ public partial class SetupWizardWindow : Window
     public SetupWizardWindow()
     {
         InitializeComponent();
+        EzForensics.App.Controls.WindowSizing.FitToWorkArea(this);
         Appearance.Attach(this);
     }
 

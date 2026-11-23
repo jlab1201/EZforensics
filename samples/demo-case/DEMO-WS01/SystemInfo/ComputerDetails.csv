@@ -1,0 +1,9 @@
+Category,Field,Value,Source
+Operating system,Computer name,DEMO-WS01,SYSTEM\ControlSet001\Control\ComputerName\ComputerName\ComputerName
+Operating system,Product name,Windows 10 Pro,SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProductName
+Operating system,Version,22H2 (build 19045),SOFTWARE\Microsoft\Windows NT\CurrentVersion\DisplayVersion
+Operating system,Install date,2025-09-02 08:14:31 UTC,SOFTWARE\Microsoft\Windows NT\CurrentVersion\InstallDate
+Time,Time zone,UTC,SYSTEM\ControlSet001\Control\TimeZoneInformation\TimeZoneKeyName
+Hardware,Machine type,Virtual machine,SYSTEM\ControlSet001\Control\SystemInformation
+Network: Ethernet0,IP address (DHCP),10.20.30.15,SYSTEM\ControlSet001\Services\Tcpip\Parameters\Interfaces
+Users,Local users,"demo.user, Administrator",SAM\Domains\Account\Users

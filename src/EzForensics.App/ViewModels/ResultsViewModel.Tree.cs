@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -160,9 +160,13 @@ public sealed partial class ResultsViewModel
     [RelayCommand]
     private void CollapseAll()
     {
-        foreach (var n in Tree.SelectMany(t => t.SelfAndDescendants())) n.IsExpanded = false;
+        _autoExpandSuppressed = true; // the open file's ancestors must not pop back open (refresh, search clear) until another file is opened
+        foreach (var n in Tree.SelectMany(t => t.SelfAndDescendants()).ToList()) n.IsExpanded = false;
         UpdateSelectionInfo();
     }
+
+    /// <summary>Set by Collapse all: <see cref="RevealFile"/> stops expanding ancestors until a file is opened (<see cref="OnCurrentFileChanged"/>) or a node is revealed by path.</summary>
+    internal bool _autoExpandSuppressed;
 
     /// <summary>Selects the tree node of <paramref name="path"/> and (with <paramref name="expand"/>) expands only its ancestors.</summary>
     public bool RevealFile(string path, bool expand = true)
@@ -170,7 +174,7 @@ public sealed partial class ResultsViewModel
         var node = Tree.SelectMany(t => t.SelfAndDescendants())
             .FirstOrDefault(n => n.IsFile && string.Equals(n.FullPath, path, StringComparison.OrdinalIgnoreCase));
         if (node == null) return false;
-        if (expand)
+        if (expand && !_autoExpandSuppressed)
             for (var p = node.Parent; p != null; p = p.Parent) p.IsExpanded = true;
         foreach (var n in Tree.SelectMany(t => t.SelfAndDescendants())) if (n != node && n.IsSelected) n.IsSelected = false;
         node.IsSelected = true;
