@@ -256,7 +256,7 @@ public partial class App : Application
             Shutdown(0);
             return;
         }
-        try { ShowMainWindow(); }
+        try { ShowMainWindow(); if (result == SetupWizardResult.OpenToolsAi) AppServices.Current?.OpenToolsConfiguration(ToolsSection.Documents); }
         catch (Exception ex)
         {
             AppLog.Error("Could not open the main window", ex);

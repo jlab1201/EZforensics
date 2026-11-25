@@ -355,8 +355,12 @@
 
                             <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,10,0,0">
                                 <Button Content="Test" MinWidth="80" Command="{Binding Ai.TestCommand}" AutomationProperties.AutomationId="Settings.Ai.Test"/>
-                                <Button Content="Set up local AI…" Margin="8,0,0,0" Command="{Binding Ai.SetUpLocalAiCommand}" AutomationProperties.AutomationId="Settings.Ai.SetUpLocal" ToolTip="Installs Ollama and a model that suits this PC, then uses it for Spectre. Anything already installed is skipped."/>
+                                <Button Content="Use local AI" Margin="8,0,0,0" Command="{Binding Ai.UseLocalAiCommand}" AutomationProperties.AutomationId="Settings.Ai.SetUpLocal" ToolTip="Uses Ollama if it is installed and downloads the model that suits this PC for Spectre. Nothing is installed."/>
+                                <Button Content="Check again" Margin="6,0,0,0" Command="{Binding Ai.UseLocalAiCommand}" Visibility="{Binding Ai.LocalAi.OllamaMissing, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Settings.Ai.CheckAgain"/>
+                                <Button Content="Cancel" Margin="6,0,0,0" Command="{Binding Ai.LocalAi.CancelCommand}" Visibility="{Binding Ai.LocalAi.IsRunning, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Settings.Ai.Cancel"/>
                                 <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Ai.Status}" AutomationProperties.AutomationId="Settings.Ai.Status"/>
+                                <Button Content="Get Ollama (ollama.com)" Margin="8,0,0,0" Style="{StaticResource LinkButton}" Command="{Binding Ai.LocalAi.OpenDownloadCommand}" Visibility="{Binding Ai.LocalAi.OllamaMissing, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Settings.Ai.GetOllama"/>
+                                <Button Content="Open log" Margin="8,0,0,0" Style="{StaticResource LinkButton}" Command="{Binding Ai.LocalAi.OpenLogCommand}" Visibility="{Binding Ai.LocalAi.ShowOpenLog, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Settings.Ai.OpenLog"/>
                             </StackPanel>
 
                             <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,10,0,0"

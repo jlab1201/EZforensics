@@ -27,7 +27,7 @@ public sealed partial class RemoteItem : ObservableObject
     public string Name => File.Name;
     /// <summary>Name without the .zip extension (display only).</summary>
     public string DisplayName => ToolDisplay.StripZip(File.Name);
-    public string Flavor => File.IsNet9 ? "net9" : "net4";
+    public string Flavor => File.IsNet9 ? ".NET 10" : "net4";
     public string Size => FormatSize(File.Size);
 
     public static string FormatSize(long size) => size <= 0 ? "" : size >= 1 << 20 ? $"{size / (double)(1 << 20):0.0} MB" : $"{size / 1024.0:0} KB";
@@ -514,6 +514,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
             Progress = 1;
             ProgressText = $"Downloaded {sel.Count} file(s).";
             await S.RescanAsync();
+            NetFxTlsConfig.EnsureAll(S.Locator.All);
             ShowMessage($"Downloaded and extracted {sel.Count} file(s) into {S.Settings.ToolsRoot}.", InfoSeverity.Success);
             return true;
         }
@@ -540,6 +541,7 @@ public sealed partial class ToolManagerViewModel : PageViewModel
             await GuardAsync(async () =>
             {
                 // Runs on the private maintenance queue (never the Ingest job list); output goes to the app log.
+                NetFxTlsConfig.EnsureAll(S.Locator.All);
                 var logDir = S.Maintenance.NewLogDir("sync");
                 var before = SnapshotSyncFiles();
                 int ok = 0, failed = 0;

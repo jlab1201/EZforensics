@@ -61,20 +61,20 @@
 
         <!-- right: page + footer -->
         <DockPanel Grid.Column="1" Margin="28,22,24,16">
-            <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" LastChildFill="False">
-                <Button DockPanel.Dock="Right" Content="{Binding NextText}" Style="{StaticResource AccentButton}" MinWidth="110" Margin="8,0,0,0"
-                        Command="{Binding NextCommand}" Visibility="{Binding ShowNext, Converter={StaticResource BoolToVis}}" IsDefault="True"
-                        AutomationProperties.AutomationId="Setup.Next"/>
-                <!-- Done page: replaces the footer Cancel (AutomationId kept from the former "Open evidence…" button) -->
-                <Button DockPanel.Dock="Right" Content="Open EZ Forensics" Style="{StaticResource AccentButton}" MinWidth="150" Margin="8,0,0,0"
-                        Command="{Binding OpenAppCommand}" Visibility="{Binding ShowOpenApp, Converter={StaticResource BoolToVis}}" IsDefault="True"
-                        AutomationProperties.AutomationId="Setup.Done.OpenEvidence" AutomationProperties.Name="Open EZ Forensics"/>
-                <Button DockPanel.Dock="Right" Content="Back" MinWidth="80" Margin="8,0,0,0" Command="{Binding BackCommand}"
-                        Visibility="{Binding ShowBack, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Setup.Back"/>
-                <Button DockPanel.Dock="Right" Content="Cancel" MinWidth="80" Command="{Binding CancelSetupCommand}"
+            <!-- One right-aligned row (a StackPanel never lays two buttons over each other, however narrow the window is). -->
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0" AutomationProperties.AutomationId="Setup.Footer">
+                <Button Content="Cancel" MinWidth="80" Command="{Binding CancelSetupCommand}"
                         Visibility="{Binding ShowCancel, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Setup.Cancel"/>
-            </DockPanel>
-
+                <Button Content="Back" MinWidth="80" Margin="8,0,0,0" Command="{Binding BackCommand}"
+                        Visibility="{Binding ShowBack, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Setup.Back"/>
+                <!-- Done page: replaces the footer Cancel (AutomationId kept from the former "Open evidence…" button) -->
+                <Button Content="Open EZ Forensics" Style="{StaticResource AccentButton}" MinWidth="150" Margin="8,0,0,0"
+                        Command="{Binding OpenAppCommand}" Visibility="{Binding ShowOpenApp, Converter={StaticResource BoolToVis}}" IsDefault="{Binding ShowOpenApp}"
+                        AutomationProperties.AutomationId="Setup.Done.OpenEvidence" AutomationProperties.Name="Open EZ Forensics"/>
+                <Button Content="{Binding NextText}" Style="{StaticResource AccentButton}" MinWidth="110" Margin="8,0,0,0"
+                        Command="{Binding NextCommand}" Visibility="{Binding ShowNext, Converter={StaticResource BoolToVis}}" IsDefault="{Binding ShowNext}"
+                        AutomationProperties.AutomationId="Setup.Next"/>
+            </StackPanel>
             <c:AutomationPane AutomationProperties.AutomationId="Setup.Page" AutomationProperties.ItemStatus="{Binding PageName}">
             <Grid>
 
@@ -392,6 +392,24 @@
                                                 </ProgressBar.Style>
                                             </ProgressBar>
                                             <TextBlock Text="{Binding Message}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                                            <TextBlock Margin="0,2,0,0" ToolTip="{Binding LogPath}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding State}" Value="Failed"/>
+                                                                    <Condition Binding="{Binding HasLogPath}" Value="True"/>
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                                <Hyperlink Command="{Binding DataContext.OpenStepLogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                           CommandParameter="{Binding LogPath}" AutomationProperties.AutomationId="{Binding Id, StringFormat=Setup.Step.{0}.OpenLog}">Open log</Hyperlink>
+                                            </TextBlock>
                                         </StackPanel>
                                     </DockPanel>
                                 </Border>
@@ -445,12 +463,23 @@
                                     <DataTemplate>
                                         <DockPanel Margin="0,1">
                                             <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE711;" FontSize="12" Foreground="{DynamicResource Brush.Error}" Margin="0,2,8,0" VerticalAlignment="Top"/>
-                                            <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                                                <TextBlock Style="{StaticResource Caption}" Margin="0,1,0,2" ToolTip="{Binding LogPath}"
+                                                           Visibility="{Binding HasLogPath, Converter={StaticResource BoolToVis}}">
+                                                    <Hyperlink Command="{Binding DataContext.OpenStepLogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                               CommandParameter="{Binding LogPath}" AutomationProperties.AutomationId="Setup.Done.Failed.OpenLog">Open log</Hyperlink>
+                                                </TextBlock>
+                                            </StackPanel>
                                         </DockPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
+
+                        <TextBlock Margin="0,16,0,0" TextWrapping="Wrap" AutomationProperties.AutomationId="Setup.Done.LocalAi">
+                            <Run Text="Local AI (optional): set it up any time in "/><Hyperlink Command="{Binding OpenToolsAiCommand}" AutomationProperties.AutomationId="Setup.Done.OpenToolsAi">Tools → AI</Hyperlink><Run Text="."/>
+                        </TextBlock>
 
                         <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
                             <Button Content="Restart now" Style="{StaticResource AccentButton}" MinWidth="130" Margin="0,0,8,0" Command="{Binding RestartNowCommand}"

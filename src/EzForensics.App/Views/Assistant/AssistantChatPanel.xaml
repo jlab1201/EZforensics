@@ -44,11 +44,31 @@
                     BorderBrush="{DynamicResource Brush.Accent}" Background="{DynamicResource Brush.SurfaceAlt}"
                     Visibility="{Binding ShowLocalAiCard, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Assistant.LocalAiCard">
                 <StackPanel>
-                    <TextBlock Text="{x:Static vm:AssistantChatViewModel.LocalAiCardText}" TextWrapping="Wrap" AutomationProperties.AutomationId="Assistant.LocalAiCard.Text"/>
-                    <Button Content="Set up local AI" Style="{DynamicResource AccentButton}" Command="{Binding SetUpLocalAiCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" Padding="10,3"
-                            AutomationProperties.AutomationId="Assistant.LocalAiCard.Setup" AutomationProperties.Name="Set up local AI"/>
-                    <TextBlock Text="{Binding LocalAiStatus}" Style="{DynamicResource Caption}" TextWrapping="Wrap" Margin="0,6,0,0"
-                               Visibility="{Binding LocalAiStatus, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Assistant.LocalAiCard.Status"/>
+                    <TextBlock Text="{Binding LocalAiCardMessage}" TextWrapping="Wrap" AutomationProperties.AutomationId="Assistant.LocalAiCard.Text"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="Use local AI" Style="{DynamicResource AccentButton}" Command="{Binding UseLocalAiCommand}" Padding="10,3"
+                                ToolTip="Uses Ollama if it is installed and downloads the model that suits this PC."
+                                AutomationProperties.AutomationId="Assistant.LocalAiCard.Setup" AutomationProperties.Name="Use local AI"/>
+                        <Button Content="Use a cloud AI" Command="{Binding UseCloudAiCommand}" Margin="6,0,0,0" Padding="10,3"
+                                Visibility="{Binding ShowCloudAiButton, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.AutomationId="Assistant.LocalAiCard.Cloud" AutomationProperties.Name="Use a cloud AI"/>
+                        <Button Content="Check again" Command="{Binding UseLocalAiCommand}" Margin="6,0,0,0" Padding="10,3"
+                                Visibility="{Binding LocalAi.OllamaMissing, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.AutomationId="Assistant.LocalAiCard.CheckAgain" AutomationProperties.Name="Check again"/>
+                        <Button Content="Cancel" Command="{Binding LocalAi.CancelCommand}" Margin="6,0,0,0" Padding="10,3"
+                                Visibility="{Binding LocalAi.IsRunning, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.AutomationId="Assistant.LocalAiCard.Cancel" AutomationProperties.Name="Cancel"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding LocalAi.Status}" Style="{DynamicResource Caption}" TextWrapping="Wrap" Margin="0,6,0,0"
+                               Visibility="{Binding LocalAi.Status, Converter={StaticResource BoolToVis}}" AutomationProperties.AutomationId="Assistant.LocalAiCard.Status"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button Content="Get Ollama (ollama.com)" Command="{Binding LocalAi.OpenDownloadCommand}" Style="{DynamicResource LinkButton}"
+                                Visibility="{Binding LocalAi.OllamaMissing, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.AutomationId="Assistant.LocalAiCard.GetOllama"/>
+                        <Button Content="Open log" Command="{Binding LocalAi.OpenLogCommand}" Style="{DynamicResource LinkButton}"
+                                Visibility="{Binding LocalAi.ShowOpenLog, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.AutomationId="Assistant.LocalAiCard.OpenLog"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

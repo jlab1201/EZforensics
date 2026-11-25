@@ -54,7 +54,7 @@ public sealed class LearnIntakeTests : IDisposable
 
         vm.Rows.Should().ContainSingle().Which.IsSelected.Should().BeTrue();
         vm.HasAi.Should().BeFalse();
-        vm.AiHint.Should().Be("Set up local AI… (Tools → AI)");
+        vm.AiHint.Should().Be("Use local AI (Tools → AI)");
         vm.SendToReviewCommand.CanExecute(null).Should().BeFalse();
     }
 
@@ -242,7 +242,7 @@ public sealed class LearnIntakeTests : IDisposable
         await vm.AddPathsAsync(new[] { Doc("a.txt", Prefetch) });
         await vm.OnShownAsync();
         vm.HasAi.Should().BeFalse();
-        vm.AiHint.Should().Be("Local AI isn't running. Start Ollama or check Tools → AI.");
+        vm.AiHint.Should().Be(KnowledgeAiGate.UnreachableHint);
         vm.SendToReviewCommand.CanExecute(null).Should().BeFalse();
 
         up = true;

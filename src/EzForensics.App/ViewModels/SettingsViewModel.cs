@@ -51,7 +51,8 @@ public sealed partial class SettingsViewModel : PageViewModel
 
     public SettingsViewModel()
     {
-        Ai = new AiSettingsViewModel(() => Edit, new ApiKeyStore(), S.CreateHttpClient);
+        Ai = new AiSettingsViewModel(() => Edit, new ApiKeyStore(), S.CreateHttpClient, S.LocalAi);
+        Ai.LiveSettingsChanged += ReloadAiFromLive;
         Load();
         S.Settings.PropertyChanged += OnLiveChanged;
     }
@@ -69,6 +70,25 @@ public sealed partial class SettingsViewModel : PageViewModel
         try { Edit.AssistantAutoMode = S.Settings.AssistantAutoMode; }
         finally { _mirroring = false; }
     }
+
+    /// <summary>"Use local AI" wrote the provider and model to the live settings: show them in the form without marking it changed.</summary>
+    private void ReloadAiFromLive()
+    {
+        var live = S.Settings;
+        _mirroring = true;
+        try
+        {
+            Edit.AiProvider = live.AiProvider;
+            Edit.AiModel = live.AiModel;
+            Edit.AiModelByProvider = new Dictionary<string, string>(live.AiModelByProvider);
+        }
+        finally { _mirroring = false; }
+        Ai.OnProviderChanged(loading: true);
+    }
+
+    /// <summary>The Options view scrolls to the AI card.</summary>
+    public event Action? AiFocusRequested;
+    public void FocusAi() => AiFocusRequested?.Invoke();
 
     /// <summary>Options > AI.</summary>
     public AiSettingsViewModel Ai { get; }

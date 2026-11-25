@@ -168,8 +168,11 @@ public sealed partial class ToolsViewModel : PageViewModel
         Tools.Add(new ToolListItem(ToolsSection.Volatility, ToolGroup.Memory, "Volatility 3", "Memory image analysis."));
         Tools.Add(new ToolListItem(ToolsSection.Explore, ToolGroup.Explore, "Explore tools", "DIE, ExifTool and CyberChef for the Explore page."));
         Tools.Add(new ToolListItem(ToolsSection.Spectre, ToolGroup.Spectre, "Spectre engine tools", "Status, version and Install / Update for every tool Spectre needs."));
-        Tools.Add(new ToolListItem(ToolsSection.Documents, ToolGroup.Ai, "AI", "Set up local AI. Documents for the assistant are managed on the AI page."));
+        Tools.Add(new ToolListItem(ToolsSection.Documents, ToolGroup.Ai, "AI", "Use local AI (Ollama). Documents for the assistant are managed on the AI page."));
         AiDocuments = new AiDocumentsViewModel(() => Manager.Spectre.Found, ShowMessage);
+        // The card count follows the AI entry's installed state (it is probed asynchronously, after the list was built).
+        AiDocuments.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AiDocumentsViewModel.LocalAiInstalled)) RefreshInstalled(); };
+        AiDocuments.LocalAi.Finished += _ => RefreshInstalled();
         ExploreTools = new ExploreToolsViewModel(() => { RefreshInstalled(); S.RaiseExploreToolsChanged(); });
         foreach (var info in ToolGroups.Pages) Cards.Add(new ToolPageCard(info));
         Tabs.Add(new ToolTab(null));
@@ -234,6 +237,7 @@ public sealed partial class ToolsViewModel : PageViewModel
         UpdateFirstRun();
         Manager.OnNavigatedTo();
         RefreshInstalled();
+        _ = AiDocuments.RefreshAsync();   // the AI entry's installed state (Ollama) comes from a probe, not from the tool locator
     }
 
     /// <summary>Installed facts of the selected GUI tool (its page has no command form).</summary>

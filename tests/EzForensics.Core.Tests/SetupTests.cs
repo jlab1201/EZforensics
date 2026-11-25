@@ -13,7 +13,7 @@ public class SetupCatalogTests
     [Fact]
     public void Catalog_has_the_five_bundles_with_the_decided_defaults()
     {
-        Cat.Bundles.Select(b => b.Id).Should().Equal(SetupIds.BundleArtifacts, SetupIds.BundleTimeline, SetupIds.BundleNetwork, SetupIds.BundleMemory, SetupIds.BundleExplore, SetupIds.BundleAi);
+        Cat.Bundles.Select(b => b.Id).Should().Equal(SetupIds.BundleArtifacts, SetupIds.BundleTimeline, SetupIds.BundleNetwork, SetupIds.BundleMemory, SetupIds.BundleExplore);
         Cat.Bundles.Single(b => b.Id == SetupIds.BundleArtifacts).DefaultOn.Should().BeTrue();
         Cat.Bundles.Single(b => b.Id == SetupIds.BundleTimeline).DefaultOn.Should().BeTrue();
         Cat.Bundles.Single(b => b.Id == SetupIds.BundleArtifacts).Items.Where(i => i.Selectable && !i.OptIn).Should().OnlyContain(i => i.DefaultOn,
@@ -545,7 +545,7 @@ public class SetupWizardPolicyTests
     }
 
     [Fact]
-    public void Failure_text_is_one_short_line_per_failed_step_plus_the_hint()
+    public void Failure_text_is_the_whole_first_line_per_failed_step_plus_the_hint()
     {
         var steps = new[]
         {
@@ -556,8 +556,8 @@ public class SetupWizardPolicyTests
         };
         var lines = SetupWizardPolicy.FailureText(steps).Split(Environment.NewLine);
         lines.Should().HaveCount(4);
-        lines[0].Should().Be("Zeek: install in the EZ Forensics Linux environment: apt-get failed with exit code 100.");
-        lines[1].Length.Should().BeLessThan(100);
+        lines[0].Should().Be("Zeek: install in the EZ Forensics Linux environment: apt-get failed with exit code 100. See the log, then click Retry (apt continues where it stopped).");
+        lines[1].Should().Be("RITA: " + new string('x', 300), "never cut: the end of the message names the log");
         lines[2].Should().Be("Python: failed.");
         lines[3].Should().Be("Fix it and click Retry, or Finish.");
     }

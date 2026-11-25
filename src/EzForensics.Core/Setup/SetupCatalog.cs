@@ -12,7 +12,7 @@ namespace EzForensics.Core.Setup;
 public static class SetupIds
 {
     /// <summary>Bundles.</summary>
-    public const string BundleArtifacts = "artifacts", BundleTimeline = "timeline", BundleNetwork = "network", BundleMemory = "memory", BundleExplore = "explore", BundleAi = "ai";
+    public const string BundleArtifacts = "artifacts", BundleTimeline = "timeline", BundleNetwork = "network", BundleMemory = "memory", BundleExplore = "explore";
 
     // Retired: "ez-timeline-explorer", "ez-gui-viewers" (the GUI viewers are no longer installed by setup; a saved selection that still
     // names them is fine: the planner drops unknown ids).
@@ -20,7 +20,7 @@ public static class SetupIds
         PersistenceBuiltIn = "persistence-builtin", ComputerDetails = "computer-details", Dotnet9 = "dotnet9",
         Plaso = "plaso", EzDistro = "ez-wsl-distro", Zeek = "zeek", Rita = "rita", Volatility = "volatility3",
         VolatilitySymbols = "volatility3-symbols",
-        ExploreDie = "explore-die", ExploreExifTool = "explore-exiftool", ExploreCyberChef = "explore-cyberchef", LocalAi = "local-ai";
+        ExploreDie = "explore-die", ExploreExifTool = "explore-exiftool", ExploreCyberChef = "explore-cyberchef";
 
     /// <summary>Licence the user must accept in the UI before the item is installed (never accepted automatically).</summary>
 }
@@ -84,7 +84,7 @@ public sealed class SetupCatalog
         Net9OnlyZips = new HashSet<string>(net9OnlyZips ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>EZ zips published only as net9 builds (no net4 build on the download index).</summary>
+    /// <summary>EZ zips published only as modern (.NET 10) builds (no net4 build on the download index).</summary>
     public IReadOnlySet<string> Net9OnlyZips { get; }
 
     public bool IsNet9Only(string zip) => Net9OnlyZips.Contains(zip);
@@ -97,7 +97,7 @@ public sealed class SetupCatalog
 
     public SetupBundle? BundleOf(string itemId) => Bundles.FirstOrDefault(b => b.Items.Any(i => i.Id.Equals(itemId, StringComparison.OrdinalIgnoreCase)));
 
-    /// <summary>Approximate zip sizes on the EZ download index (net9 builds, MB), used until the live sizes are known.</summary>
+    /// <summary>Approximate zip sizes on the EZ download index (.NET 10 builds, MB), used until the live sizes are known.</summary>
     public static readonly IReadOnlyDictionary<string, double> EzZipMB = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
     {
         ["AmcacheParser.zip"] = 2.3, ["AppCompatCacheParser.zip"] = 2.3, ["EvtxECmd.zip"] = 3.9, ["JLECmd.zip"] = 3.0, ["LECmd.zip"] = 3.1,
@@ -137,7 +137,7 @@ public sealed class SetupCatalog
                     new SetupItem
                     {
                         Id = SetupIds.EzCli, Title = "EZ command-line parsers", DefaultOn = true, Zips = cli,
-                        Description = $"{cli.Count} tools (MFTECmd, EvtxECmd, RECmd, PECmd, LECmd, JLECmd, SrumECmd, AmcacheParser, ...) from download.ericzimmermanstools.com. Without .NET 9 the net4 builds are used (SQLECmd and WxTCmd exist only as net9 builds).",
+                        Description = $"{cli.Count} tools (MFTECmd, EvtxECmd, RECmd, PECmd, LECmd, JLECmd, SrumECmd, AmcacheParser, ...) from download.ericzimmermanstools.com. Without .NET 9 the net4 builds are used (SQLECmd and WxTCmd exist only as .NET 10 builds).",
                         DownloadMB = ZipsMB(cli), DiskMB = (int)(ZipsMB(cli) * 2.6),
                     },
                     new SetupItem
@@ -150,7 +150,7 @@ public sealed class SetupCatalog
                     {
                         // Default on: Minimal selects it when the machine has no .NET 9 (with .NET 9 it is "already installed").
                         Id = SetupIds.Dotnet9, Title = "Microsoft .NET 9 and 10 Desktop Runtimes (private copy)", DefaultOn = true,
-                        Description = "Only needed for the net9 EZ builds, which need .NET 9 and 10 (SQLECmd and WxTCmd exist only as net9 builds). Installed per user into EZ Forensics' data folder with Microsoft's official dotnet-install script: no admin rights, nothing else on the system changes. Without it, the net4 builds are used (they need only the .NET Framework that ships with Windows).",
+                        Description = "Only needed for the .NET 10 EZ builds, which need .NET 9 and 10 (SQLECmd and WxTCmd exist only as .NET 10 builds). Installed per user into EZ Forensics' data folder with Microsoft's official dotnet-install script: no admin rights, nothing else on the system changes. Without it, the net4 builds are used (they need only the .NET Framework that ships with Windows).",
                         DownloadMB = Dotnet9DownloadMB, DiskMB = Dotnet9DiskMB,
                     },
                     new SetupItem
@@ -234,20 +234,6 @@ public sealed class SetupCatalog
                     ExploreItem(SetupIds.ExploreDie, ExploreToolReleases.Die, "Detect It Easy (DIE)", "Identifies file types, packers and compilers (MIT)."),
                     ExploreItem(SetupIds.ExploreExifTool, ExploreToolReleases.ExifTool, "ExifTool", "Reads metadata from almost any file type (Perl Artistic License / GPL)."),
                     ExploreItem(SetupIds.ExploreCyberChef, ExploreToolReleases.CyberChef, "CyberChef", "Decodes and transforms data; runs offline inside EZ Forensics (Apache-2.0)."),
-                },
-            },
-            new SetupBundle
-            {
-                Id = SetupIds.BundleAi, Title = "AI assistant (Spectre)", DefaultOn = true,
-                Description = "Spectre can run on your own PC with Ollama, so nothing leaves the computer. Everything always ticks it (a slower PC gets a smaller model); Minimal ticks it only when your PC is up to it. You can also set up a cloud AI later in Options, AI.",
-                Items = new[]
-                {
-                    new SetupItem
-                    {
-                        Id = SetupIds.LocalAi, Title = "Local AI (Ollama + model)", DefaultOn = false,
-                        Description = "Installs Ollama (official per-user installer from ollama.com, no admin) and downloads a model that suits this PC, then points Spectre at it. Ollama is MIT licensed; the Qwen3 models are Apache-2.0.",
-                        DownloadMB = 3800, DiskMB = 7000,
-                    },
                 },
             },
         }, net9Only);

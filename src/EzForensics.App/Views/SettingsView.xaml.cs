@@ -15,10 +15,12 @@ public partial class SettingsView : UserControl
         Loaded += (_, _) => Reflow();
         DataContextChanged += (_, e) =>
         {
-            if (e.OldValue is ViewModels.SettingsViewModel o) o.IngestSelectionsFocusRequested -= ScrollToSelections;
-            if (e.NewValue is ViewModels.SettingsViewModel n) n.IngestSelectionsFocusRequested += ScrollToSelections;
+            if (e.OldValue is ViewModels.SettingsViewModel o) { o.IngestSelectionsFocusRequested -= ScrollToSelections; o.AiFocusRequested -= ScrollToAi; }
+            if (e.NewValue is ViewModels.SettingsViewModel n) { n.IngestSelectionsFocusRequested += ScrollToSelections; n.AiFocusRequested += ScrollToAi; }
         };
     }
+
+    private void ScrollToAi() => Dispatcher.BeginInvoke(new Action(() => CardAi.BringIntoView()), System.Windows.Threading.DispatcherPriority.Loaded);
 
     private const double TwoColumnMinWidth = 1000;
     private bool? _narrow;

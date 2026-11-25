@@ -8,7 +8,7 @@ using EzForensics.Core.Setup;
 namespace EzForensics.App.Services;
 
 /// <summary>How the setup wizard was closed (OpenApp = "Open EZ Forensics" on the Done page; Cancelled = the first setup was cancelled and reverted).</summary>
-public enum SetupWizardResult { Closed, OpenApp, RestartingWindows, Cancelled }
+public enum SetupWizardResult { Closed, OpenApp, OpenToolsAi, RestartingWindows, Cancelled }
 
 /// <summary>Opens the setup wizard (first run, its resume after the restart, the menu's "Run setup", Tools, Settings) and the setup guide.</summary>
 public static class SetupLauncher
@@ -20,7 +20,7 @@ public static class SetupLauncher
     {
         var r = Show(owner, null);
         if (r == SetupWizardResult.RestartingWindows) Application.Current?.Shutdown(0);
-        return r == SetupWizardResult.OpenApp;
+        return r is SetupWizardResult.OpenApp or SetupWizardResult.OpenToolsAi;
     }
 
     /// <summary>
@@ -89,6 +89,7 @@ public static class SetupLauncher
         finally { _open = null; }
         if (result is not (SetupWizardResult.RestartingWindows or SetupWizardResult.Cancelled)) _ = RefreshAfterSetupAsync(s);
         if (result == SetupWizardResult.OpenApp) s.Navigate<TriageViewModel>();
+        else if (result == SetupWizardResult.OpenToolsAi) s.OpenToolsConfiguration(ToolsSection.Documents); // no-op while the wizard runs alone: App opens it once the main window is up
         return result;
     }
 

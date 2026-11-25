@@ -30,7 +30,7 @@ public sealed class ToolDefinition
     public ToolKind Kind { get; set; } = ToolKind.Cli;
     /// <summary>Exe file name, e.g. "EvtxECmd.exe".</summary>
     public string Exe { get; set; } = "";
-    /// <summary>Zip name on download.ericzimmermanstools.com, e.g. "EvtxECmd.zip" (net9 builds live under /net9/).</summary>
+    /// <summary>Zip name on download.ericzimmermanstools.com, e.g. "EvtxECmd.zip" (modern .NET 9/10 builds live under /net/).</summary>
     public string Zip { get; set; } = "";
     /// <summary>Available builds: "net9", "net4".</summary>
     public List<string> Builds { get; set; } = new();

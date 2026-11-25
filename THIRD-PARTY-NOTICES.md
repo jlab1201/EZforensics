@@ -17,7 +17,7 @@ These are **not bundled**. The setup wizard downloads them to your machine, from
 | Ubuntu Base (private WSL environment) | Ubuntu free software licences | https://ubuntu.com/legal/intellectual-property-policy |
 | Microsoft .NET 9 runtime | MIT | https://github.com/dotnet/runtime/blob/main/LICENSE.TXT |
 | Python (private copy) | Python Software Foundation License | https://docs.python.org/3/license.html |
-| Ollama (optional local AI) | MIT | https://github.com/ollama/ollama/blob/main/LICENSE |
+| Ollama (optional local AI, installed separately by the user) | MIT | https://github.com/ollama/ollama/blob/main/LICENSE |
 | Qwen3 models (optional local AI, pulled by Ollama) | Apache 2.0 | https://huggingface.co/Qwen |
 | Detect It Easy (DIE), for Explore | MIT | https://github.com/horsicq/Detect-It-Easy/blob/master/LICENSE |
 | ExifTool, for Explore | Perl Artistic License / GPL | https://exiftool.org/#license |
@@ -82,4 +82,4 @@ MITRE ATT&CK Enterprise 20.1 technique list (`src/EzForensics.Core/Resources/mit
 
 ## Optional external services
 
-Anthropic, OpenAI and OpenRouter are optional services you connect to yourself, with your own key. Ollama can be a local install you connect to (the setup wizard can download it). Nothing from them is bundled with EZ Forensics. Their terms apply to your use.
+Anthropic, OpenAI and OpenRouter are optional services you connect to yourself, with your own key. Ollama is a separate app you install yourself and connect to; EZ Forensics only downloads models through it. Nothing from them is bundled with EZ Forensics. Their terms apply to your use.

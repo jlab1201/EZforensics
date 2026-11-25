@@ -80,14 +80,20 @@ public static class AiHardware
 
     public static IReadOnlyList<GpuInfo> Gpus() => ParseGpus(ReadRegistryGpus());
 
-    /// <summary>ollama.exe in the per-user install folder, else on PATH. Null when not found.</summary>
-    public static string? FindOllamaExe(Func<string, bool>? fileExists = null, string? localAppData = null, string? pathVar = null)
+    /// <summary>ollama.exe in the per-user install folder, %ProgramFiles%\Ollama, else on PATH. Null when not found.</summary>
+    public static string? FindOllamaExe(Func<string, bool>? fileExists = null, string? localAppData = null, string? pathVar = null, string? programFiles = null)
     {
         fileExists ??= File.Exists;
         localAppData ??= Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        programFiles ??= Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         if (!string.IsNullOrEmpty(localAppData))
         {
             var p = Path.Combine(localAppData, "Programs", "Ollama", "ollama.exe");
+            if (fileExists(p)) return p;
+        }
+        if (!string.IsNullOrEmpty(programFiles))
+        {
+            var p = Path.Combine(programFiles, "Ollama", "ollama.exe");
             if (fileExists(p)) return p;
         }
         pathVar ??= Environment.GetEnvironmentVariable("PATH") ?? "";

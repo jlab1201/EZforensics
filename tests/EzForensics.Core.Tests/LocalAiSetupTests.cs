@@ -1,3 +1,4 @@
+using EzForensics.Core.Settings;
 using EzForensics.Core.Assistant;
 using EzForensics.Core.Setup;
 using FluentAssertions;
@@ -11,21 +12,58 @@ public class LocalAiSetupTests
         public OllamaState State = OllamaState.None;
         public List<string> Calls = new();
         public int TunedCount = 0;
+        public string? Exe;
+        public string? FindExe() => Exe;
         public Task<OllamaState> ProbeAsync(CancellationToken ct) => Task.FromResult(State);
-        public Task InstallOllamaAsync(Action<LocalAiProgress> p, CancellationToken ct) { Calls.Add("install"); State = new(true, false, State.Models); return Task.CompletedTask; }
         public IReadOnlyList<string> ApplyTuning() { Calls.Add("tune"); return Enumerable.Repeat("X", TunedCount).ToList(); }
-        public Task StartServerAsync(bool restart, CancellationToken ct) { Calls.Add(restart ? "restart" : "start"); State = State with { Running = true }; return Task.CompletedTask; }
+        public Task StartServerAsync(CancellationToken ct) { Calls.Add("start"); State = State with { Running = true }; return Task.CompletedTask; }
         public Task PullModelAsync(string model, Action<LocalAiProgress> p, CancellationToken ct) { Calls.Add("pull:" + model); State = State with { Models = new[] { model } }; return Task.CompletedTask; }
         public void UseModel(string model) => Calls.Add("use:" + model);
     }
 
     [Fact]
-    public async Task Fresh_machine_runs_every_step()
+    public async Task Not_installed_throws_the_note_and_changes_nothing()
     {
-        var ops = new FakeOps { TunedCount = 2 };
+        var ops = new FakeOps();
+        var act = () => LocalAiSetup.RunAsync("qwen3:8b", ops);
+        var ex = await act.Should().ThrowAsync<OllamaNotInstalledException>();
+        ex.Which.Message.Should().Contain("ollama.com");
+        ops.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Exe_on_disk_counts_as_installed_and_gets_started()
+    {
+        var ops = new FakeOps { Exe = "ollama.exe" };
+        await LocalAiSetup.RunAsync("qwen3:8b", ops);
+        ops.Calls.Should().Equal("tune", "start", "pull:qwen3:8b", "use:qwen3:8b");
+    }
+
+    [Fact]
+    public async Task Running_api_counts_as_installed_and_is_never_restarted()
+    {
+        var ops = new FakeOps { State = new(false, true, Array.Empty<string>()), TunedCount = 2 };
         var r = await LocalAiSetup.RunAsync("qwen3:8b", ops);
-        ops.Calls.Should().Equal("install", "tune", "restart", "pull:qwen3:8b", "use:qwen3:8b");
-        r.Skipped.Should().BeEmpty();
+        ops.Calls.Should().Equal("tune", "pull:qwen3:8b", "use:qwen3:8b");
+        r.Summary.Should().Contain("next time Ollama starts");
+    }
+
+    [Fact]
+    public async Task Summary_mentions_the_speed_settings_when_they_were_changed()
+    {
+        var ops = new FakeOps { State = new(true, true, new[] { "qwen3:8b" }), TunedCount = 2 };
+        var r = await LocalAiSetup.RunAsync("qwen3:8b", ops);
+        r.Summary.Should().Contain("flash attention").And.Contain("8-bit cache");
+        var quiet = await LocalAiSetup.RunAsync("qwen3:8b", new FakeOps { State = new(true, true, new[] { "qwen3:8b" }) });
+        quiet.Summary.Should().NotContain("flash attention");
+    }
+
+    [Fact]
+    public async Task Started_here_means_no_restart_note()
+    {
+        var ops = new FakeOps { State = new(true, true, new[] { "qwen3:8b" }) };
+        var r = await LocalAiSetup.RunAsync("qwen3:8b", ops, tunedBefore: new[] { "OLLAMA_FLASH_ATTENTION" }, startedHere: true);
+        r.Summary.Should().Contain("flash attention").And.NotContain("next time Ollama starts");
     }
 
     [Fact]
@@ -34,24 +72,15 @@ public class LocalAiSetupTests
         var ops = new FakeOps { State = new(true, true, new[] { "qwen3:8b" }) };
         var r = await LocalAiSetup.RunAsync("qwen3:8b", ops);
         ops.Calls.Should().Equal("tune", "use:qwen3:8b");
-        r.Skipped.Should().HaveCount(3);
-    }
-
-    [Fact]
-    public async Task Installed_but_stopped_starts_the_server_and_pulls_only_the_missing_model()
-    {
-        var ops = new FakeOps { State = new(true, false, Array.Empty<string>()) };
-        await LocalAiSetup.RunAsync("qwen3:4b", ops);
-        ops.Calls.Should().Equal("tune", "start", "pull:qwen3:4b", "use:qwen3:4b");
+        r.Skipped.Should().HaveCount(2);
     }
 
     [Fact]
     public async Task Cancellation_stops_before_the_next_step()
     {
-        var ops = new FakeOps();
+        var ops = new FakeOps { State = new(true, true, Array.Empty<string>()) };
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        // The fake ignores the token itself; the setup checks it between steps.
         var act = () => LocalAiSetup.RunAsync("qwen3:8b", ops, null, cts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
         ops.Calls.Should().NotContain("pull:qwen3:8b");
@@ -68,30 +97,23 @@ public class LocalAiSetupTests
     }
 }
 
-public class LocalAiPlanTests
+public class WizardHasNoLocalAiTests
 {
-    private const long Gb = 1024L * 1024 * 1024;
-    private static SystemCheckResult Pc(double vramGb, double ramGb = 16) =>
-        SetupCatalogTests.Sys() with { TotalRamBytes = (long)(ramGb * Gb), Gpus = vramGb > 0 ? new[] { new GpuInfo("NVIDIA RTX 3070", (long)(vramGb * Gb)) } : Array.Empty<GpuInfo>() };
-
     [Theory]
-    [InlineData(8, true)]
-    [InlineData(4, false)]
-    [InlineData(0, false)]
-    public void Local_ai_is_preselected_only_when_the_pc_suits_it(double vram, bool selected)
+    [InlineData(SetupProfile.Minimal)]
+    [InlineData(SetupProfile.Everything)]
+    public void Profiles_never_contain_local_ai(SetupProfile profile)
     {
-        SetupSelection.ForProfile(SetupProfile.Minimal, SetupCatalog.Default, Pc(vram)).Has(SetupIds.LocalAi).Should().Be(selected);
-        SetupSelection.ForProfile(SetupProfile.Everything, SetupCatalog.Default, Pc(vram)).Has(SetupIds.LocalAi).Should().BeTrue("Everything means everything");
+        SetupSelection.ForProfile(profile, SetupCatalog.Default, SetupCatalogTests.Sys()).Items.Should().NotContain("local-ai");
+        SetupCatalog.Default.Find("local-ai").Should().BeNull();
     }
 
     [Fact]
-    public void Plan_has_an_install_step_with_the_model()
+    public void A_saved_resume_list_with_local_ai_loads_and_plans_no_ai_step()
     {
-        var sel = new SetupSelection();
-        sel.Items.Add(SetupIds.LocalAi);
-        var plan = SetupPlanner.Plan(SetupCatalog.Default, sel, Pc(8));
-        var step = plan.Steps.Single(s => s.Kind == SetupStepKind.InstallLocalAi);
-        step.Args["model"].Should().Be("qwen3:8b");
-        step.RequiresAdmin.Should().BeFalse();
+        var sel = SetupWizardPolicy.FromResume(new SetupResumeState { Items = new List<string> { "local-ai", "ai", SetupIds.ExploreDie }, SavedUtc = DateTime.UtcNow });
+        var plan = SetupPlanner.Plan(SetupCatalog.Default, sel, SetupCatalogTests.Sys());
+        plan.Steps.Should().NotContain(s => s.ItemId == "local-ai" || s.Id == "local-ai");
+        plan.Selection.Items.Should().NotContain("local-ai");
     }
 }

@@ -34,4 +34,17 @@ public class ToolsLocatorTests
         loc.Resolve("apphosttool")!.Flavor.Should().Be(BuildFlavor.Net9);
         loc.Resolve("nothing").Should().BeNull();
     }
+
+    [Theory]
+    [InlineData("net")]
+    [InlineData("net9")]
+    [InlineData("net10")]
+    public void Modern_folders_classify_as_Net9(string folder)
+    {
+        using var t = new TempDir();
+        Directory.CreateDirectory(Path.Combine(t.Path, folder));
+        // a managed assembly would be Net4 anywhere else; the folder name wins
+        File.Copy(FakeToolPaths.Dll, Path.Combine(t.Path, folder, "RECmd.exe"));
+        ToolLocator.Classify(Path.Combine(t.Path, folder, "RECmd.exe")).Should().Be(BuildFlavor.Net9);
+    }
 }

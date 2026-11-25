@@ -30,7 +30,7 @@
     <Authors>jlab1201</Authors>
     <Description>EZ Forensics: one place to set up and run Windows forensic tools (Eric Zimmerman's tools, plaso, Zeek).</Description>
     <Copyright>Copyright (c) 2026 jlab1201</Copyright>
-    <Version>1.4.1</Version>
+    <Version>1.4.5</Version>
     <FileVersion>$(Version).0</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

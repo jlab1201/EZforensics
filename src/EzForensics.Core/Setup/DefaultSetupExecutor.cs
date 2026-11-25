@@ -125,7 +125,53 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
         return null;
     }
 
+    /// <summary>One JSON line per finished step in the setup run folder: id, state, message and the step's log files.</summary>
+    public const string StepRecordFile = "setup-steps.jsonl";
+
     public async Task<SetupStepResult> ExecuteAsync(SetupStepContext c, CancellationToken ct)
+    {
+        var started = DateTime.UtcNow;
+        try
+        {
+            var r = await ExecuteCoreAsync(c, ct).ConfigureAwait(true);
+            RecordStep(c.Step, r.State, r.Message, started);
+            return r;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            RecordStep(c.Step, SetupStepState.Cancelled, "Cancelled.", started);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            RecordStep(c.Step, SetupStepState.Failed, SetupRunner.Explain(ex), started);
+            throw;
+        }
+    }
+
+    /// <summary>Appends the step's outcome to <see cref="StepRecordFile"/> in <see cref="SetupEnvironment.MaintenanceDir"/> (best effort).</summary>
+    private void RecordStep(SetupStep step, SetupStepState state, string message, DateTime startedUtc)
+    {
+        try
+        {
+            Directory.CreateDirectory(_env.MaintenanceDir);
+            var line = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                id = step.Id,
+                title = step.Title,
+                kind = step.Kind.ToString(),
+                state = state.ToString(),
+                message,
+                startUtc = startedUtc.ToString("o"),
+                endUtc = DateTime.UtcNow.ToString("o"),
+                logFiles = step.LogFiles,
+            });
+            File.AppendAllText(Path.Combine(_env.MaintenanceDir, StepRecordFile), line + Environment.NewLine);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException) { }
+    }
+
+    private async Task<SetupStepResult> ExecuteCoreAsync(SetupStepContext c, CancellationToken ct)
     {
         var step = c.Step;
         if (_env.SimulatorExe != null && _env.Simulate.Contains(step.Kind))
@@ -144,7 +190,6 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
             SetupStepKind.InstallVolatility => await InstallVolatilityAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.InstallVolatilitySymbols => await InstallVolatilitySymbolsAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.InstallExploreTool => await InstallExploreToolAsync(c, ct).ConfigureAwait(true),
-            SetupStepKind.InstallLocalAi => await InstallLocalAiAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.EnableWsl => await EnableWslAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.InstallRita => await InstallRitaAsync(c, ct).ConfigureAwait(true),
             SetupStepKind.InstallEzDistro => await InstallEzDistroAsync(c, ct).ConfigureAwait(true),
@@ -197,7 +242,9 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
     private async Task<Job> RunJobAsync(SetupStepContext c, JobSpec spec, CancellationToken ct, string? heartbeat = null)
     {
         using var hb = heartbeat != null ? Heartbeat(c, heartbeat) : null;
-        return await MaintenanceRunner.RunAsync(_env.Queue, spec, _env.MaintenanceDir, c.Log, ct).ConfigureAwait(true);
+        var job = await MaintenanceRunner.RunAsync(_env.Queue, spec, _env.MaintenanceDir, c.Log, ct).ConfigureAwait(true);
+        c.AddLogFile(job.LogPath);
+        return job;
     }
 
     private static SetupStepResult FromJob(Job job, string ok, string failHint) => job.State switch
@@ -280,7 +327,7 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
         int netVersion = step.Args.TryGetValue("netVersion", out var nv) && nv == "4" ? 4 : 9;
         if (netVersion == 9 && !RuntimeProbe.HasNet9())
         {
-            c.Log(".NET 9 is not available: using the net4 builds.");
+            c.Log(".NET 9/10 is not available: using the net4 builds.");
             netVersion = 4;
         }
         var root = _env.Settings.ToolsRoot;
@@ -291,15 +338,20 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
         var all = await updater.CheckAsync(root, 0, ct).ConfigureAwait(true);
         var pick = new List<RemoteToolFile>();
         var missing = new List<string>();
+        var fellBack = new List<string>();
         foreach (var zip in step.Zips)
         {
-            var cands = all.Where(f => f.Name.Equals(zip, StringComparison.OrdinalIgnoreCase)).ToList();
-            var want = cands.FirstOrDefault(f => f.IsNet9 == (netVersion == 9))
-                       ?? (netVersion == 9 ? cands.FirstOrDefault() : null); // net4-only zips are fine with .NET 9 too
+            var want = ToolUpdater.PickBuild(all, zip, netVersion == 9, out var fb);
+            if (fb)
+            {
+                var n = Path.GetFileNameWithoutExtension(zip);
+                fellBack.Add(n); // no modern build: the .NET Framework one is all there is
+                c.Log($"{n}: no modern (.NET 10) build on the index; using the .NET Framework (net4) build.");
+            }
             if (want == null) { missing.Add(zip); continue; }
             if (want.Status != RemoteFileStatus.UpToDate) pick.Add(want);
         }
-        if (missing.Count > 0) c.Log($"Not available as {(netVersion == 9 ? "net9" : "net4")} builds: {string.Join(", ", missing)}");
+        if (missing.Count > 0) c.Log($"Not available as {(netVersion == 9 ? ".NET 10" : "net4")} builds: {string.Join(", ", missing)}");
         if (_env.Settings.NetVersionToDownload != netVersion)
         {
             _env.Settings.NetVersionToDownload = netVersion;
@@ -308,6 +360,7 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
         if (pick.Count == 0)
         {
             _env.Locator.Rescan(root);
+            NetFxTlsConfig.EnsureAll(_env.Locator.All);
             return SetupStepResult.AlreadyDone("The selected tools are already up to date in " + root + ".");
         }
         long totalBytes = Math.Max(1, pick.Sum(f => Math.Max(f.Size, 1)));
@@ -327,18 +380,23 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
         });
         var rejected = await updater.DownloadAsync(pick, root, progress, ct, c.Log).ConfigureAwait(true);
         _env.Locator.Rescan(root);
+        NetFxTlsConfig.EnsureAll(_env.Locator.All);
         if (rejected.Count > 0)
             return SetupStepResult.Fail(string.Join(" ", rejected) + " Click Retry; if it keeps failing, report it.");
-        return SetupStepResult.Ok($"Downloaded {pick.Count} tool package(s) ({(netVersion == 9 ? "net9" : "net4")} builds, {pick.Sum(f => f.Size) / 1048576.0:0} MB) into {root}." +
+        return SetupStepResult.Ok($"Downloaded {pick.Count} tool package(s) ({(netVersion == 9 ? ".NET 10" : "net4")} builds, {pick.Sum(f => f.Size) / 1048576.0:0} MB) into {root}." +
+                                  (fellBack.Count > 0 ? $" Installed as .NET Framework (net4) builds, no modern build exists: {string.Join(", ", fellBack)}." : "") +
                                   (missing.Count > 0 ? $" Not available for this .NET: {string.Join(", ", missing.Select(Path.GetFileNameWithoutExtension))}." : ""));
     }
 
     private async Task<SetupStepResult> SyncMapsAsync(SetupStepContext c, CancellationToken ct)
     {
         _env.Locator.Rescan(_env.Settings.ToolsRoot);
+        NetFxTlsConfig.EnsureAll(_env.Locator.All);
         var dir = Maint("sync");
         int ok = 0;
         var failed = new List<string>();
+        var failedDetail = new List<string>();
+        string? logPath = null;
         var ids = new[] { "EvtxECmd", "RECmd", "SQLECmd" };
         for (int i = 0; i < ids.Length; i++)
         {
@@ -346,12 +404,22 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
             if (def == null) continue;
             if (_env.Locator.Resolve(def.Exe, _env.Settings.PreferredBuildFlavor) == null) { c.Log($"{def.Exe} is not installed; skipped."); continue; }
             var job = await RunJobAsync(c, new JobSpec(def.Id, def.Exe, new[] { "--sync" }, dir, $"{def.DisplayName} --sync", "Maintenance"), ct).ConfigureAwait(true);
-            if (job.State == JobState.Succeeded) ok++; else failed.Add($"{def.DisplayName}: {job.StatusReason}");
+            if (job.State == JobState.Succeeded) ok++;
+            else
+            {
+                failed.Add(def.DisplayName);
+                var reason = (job.StatusReason ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? "failed";
+                failedDetail.Add($"{def.DisplayName} ({reason})");
+                logPath ??= job.LogPath;
+            }
             c.Report((i + 1) / (double)ids.Length);
         }
-        if (failed.Count > 0) return SetupStepResult.Fail("Sync failed for " + string.Join("; ", failed) + ". GitHub must be reachable (check the proxy), then click Retry.");
-        return ok == 0 ? SetupStepResult.Fail("None of EvtxECmd, RECmd, SQLECmd is installed, so nothing could be synced.")
-            : SetupStepResult.Ok($"Maps and batch files updated ({ok} tool(s)).");
+        c.AddLogFile(logPath); // the first failed sync's log is the one to open
+        if (ok == 0 && failed.Count == 0) return SetupStepResult.Fail("None of EvtxECmd, RECmd, SQLECmd is installed, so nothing could be synced.");
+        if (failed.Count > 0)
+            return SetupStepResult.Ok($"Maps not updated for {string.Join(", ", failedDetail)}. The bundled maps and batch files are still used; Tools → Update maps retries." +
+                                      (logPath != null ? $" Log: {logPath}" : ""));
+        return SetupStepResult.Ok($"Maps and batch files updated ({ok} tool(s)).");
     }
 
     // ------------------------------------------------------------------ plaso
@@ -439,19 +507,6 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
         }
         return found?.Version != null ? SetupStepResult.Ok($"Volatility 3 {found.Version} installed ({vl.ManagedVenv}).")
             : SetupStepResult.Fail("pip finished but Volatility 3 does not answer. See the log, then click Retry.");
-    }
-
-    private async Task<SetupStepResult> InstallLocalAiAsync(SetupStepContext c, CancellationToken ct)
-    {
-        var model = c.Step.Args.TryGetValue("model", out var m) ? m : Assistant.LocalAiAdvisor.FallbackModel;
-        var ops = new Assistant.OllamaOps(_env.CreateHttp, _env.Settings, _env.SaveSettings);
-        string? last = null;
-        var r = await Assistant.LocalAiSetup.RunAsync(model, ops, p =>
-        {
-            if (p.Text != last) { last = p.Text; c.Log(p.Text); }
-            if (p.Fraction is { } f) c.Report(f);
-        }, ct).ConfigureAwait(true);
-        return SetupStepResult.Ok(r.Summary + (r.Skipped.Count > 0 ? " " + string.Join(" ", r.Skipped) : ""));
     }
 
     private async Task<SetupStepResult> InstallExploreToolAsync(SetupStepContext c, CancellationToken ct)
@@ -576,6 +631,7 @@ public sealed class DefaultSetupExecutor : ISetupExecutor
         TryDeleteFile(logPath);
         var args = _env.ElevatedHelperPrefixArgs.Concat(ElevatedSetupHelper.BuildArgs(new[] { task }, resultPath, logPath)).ToList();
         c.Log($"Asking Windows for administrator permission (UAC) once: {helper} {string.Join(" ", args)}");
+        c.AddLogFile(logPath);
         int code, forwarded;
         using (var stopTail = new CancellationTokenSource())
         {

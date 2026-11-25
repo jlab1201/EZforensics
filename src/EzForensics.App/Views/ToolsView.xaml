@@ -704,7 +704,7 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- AI: status and Set up local AI. The assistant's documents are managed on the Learn page. -->
+                    <!-- AI: status and Use local AI. The assistant's documents are managed on the Learn page. -->
                     <ScrollViewer Visibility="{Binding ShowAi, Converter={StaticResource BoolToVis}}" VerticalScrollBarVisibility="Auto"
                                   AutomationProperties.AutomationId="Tools.Ai">
                         <StackPanel DataContext="{Binding AiDocuments}" Margin="0,0,8,8">
@@ -716,14 +716,22 @@
                             <Border Style="{StaticResource Tile}" Margin="0,0,0,10" AutomationProperties.AutomationId="Tools.Ai.Actions">
                                 <StackPanel>
                                     <WrapPanel>
-                                        <Button Content="Set up local AI…" Style="{StaticResource AccentButton}" Command="{Binding SetUpLocalAiCommand}" Margin="0,0,6,6"
-                                                ToolTip="Installs Ollama and the model that suits this PC."
+                                        <Button Content="Use local AI" Style="{StaticResource AccentButton}" Command="{Binding UseLocalAiCommand}" Margin="0,0,6,6"
+                                                ToolTip="Uses Ollama if it is installed and downloads the model that suits this PC."
                                                 AutomationProperties.AutomationId="Tools.Ai.SetUpLocalAi"/>
+                                        <Button Content="Check again" Command="{Binding UseLocalAiCommand}" Margin="0,0,6,6" Visibility="{Binding LocalAi.OllamaMissing, Converter={StaticResource BoolToVis}}"
+                                                AutomationProperties.AutomationId="Tools.Ai.CheckAgain"/>
+                                        <Button Content="Cancel" Command="{Binding LocalAi.CancelCommand}" Margin="0,0,6,6" Visibility="{Binding LocalAi.IsRunning, Converter={StaticResource BoolToVis}}"
+                                                AutomationProperties.AutomationId="Tools.Ai.Cancel"/>
+                                        <Button Content="Get Ollama (ollama.com)" Style="{StaticResource LinkButton}" Command="{Binding LocalAi.OpenDownloadCommand}" Margin="0,0,6,6" Visibility="{Binding LocalAi.OllamaMissing, Converter={StaticResource BoolToVis}}"
+                                                AutomationProperties.AutomationId="Tools.Ai.GetOllama"/>
+                                        <Button Content="Open log" Style="{StaticResource LinkButton}" Command="{Binding LocalAi.OpenLogCommand}" Margin="0,0,6,6" Visibility="{Binding LocalAi.ShowOpenLog, Converter={StaticResource BoolToVis}}"
+                                                AutomationProperties.AutomationId="Tools.Ai.OpenLog"/>
                                         <Button Content="Manage knowledge on the AI page" Command="{Binding ManageInLearnCommand}" Margin="0,0,6,6"
                                                 ToolTip="Add, review and remove the documents the assistant can search."
                                                 AutomationProperties.AutomationId="Tools.Ai.ManageInLearn"/>
                                     </WrapPanel>
-                                    <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Caption}" TextWrapping="Wrap" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
+                                    <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Caption}" TextWrapping="Wrap" Visibility="{Binding ProgressText, Converter={StaticResource BoolToVis}}"
                                                AutomationProperties.AutomationId="Tools.Ai.Progress"/>
                                     <TextBlock Text="{Binding Message}" Style="{StaticResource Caption}" TextWrapping="Wrap" AutomationProperties.AutomationId="Tools.Ai.Message"/>
                                 </StackPanel>

@@ -11,10 +11,10 @@ public class SetupOrderTests
 {
     private static readonly SetupCatalog Cat = SetupCatalog.Default;
 
-    private static readonly SetupStepKind[] WslKinds = { SetupStepKind.InstallEzDistro, SetupStepKind.InstallZeekWsl, SetupStepKind.InstallRita };
+    internal static readonly SetupStepKind[] WslKinds = { SetupStepKind.InstallEzDistro, SetupStepKind.InstallZeekWsl, SetupStepKind.InstallRita };
 
     /// <summary>The user's fresh VM: Everything, WSL not enabled, no .NET 9, no Python.</summary>
-    private static SetupPlan FreshVmEverything(WslStatus wsl = WslStatus.NotEnabled)
+    internal static SetupPlan FreshVmEverything(WslStatus wsl = WslStatus.NotEnabled)
     {
         var sys = SetupCatalogTests.Sys(net9: false, python: null, wsl: wsl, distro: null);
         var sel = SetupSelection.ForProfile(SetupProfile.Everything, Cat, sys);
@@ -167,6 +167,55 @@ public class SetupOrderTests
 
 public class ElevatedSetupHelperTests
 {
+    /// <summary>The real executor for some kinds (EnableWsl through the elevated helper), "ok" for the rest.</summary>
+    private sealed class Mixed : ISetupExecutor
+    {
+        private readonly ISetupExecutor _real;
+        private readonly Func<SetupStepKind, bool> _useReal;
+        public Mixed(ISetupExecutor real, Func<SetupStepKind, bool> useReal) { _real = real; _useReal = useReal; }
+        public Task<SetupStepResult> ExecuteAsync(SetupStepContext c, CancellationToken ct) =>
+            _useReal(c.Step.Kind) ? _real.ExecuteAsync(c, ct) : Task.FromResult(SetupStepResult.Ok("ok"));
+    }
+
+    [Fact]
+    public async Task Elevated_wsl_exit_3010_waits_for_the_restart_and_saves_distro_zeek_and_rita_for_the_resume()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ezf-3010-" + Guid.NewGuid().ToString("N"));
+        var probe = new Probe { WslWorks = false };
+        // The real helper command line: wsl --install and the classic component both answer 3010 (restart required).
+        var elev = new Elev(args => ElevatedSetupHelper.RunCommandLine(args.Skip(1).ToList(), null, (_, _, _) => 3010));
+        var env = new SetupEnvironment
+        {
+            Queue = new JobQueue(new FakeLocator(null), 1, TimeSpan.FromSeconds(10)),
+            CreateHttp = () => new HttpClient(),
+            Settings = new AppSettings(),
+            SaveSettings = () => { },
+            Locator = new FakeLocator(null),
+            MaintenanceDir = dir,
+            Elevation = elev,
+            Probe = probe,
+            ElevatedHelperExe = "C:\\app\\EzForensics.exe",
+            RebootPending = () => false,
+        };
+        var plan = SetupOrderTests.FreshVmEverything();
+        var hostLog = new List<string>();
+        try
+        {
+            await new SetupRunner(new Mixed(new DefaultSetupExecutor(env), k => k == SetupStepKind.EnableWsl), hostLog.Add).RunAsync(plan);
+
+            elev.Calls.Should().Be(1);
+            var wsl = plan.Steps.Single(s => s.Kind == SetupStepKind.EnableWsl);
+            wsl.State.Should().Be(SetupStepState.WaitingForRestart);
+            plan.Steps.Where(s => SetupOrderTests.WslKinds.Contains(s.Kind)).Should().OnlyContain(s => s.State == SetupStepState.WaitingForRestart);
+            SetupWizardPolicy.PendingAfterRestart(plan)!.Items.Should().Contain(new[] { SetupIds.EzDistro, SetupIds.Zeek, SetupIds.Rita });
+
+            wsl.LogPath.Should().Be(Path.Combine(dir, "elevated", ElevatedSetupHelper.EnableWslTask + ".log"), "the elevated helper's log is the step's log");
+            hostLog.Should().Contain(l => l.StartsWith("Setup step end enable-wsl WaitingForRestart "));
+            File.ReadAllText(Path.Combine(dir, DefaultSetupExecutor.StepRecordFile)).Should().Contain("\"state\":\"WaitingForRestart\"").And.Contain("enable-wsl.log");
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
     private sealed class Runner
     {
         public readonly List<string> Calls = new();

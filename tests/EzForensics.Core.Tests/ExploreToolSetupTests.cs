@@ -6,6 +6,36 @@ using FluentAssertions;
 
 namespace EzForensics.Core.Tests;
 
+[Collection("EnvironmentVariables")]
+public sealed class ExploreToolPathTests
+{
+    [Fact]
+    public void Die_exiftool_and_cyberchef_install_under_data_root_tools_explore()
+    {
+        var saved = (Environment.GetEnvironmentVariable("EZFORENSICS_EXPLORE_TOOLS"), Environment.GetEnvironmentVariable("EZHUB_EXPLORE_TOOLS"));
+        try
+        {
+            Environment.SetEnvironmentVariable("EZFORENSICS_EXPLORE_TOOLS", null);
+            Environment.SetEnvironmentVariable("EZHUB_EXPLORE_TOOLS", null);
+            var root = Path.Combine(EzForensics.Core.Settings.AppPaths.DataRoot, "Tools", "Explore");
+            ExploreToolLocator.ManagedRoot.Should().Be(root);
+            var loc = new ExploreToolLocator(); // what the setup step uses
+            foreach (var tool in new[] { ExploreTool.Die, ExploreTool.ExifTool, ExploreTool.CyberChef })
+            {
+                var dir = loc.ToolDir(tool);
+                Path.GetDirectoryName(dir).Should().Be(root, tool.ToString());
+                loc.EntryPath(tool).Should().StartWith(dir + Path.DirectorySeparatorChar);
+            }
+            new[] { ExploreTool.Die, ExploreTool.ExifTool, ExploreTool.CyberChef }.Select(loc.ToolDir).Should().OnlyHaveUniqueItems();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("EZFORENSICS_EXPLORE_TOOLS", saved.Item1);
+            Environment.SetEnvironmentVariable("EZHUB_EXPLORE_TOOLS", saved.Item2);
+        }
+    }
+}
+
 public sealed class ExploreToolSetupTests : IDisposable
 {
     private readonly TempDir _tmp = new();

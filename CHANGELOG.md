@@ -4,6 +4,7 @@
 
 ### Added
 
+- EZ Forensics no longer installs Ollama; install it from ollama.com and use Tools → AI → Use local AI to download a model.
 - Review shows one "Spectre: not set up" chip. Run Spectre is hidden until Spectre is ready.
 
 ### Changed

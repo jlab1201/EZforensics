@@ -54,7 +54,7 @@ public sealed partial class ToolReleaseViewModel : ObservableObject
     {
         var t = AppServices.Current.ResolveNonBlocking(_def.Exe);
         Version = string.IsNullOrWhiteSpace(t?.Version) ? "unknown" : ToolDisplay.FormatVersion(t!.Version);
-        Flavor = t == null ? "" : t.Flavor == BuildFlavor.Net9 ? "net9" : "net4 (.NET Framework)";
+        Flavor = t == null ? "" : t.Flavor == BuildFlavor.Net9 ? ".NET 10" : "net4 (.NET Framework)";
         ExePath = t?.Path ?? "";
         OnPropertyChanged(nameof(InstallPath));
         InstalledDate = t != null && File.Exists(t.Path)

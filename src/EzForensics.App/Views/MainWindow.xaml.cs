@@ -211,6 +211,11 @@ public partial class MainWindow : Window
         {
             if (!EzForensics.App.Services.Dialogs.Confirm("Jobs still running", $"{active} job(s) are running or queued. Cancel them and exit?", "Cancel jobs and exit", "Stay", EzForensics.App.Views.EzDialogSeverity.Warning, defaultNo: true, owner: this)) { e.Cancel = true; return; }
         }
+        if (AppServices.Current.LocalAi.IsRunning)
+        {
+            if (!EzForensics.App.Services.Dialogs.Confirm("Local AI", "Local AI setup is still running. Quit anyway?", "Quit anyway", "Stay", EzForensics.App.Views.EzDialogSeverity.Warning, defaultNo: true, owner: this)) { e.Cancel = true; return; }
+            AppServices.Current.LocalAi.Cancel();
+        }
         Appearance.FlushPendingSave();
         base.OnClosing(e);
     }

@@ -20,9 +20,15 @@ public sealed partial class AiSettingsViewModel : ObservableObject
     private readonly ApiKeyStore _keys;
     private readonly Func<HttpClient> _http;
 
-    public AiSettingsViewModel(Func<AppSettings> edit, ApiKeyStore keys, Func<HttpClient> http)
+    /// <summary>The app-wide "Use local AI" run (shared with Tools > AI and the chat card).</summary>
+    public LocalAiService LocalAi { get; }
+
+    public AiSettingsViewModel(Func<AppSettings> edit, ApiKeyStore keys, Func<HttpClient> http, LocalAiService? localAi = null)
     {
         _edit = edit; _keys = keys; _http = http;
+        LocalAi = localAi ?? new LocalAiService(http, new AppSettings(), () => { });
+        LocalAi.PropertyChanged += OnLocalAiChanged;
+        LocalAi.Finished += OnLocalAiFinished;
         RefreshKeyState();
     }
 
@@ -87,31 +93,33 @@ public sealed partial class AiSettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Options > AI > "Set up local AI…": the wizard's local AI step with the model that suits this PC. The provider and model are
-    /// staged in the form like any other change (Save applies them).</summary>
-    [RelayCommand(CanExecute = nameof(CanSetUpLocalAi))]
-    private async Task SetUpLocalAiAsync()
+    /// <summary>Raised after a "Use local AI" run changed the live settings (provider, model): Options reloads its form fields from them.</summary>
+    public event Action? LiveSettingsChanged;
+
+    /// <summary>Options > AI > "Use local AI": Ollama if installed, plus the model that suits this PC. The provider and model are
+    /// applied to the app settings and saved at once (like Tools > AI and the chat card); the form then shows them.</summary>
+    [RelayCommand(CanExecute = nameof(CanUseLocalAi))]
+    private async Task UseLocalAiAsync()
     {
-        if (IsBusy) return;
-        IsBusy = true;
-        SetUpLocalAiCommand.NotifyCanExecuteChanged();
-        var ctx = SynchronizationContext.Current;
-        try
-        {
-            var summary = await LocalAiRunner.RunAsync(_http, _edit(), () => { }, t => ctx?.Post(_ => Status = t, null));
-            RefreshKeyState();
-            Status = summary + " Click Save to use it.";
-        }
-        catch (OperationCanceledException) { Status = "Cancelled."; }
-        catch (Exception ex) { Status = "Local AI setup failed: " + ex.Message; }
-        finally
-        {
-            IsBusy = false;
-            SetUpLocalAiCommand.NotifyCanExecuteChanged();
-        }
+        var summary = await LocalAi.StartAsync();
+        Status = summary ?? LocalAi.Status;
     }
 
-    private bool CanSetUpLocalAi() => !IsBusy;
+    private void OnLocalAiChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LocalAiService.Status)) Status = LocalAi.Status;
+        else if (e.PropertyName == nameof(LocalAiService.IsRunning)) UseLocalAiCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnLocalAiFinished(bool success)
+    {
+        if (!success) return;
+        LiveSettingsChanged?.Invoke();
+        RefreshKeyState();
+        _ = RefreshModelsAsync();
+    }
+
+    private bool CanUseLocalAi() => !LocalAi.IsRunning;
 
     [RelayCommand]
     private void OpenPromptFiles()
@@ -170,16 +178,20 @@ public sealed partial class AiSettingsViewModel : ObservableObject
         if (Provider != provider) return;
         Models.Clear();
         if (ids == null) return; // Status holds the error
-        foreach (var id in ids.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) Models.Add(id);
+        foreach (var id in ChatModels(provider, ids).OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) Models.Add(id);
         var settings = _edit();
         if (!Models.Contains(settings.AiModel, StringComparer.OrdinalIgnoreCase) && PickDefault(provider, Models) is { } pick)
             settings.AiModel = pick;
     }
 
+    /// <summary>The models to offer for chatting: Ollama also lists its embedding models, which cannot chat.</summary>
+    public static IEnumerable<string> ChatModels(string provider, IEnumerable<string> ids)
+        => provider == "ollama" ? ids.Where(LocalAiAdvisor.IsChatModel) : ids;
+
     /// <summary>The model chosen when none is set (or the saved one is gone): Anthropic's default if offered, else the first.</summary>
     public static string? PickDefault(string provider, IEnumerable<string> ids)
     {
-        var list = ids.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        var list = ChatModels(provider, ids).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
         if (provider == "anthropic" && list.Contains(AnthropicDefaults.Model)) return AnthropicDefaults.Model;
         return list.FirstOrDefault();
     }

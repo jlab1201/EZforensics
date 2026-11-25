@@ -298,7 +298,7 @@ public sealed class LearnInboxTests : IDisposable
         vm.SetSelected(vm.Rows.ToList());
 
         vm.HasAi.Should().BeFalse();
-        vm.AiHint.Should().Be("Set up local AI… (Tools → AI)");
+        vm.AiHint.Should().Be("Use local AI (Tools → AI)");
         vm.LabelWithAiCommand.CanExecute(null).Should().BeFalse();
         vm.DistillCommand.CanExecute(null).Should().BeFalse();
         vm.RetryAiCommand.CanExecute(vm.Rows[0]).Should().BeFalse();
@@ -504,7 +504,7 @@ public sealed class LearnInboxTests : IDisposable
         var off = new LibraryViewModel(_ws, _ => Task.CompletedTask, null, () => (null, ""));
         await off.RefreshAsync();
         off.HasAi.Should().BeFalse();
-        off.AiHint.Should().Be("Set up local AI… (Tools → AI)");
+        off.AiHint.Should().Be("Use local AI (Tools → AI)");
         off.DistillCommand.CanExecute(off.Sources[0]).Should().BeFalse();
         off.LabelAiCommand.CanExecute(off.Sources[0]).Should().BeFalse();
     }
@@ -766,7 +766,7 @@ public sealed class LearnInboxTests : IDisposable
     {
         var vm = new AiDocumentsViewModel(() => false, (_, _) => { });
         vm.ManageInLearnCommand.Should().NotBeNull();
-        vm.SetUpLocalAiCommand.Should().NotBeNull();
+        vm.UseLocalAiCommand.Should().NotBeNull();
         typeof(AiDocumentsViewModel).GetProperty("Sources").Should().BeNull();
         typeof(AiDocumentsViewModel).GetMethod("AddPathsAsync").Should().BeNull();
     }

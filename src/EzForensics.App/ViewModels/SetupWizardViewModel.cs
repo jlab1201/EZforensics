@@ -17,6 +17,12 @@ public enum SetupPage { Welcome, SystemCheck, Bundles, Summary, Install, Done }
 
 public enum CheckLevel { Ok, Info, Warning }
 
+/// <summary>A "Not installed" line of the Done page, with the step's log file when it has one ("Open log").</summary>
+public sealed record SetupDoneProblem(string Text, string? LogPath)
+{
+    public bool HasLogPath => !string.IsNullOrEmpty(LogPath);
+}
+
 /// <summary>One line of the system check page: a short value, the explanation behind its "?".</summary>
 public sealed record CheckRow(string Id, string Label, string Value, CheckLevel Level, string? Help = null)
 {
@@ -393,6 +399,14 @@ public sealed partial class SetupWizardViewModel : ObservableObject
     /// <summary>"Open EZ Forensics" on the Done page.</summary>
     [RelayCommand] private void OpenApp() => Finish();
 
+    /// <summary>"Tools → AI" on the Done page: closes the wizard and opens Tools on the AI page (once the main window is up).</summary>
+    [RelayCommand]
+    private void OpenToolsAi()
+    {
+        if (!TryClose()) return;
+        CloseRequested?.Invoke(SetupWizardResult.OpenToolsAi);
+    }
+
     private void Finish()
     {
         AppLog.Info($"Setup: Finish clicked (page={Page}, running={IsRunning}, reverting={IsReverting}, checking={IsChecking}, resume={IsResume}, listener={CloseRequested != null}).");
@@ -491,9 +505,9 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         });
         yield return new CheckRow("Net9", ".NET 9 and 10 runtimes", r.HasSystemNet9 ? "Installed" : r.HasPrivateNet9 ? "Private copy" : "Not installed (setup adds a private copy)",
             r.HasNet9 ? CheckLevel.Ok : CheckLevel.Info,
-            r.HasNet9 ? "The net9 builds of the EZ tools can run."
+            r.HasNet9 ? "The .NET 10 builds of the EZ tools can run."
                 : "Setup installs private .NET 9 and 10 runtimes into EZ Forensics' data folder (no admin, nothing else changes) for " +
-                  "the net9 tool builds. Without it, the net4 builds are used (they need only the .NET Framework in Windows).");
+                  "the .NET 10 tool builds. Without it, the net4 builds are used (they need only the .NET Framework in Windows).");
         var ai = LocalAiAdvisor.Recommend(r);
         yield return new CheckRow("Ai", "AI assistant", ai.Choice switch
         {
@@ -502,7 +516,8 @@ public sealed partial class SetupWizardViewModel : ObservableObject
             _ => "Cloud AI recommended",
         }, ai.RecommendLocal ? CheckLevel.Ok : CheckLevel.Info,
             $"{ai.Reason} ({r.TotalRamBytes / 1073741824.0:0} GB RAM)" +
-            (r.Ollama.Running ? $" Ollama is running ({r.Ollama.Models.Count} model(s))." : r.Ollama.Installed ? " Ollama is installed but not running." : ""));
+            (r.Ollama.Running ? $" Ollama is running ({r.Ollama.Models.Count} model(s))." : r.Ollama.Installed ? " Ollama is installed but not running." : "") +
+            (ai.RecommendLocal ? " Local AI needs Ollama (free, installed separately from ollama.com), then Tools → AI." : " Local AI needs Ollama (free, installed separately from ollama.com), then Tools → AI. Or use a cloud AI in Options → AI."));
         yield return new CheckRow("Python", "Python for plaso", r.Python ?? "None (a private copy is downloaded)", r.Python != null ? CheckLevel.Ok : CheckLevel.Warning,
             r.Python != null ? null : $"No Python 3.10-3.13 was found: a private Python {PrivatePython.Default.Version} (python.org's official package, SHA-512 checked) is downloaded for plaso and Volatility. No admin, no PATH changes.");
         yield return new CheckRow("Internet", "Internet", r.InternetReachable switch
@@ -585,28 +600,14 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         return $"≈{SetupPlan.FormatMB(dl)}";
     }
 
-    /// <summary>"Local AI (Ollama + qwen3:8b, ~5 GB download)" once the PC is measured.</summary>
-    internal string TitleFor(SetupItem i)
-    {
-        if (i.Id != SetupIds.LocalAi || Machine == null) return i.Title;
-        var (model, gb) = LocalAiAdvisor.ModelToInstall(LocalAiAdvisor.Recommend(Machine));
-        return $"Local AI (Ollama + {model}, ~{gb + (Machine.Ollama.Installed ? 0 : 1.3):0.#} GB download)";
-    }
+    internal string TitleFor(SetupItem i) => i.Title;
 
     private (int Download, int Disk) Size(SetupItem i) => i.Id switch
     {
-        SetupIds.LocalAi when Machine != null => LocalAiSize(Machine),
         SetupIds.Plaso => PlasoSetup.Estimate(needsPython: Machine?.Python == null),
         SetupIds.Zeek => (ZeekSetup.WslDownloadMB, ZeekSetup.WslDiskMB),
         _ => (i.DownloadMB, i.DiskMB),
     };
-
-    private static (int, int) LocalAiSize(SystemCheckResult r)
-    {
-        var (_, gb) = LocalAiAdvisor.ModelToInstall(LocalAiAdvisor.Recommend(r));
-        int dl = (int)(gb * 1024) + (r.Ollama.Installed ? 0 : 1300);
-        return (dl, dl * 2);
-    }
 
     internal string? NoteFor(SetupItem i)
     {
@@ -614,8 +615,6 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         if (r == null) return null;
         return i.Id switch
         {
-            SetupIds.LocalAi when !LocalAiAdvisor.Recommend(r).RecommendLocal => "Your PC is better suited to a cloud AI: set it up later in Options → AI",
-            SetupIds.LocalAi when r.Ollama.Running => "Ollama is already running",
             SetupIds.Dotnet9 when r.HasNet9 => "Already installed",
             SetupIds.Plaso when r.PlasoVersion != null => "Already installed",
             SetupIds.Zeek when r.ZeekSummary != null => "Already available",
@@ -636,7 +635,6 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         var (dl, disk) = Size(i);
         var extra = r == null ? null : i.Id switch
         {
-            SetupIds.LocalAi => LocalAiAdvisor.Recommend(r).Reason,
             SetupIds.Dotnet9 when r.HasNet9 => r.HasSystemNet9 ? ".NET 9 and 10 are already installed on this computer: not needed." : "EZ Forensics' private copy is already installed.",
             SetupIds.Plaso when r.PlasoVersion != null => $"plaso {r.PlasoVersion} is already installed.",
             SetupIds.Plaso when r.Python == null => $"No Python found: a private Python {PrivatePython.Default.Version} is downloaded first.",
@@ -768,7 +766,15 @@ public sealed partial class SetupWizardViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasFailure))]
     private string? _failureText;
 
+    /// <summary>A run ended and its outcome was handled with problems left (set last, by <see cref="SetRunFinished"/>, so "Finish" never flashes next to the Done page).</summary>
     private bool _runFinished;
+
+    private void SetRunFinished(bool value)
+    {
+        _runFinished = value;
+        OnPropertyChanged(nameof(ShowNext));
+        OnPropertyChanged(nameof(CanRetry));
+    }
 
     public bool HasFailure => !string.IsNullOrEmpty(FailureText);
     public bool CanRetry => !IsRunning && !IsReverting && Plan is { AnyFailed: true };
@@ -777,7 +783,21 @@ public sealed partial class SetupWizardViewModel : ObservableObject
     public string DoneHeadline { get; private set; } = "";
     public ObservableCollection<string> DoneInstalled { get; } = new();
     public ObservableCollection<string> DoneAfterRestart { get; } = new();
-    public ObservableCollection<string> DoneFailed { get; } = new();
+    public ObservableCollection<SetupDoneProblem> DoneFailed { get; } = new();
+
+    /// <summary>"Open log" on a failed step row / a Done page problem: the log file in its default viewer (Explorer when that fails).</summary>
+    [RelayCommand]
+    private void OpenStepLog(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        try { ShellOps.OpenFile(path); }
+        catch (Exception ex)
+        {
+            AppLog.Warn($"Setup: could not open the log {path}: {ex.Message}");
+            try { ShellOps.OpenFolder(File.Exists(path) ? path : Path.GetDirectoryName(path)); }
+            catch (Exception ex2) { AppLog.Warn("Setup: could not show the log folder: " + ex2.Message); }
+        }
+    }
     /// <summary>The Done page offers "Restart now" (a step waits for the restart).</summary>
     public bool ShowRestart { get; private set; }
     public string TotalTimeText => "Total time " + SetupPlan.FormatElapsed(_runWatch.Elapsed);
@@ -843,7 +863,7 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         }
         var plan = Plan!;
         IsRunning = true;
-        _runFinished = false;
+        SetRunFinished(false);
         FailureText = null;
         _cts = new CancellationTokenSource();
         foreach (var st in plan.Steps)
@@ -860,7 +880,8 @@ public sealed partial class SetupWizardViewModel : ObservableObject
             _snapshot = SetupSnapshot.Take(RevertPaths, ezDistroExists: Machine == null || (Machine.EzDistroState?.Exists ?? false));
             AppLog.Info($"Setup snapshot taken ({_snapshot.Existing.Count} existing paths, distro existed: {_snapshot.EzDistroExisted}).");
         }
-        _runner = new SetupRunner(new DefaultSetupExecutor(SetupHost.CreateEnvironment(_s)));
+        _runner = new SetupRunner(new DefaultSetupExecutor(SetupHost.CreateEnvironment(_s)),
+            line => { if (line.StartsWith("Setup step FAILED", StringComparison.Ordinal)) AppLog.Warn(line); else AppLog.Info(line); });
         StartClock();
         try
         {
@@ -879,12 +900,12 @@ public sealed partial class SetupWizardViewModel : ObservableObject
         {
             StopClock();
             RunningStep = null;
-            _runFinished = true;
             IsRunning = false;
             _cts.Dispose();
             _cts = null;
         }
-        await AfterRunAsync(plan);
+        try { await AfterRunAsync(plan); }
+        finally { if (Page != SetupPage.Done) SetRunFinished(true); } // problems left: Finish (to the Done page) appears now
     }
 
     private void StartClock()
@@ -950,7 +971,7 @@ public sealed partial class SetupWizardViewModel : ObservableObject
             if (s.State == SetupStepState.Done) DoneInstalled.Add(Clean(s));
             else if (s.State == SetupStepState.AlreadyInstalled) DoneInstalled.Add(Clean(s) + " (already installed)");
             else if (s.State == SetupStepState.WaitingForRestart || restartPending) DoneAfterRestart.Add(Clean(s));
-            else DoneFailed.Add($"{Clean(s)}: {s.Message}");
+            else DoneFailed.Add(new SetupDoneProblem($"{Clean(s)}: {s.Message}", s.LogPath));
         }
         ShowRestart = plan.WaitingForRestart || restartPending;
         DoneHeadline = DoneFailed.Count > 0 ? "Setup finished with problems." : ShowRestart ? "Restart Windows to finish." : "EZ Forensics is ready.";

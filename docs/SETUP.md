@@ -14,7 +14,7 @@ You need Windows 10 (1809 or later) or Windows 11, 64-bit, and internet access d
 2. **System check.** Shows what your computer already has (disk space, admin rights, internet and so on). Nothing here needs fixing. If it says the internet is not reachable, fix your connection or proxy and click *Check again*.
 3. **Choose what to install.**
    - **Minimal**: Windows artifacts (Eric Zimmerman's tools), the super timeline (plaso) and file analysis (Explore tools). No admin rights needed. About 1 GB.
-   - **Everything** (preselected): Minimal plus Network (Zeek, RITA) and Memory (Volatility 3). The local AI item is ticked only if your PC can run it.
+   - **Everything** (preselected): Minimal plus Network (Zeek, RITA) and Memory (Volatility 3).
    - Or tick your own. Click the arrow on a bundle to see its tools and download sizes.
    - Optional: an offline Windows symbol pack for Volatility (large, off by default).
 4. **Summary.** Steps, download size, disk space and a time estimate. Tick the licence box to enable *Install*. *View licences* lists every tool.
@@ -34,13 +34,12 @@ You can open the wizard again with the *Open setup* button on Ingest (shown when
 | Network | Zeek (pcap to logs) and RITA (beacon detection). |
 | Memory | Volatility 3. Optional offline Windows symbol pack. |
 | File analysis (Explore) | Detect It Easy, ExifTool and CyberChef. No admin rights. |
-| AI assistant (Spectre) | Local AI: Ollama and a model that suits your PC. |
 
 Setup downloads each tool from its publisher. Nothing is bundled with the app.
 
 ## AI assistant (optional)
 
-- Open **Options > AI** to set up Spectre.
+- Setup does not install it. Click **Use local AI** in **Tools > AI**, or a cloud AI in **Options > AI**.
 - Local Ollama is the default and keeps your data on the PC.
 - Anthropic, OpenAI and OpenRouter need your own API key. The data you share with Spectre goes to that provider.
 - The AI page's semantic search needs the embedding model (build step in the README). Without it, the page uses text search.

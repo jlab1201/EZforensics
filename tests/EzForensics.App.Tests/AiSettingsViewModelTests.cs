@@ -28,4 +28,20 @@ public class AiSettingsViewModelTests
         Assert.Equal(AnthropicDefaults.Model, AiSettingsViewModel.PickDefault("anthropic", new[] { "claude-haiku-5-5", AnthropicDefaults.Model }));
         Assert.Null(AiSettingsViewModel.PickDefault("ollama", Array.Empty<string>()));
     }
+
+    [Fact]
+    public async Task Tools_ai_entry_count_follows_the_probe()
+    {
+        var installed = false;
+        var vm = new AiDocumentsViewModel(() => false, (_, _) => { }, new EzForensics.App.Services.LocalAiService(() => new System.Net.Http.HttpClient(), new EzForensics.Core.Settings.AppSettings(), () => { }),
+            () => Task.FromResult(new EzForensics.Core.Setup.OllamaState(installed, installed, Array.Empty<string>())));
+        var changes = new List<string?>();
+        vm.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+        await vm.RefreshAsync();
+        Assert.False(vm.LocalAiInstalled);
+        installed = true;
+        await vm.RefreshAsync();
+        Assert.True(vm.LocalAiInstalled);
+        Assert.Contains(nameof(AiDocumentsViewModel.LocalAiInstalled), changes);
+    }
 }

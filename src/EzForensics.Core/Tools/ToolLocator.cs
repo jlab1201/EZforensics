@@ -61,7 +61,8 @@ public sealed class ToolLocator : IToolLocator
     public static BuildFlavor Classify(string exePath)
     {
         var segs = exePath.Split(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
-        if (segs.Take(segs.Length - 1).Any(s => s.Equals("net9", StringComparison.OrdinalIgnoreCase)))
+        if (segs.Take(segs.Length - 1).Any(s => s.Equals("net", StringComparison.OrdinalIgnoreCase) || s.Equals("net9", StringComparison.OrdinalIgnoreCase) ||
+                                                s.Equals("net10", StringComparison.OrdinalIgnoreCase)))
             return BuildFlavor.Net9;
         try
         {

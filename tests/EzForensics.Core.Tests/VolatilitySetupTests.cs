@@ -295,7 +295,7 @@ public sealed class VolatilitySetupPlanTests
     {
         var all = SetupSelection.ForProfile(SetupProfile.Everything, Cat, Sys());
         var expected = Cat.Bundles.Where(b => !b.ComingSoon).SelectMany(b => b.Items)
-            .Where(i => i.Selectable && !i.Hidden && i.Id != SetupIds.Dotnet9 && i.Id != SetupIds.LocalAi).Select(i => i.Id);
+            .Where(i => i.Selectable && !i.Hidden && i.Id != SetupIds.Dotnet9).Select(i => i.Id);
         all.Items.Should().Contain(expected, "Everything means every item shown in the wizard");
         SetupPlanner.Plan(Cat, all, Sys(python: "py")).Steps.Should().Contain(s => s.Kind == SetupStepKind.InstallVolatilitySymbols);
     }

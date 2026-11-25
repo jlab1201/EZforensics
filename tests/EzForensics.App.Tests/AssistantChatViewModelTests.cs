@@ -129,10 +129,76 @@ public sealed class AssistantChatViewModelTests : IDisposable
             null, null, (_, _) => false, a => a(), (_, _) => Task.FromResult<AssistantExtraTools?>(null));
         await vm.CheckProviderAsync();
         Assert.True(vm.ShowLocalAiCard);
-        vm.SetUpLocalAiOverride = () => { h.Body = "{\"data\":[{\"id\":\"qwen3:8b\"}]}"; return Task.FromResult("Local AI is ready."); };
-        await vm.SetUpLocalAiCommand.ExecuteAsync(null);
+        vm.UseLocalAiOverride = () => { h.Body = "{\"data\":[{\"id\":\"qwen3:8b\"}]}"; return Task.FromResult("Local AI is ready."); };
+        await vm.UseLocalAiCommand.ExecuteAsync(null);
         Assert.Equal("Local AI is ready.", vm.LocalAiStatus);
         Assert.False(vm.ShowLocalAiCard);
+    }
+
+    private AssistantChatViewModel Chat(StubHandler h, AppSettings settings) =>
+        new(settings, new ApiKeyStore(Path.Combine(_dir, "keys")), () => new HttpClient(h, false), () => null,
+            null, null, (_, _) => false, a => a(), (_, _) => Task.FromResult<AssistantExtraTools?>(null));
+
+    [Fact]
+    public async Task Local_ai_card_shows_when_the_configured_model_is_not_downloaded()
+    {
+        var h = new StubHandler { Body = "{\"data\":[{\"id\":\"llama3.1:8b\"},{\"id\":\"nomic-embed-text:latest\"}]}" };
+        var settings = new AppSettings { AiProvider = "ollama", AiModel = "qwen3:8b" };
+        var vm = Chat(h, settings);
+        vm.RecommendChoice = () => LocalAiChoice.Local;
+        await vm.CheckProviderAsync();
+        Assert.True(vm.ShowLocalAiCard);            // other models exist, the configured one does not
+        settings.AiModel = "llama3.1:8b";
+        await vm.CheckProviderAsync();
+        Assert.False(vm.ShowLocalAiCard);
+        settings.AiModel = "";                       // none chosen yet: any model will do
+        await vm.CheckProviderAsync();
+        Assert.False(vm.ShowLocalAiCard);
+    }
+
+    [Fact]
+    public async Task Card_text_and_cloud_button_follow_the_hardware_advice()
+    {
+        var h = new StubHandler { Down = true };
+        var vm = Chat(h, new AppSettings { AiProvider = "ollama" });
+        vm.RecommendChoice = () => LocalAiChoice.Cloud;
+        await vm.CheckProviderAsync();
+        Assert.True(vm.ShowLocalAiCard);
+        Assert.True(vm.ShowCloudAiButton);
+        Assert.Contains("cloud AI", vm.LocalAiCardMessage);
+        var opened = false;
+        vm.OpenOptionsAi = () => opened = true;
+        vm.UseCloudAiCommand.Execute(null);
+        Assert.True(opened);
+
+        var good = Chat(h, new AppSettings { AiProvider = "ollama" });
+        good.RecommendChoice = () => LocalAiChoice.Local;
+        await good.CheckProviderAsync();
+        Assert.False(good.ShowCloudAiButton);
+        Assert.Equal(AssistantChatViewModel.LocalAiCardText, good.LocalAiCardMessage);
+    }
+
+    [Fact]
+    public async Task Provider_check_never_throws()
+    {
+        var vm = new AssistantChatViewModel(new AppSettings { AiProvider = "ollama" }, new ApiKeyStore(Path.Combine(_dir, "keys")),
+            () => throw new InvalidOperationException("no client"), () => null, null, null, (_, _) => false, a => a(), (_, _) => Task.FromResult<AssistantExtraTools?>(null));
+        vm.RecommendChoice = () => LocalAiChoice.Local;
+        await vm.CheckProviderAsync();
+        Assert.True(vm.ShowLocalAiCard);
+    }
+
+    [Fact]
+    public async Task Embedding_models_are_not_picked_as_the_default_chat_model()
+    {
+        var h = new StubHandler { Body = "{\"data\":[{\"id\":\"bge-m3\"},{\"id\":\"qwen3:4b\"}]}" };
+        var settings = new AppSettings { AiProvider = "ollama", AiModel = "" };
+        Assert.Equal("qwen3:4b", AiSettingsViewModel.PickDefault("ollama", new[] { "bge-m3", "nomic-embed-text", "qwen3:4b" }));
+        Assert.Null(AiSettingsViewModel.PickDefault("ollama", new[] { "bge-m3" }));
+        Assert.Equal(new[] { "qwen3:4b" }, AiSettingsViewModel.ChatModels("ollama", new[] { "bge-m3", "qwen3:4b" }));
+        Assert.Equal(new[] { "bge-m3" }, AiSettingsViewModel.ChatModels("custom", new[] { "bge-m3" }));
+        await Task.CompletedTask;
+        _ = h; _ = settings;
     }
 
     [Fact]

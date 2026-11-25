@@ -142,7 +142,7 @@ public class ToolsUpdaterTests
 
         lines.Should().Contain(l => l.Contains(expected) && l.Contains("PECmd.zip"));
         lines.Should().Contain(l => l.Contains("signer CN=ZimTech LLC"));
-        File.ReadAllText(Path.Combine(t.Path, "net9", "PECmd.exe")).Should().Be("hello");
+        File.ReadAllText(Path.Combine(t.Path, "net", "PECmd.exe")).Should().Be("hello");
         var row = ToolUpdater.ReadDetails(Path.Combine(t.Path, ToolUpdater.DetailsFileName)).Should().ContainSingle().Subject;
         row.Sha256.Should().Be(expected);
         row.Sha1.Should().Be("etag1");
@@ -232,5 +232,68 @@ public class ToolsUpdaterTests
         var f = new RemoteToolFile("C:evil.zip", "https://download.ericzimmermanstools.com/C:evil.zip", "e", 0, false, RemoteFileStatus.New);
         await FluentActions.Awaiting(() => updater.DownloadAsync(new[] { f }, t.Path, null, CancellationToken.None)).Should().ThrowAsync<InvalidOperationException>();
         handler.Calls.Should().Be(0);
+    }
+
+    private const string ModernHtml = """
+        <html><body>
+        <a href="https://download.ericzimmermanstools.com/EvtxECmd.zip">EvtxECmd net4</a>
+        <a href="https://download.ericzimmermanstools.com/net/EvtxECmd.zip">EvtxECmd</a>
+        <a href="https://download.ericzimmermanstools.com/RECmd.zip">RECmd net4</a>
+        <a href="https://download.ericzimmermanstools.com/net/RECmd.zip">RECmd</a>
+        <a href="https://download.ericzimmermanstools.com/net/SQLECmd.zip">SQLECmd</a>
+        <a href="https://download.ericzimmermanstools.com/Get-ZimmermanTools.zip">script</a>
+        </body></html>
+        """;
+
+    [Fact]
+    public void Modern_index_links_under_net_are_modern_builds()
+    {
+        ToolUpdater.IsModernUrl("https://download.ericzimmermanstools.com/net/RECmd.zip").Should().BeTrue();
+        ToolUpdater.IsModernUrl("https://download.ericzimmermanstools.com/net9/RECmd.zip").Should().BeTrue();
+        ToolUpdater.IsModernUrl("https://download.ericzimmermanstools.com/net10/RECmd.zip").Should().BeTrue();
+        ToolUpdater.IsModernUrl("https://download.ericzimmermanstools.com/RECmd.zip").Should().BeFalse();
+        ToolUpdater.ParseLinks(ModernHtml, 9).Should().BeEquivalentTo(new[]
+        {
+            "https://download.ericzimmermanstools.com/net/EvtxECmd.zip",
+            "https://download.ericzimmermanstools.com/net/RECmd.zip",
+            "https://download.ericzimmermanstools.com/net/SQLECmd.zip",
+            "https://download.ericzimmermanstools.com/Get-ZimmermanTools.zip",
+        });
+    }
+
+    [Fact]
+    public void PickBuild_prefers_modern_and_flags_a_net4_fallback()
+    {
+        var all = ToolUpdater.ParseLinks(ModernHtml, 0)
+            .Select(u => new RemoteToolFile(ToolUpdater.FileNameOf(u), u, "e", 1, ToolUpdater.IsModernUrl(u), RemoteFileStatus.New)).ToList();
+        var recmd = ToolUpdater.PickBuild(all, "RECmd.zip", true, out var fb);
+        recmd!.Url.Should().EndWith("/net/RECmd.zip"); fb.Should().BeFalse();
+        ToolUpdater.PickBuild(all, "SQLECmd.zip", true, out fb)!.Url.Should().EndWith("/net/SQLECmd.zip");
+        ToolUpdater.PickBuild(all, "RECmd.zip", false, out _)!.IsNet9.Should().BeFalse();
+        ToolUpdater.PickBuild(all, "SQLECmd.zip", false, out _).Should().BeNull();
+
+        var onlyNet4 = new[] { new RemoteToolFile("Old.zip", "https://download.ericzimmermanstools.com/Old.zip", "e", 1, false, RemoteFileStatus.New) };
+        ToolUpdater.PickBuild(onlyNet4, "Old.zip", true, out fb)!.IsNet9.Should().BeFalse();
+        fb.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Stale_net4_exe_is_removed_only_for_managed_exes_in_the_root()
+    {
+        using var t = new TempDir();
+        var staging = Path.Combine(t.Path, "stage"); Directory.CreateDirectory(staging);
+        File.Copy(FakeToolPaths.Exe, Path.Combine(staging, "RECmd.exe"));
+        File.Copy(FakeToolPaths.Exe, Path.Combine(staging, "Other.exe"));
+        File.Copy(FakeToolPaths.Dll, Path.Combine(t.Path, "RECmd.exe"));     // managed net4 copy: removed
+        File.WriteAllText(Path.Combine(t.Path, "RECmd.exe.config"), "<configuration/>");
+        File.Copy(FakeToolPaths.Exe, Path.Combine(t.Path, "Other.exe"));     // native: kept
+        File.WriteAllText(Path.Combine(t.Path, "Shared.dll"), "x");
+        var lines = new List<string>();
+        ToolUpdater.RemoveStaleNet4Copies(staging, t.Path, "RECmd.zip", lines.Add);
+        File.Exists(Path.Combine(t.Path, "RECmd.exe")).Should().BeFalse();
+        File.Exists(Path.Combine(t.Path, "RECmd.exe.config")).Should().BeFalse();
+        File.Exists(Path.Combine(t.Path, "Other.exe")).Should().BeTrue();
+        File.Exists(Path.Combine(t.Path, "Shared.dll")).Should().BeTrue();
+        lines.Should().ContainSingle().Which.Should().Contain("RECmd.exe");
     }
 }

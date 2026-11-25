@@ -52,7 +52,7 @@ public sealed partial class IntakeViewModel : ObservableObject
     /// <summary>Test seam: runs before each file is read in Send to review; throwing marks that file as failed.</summary>
     internal Action<string>? AddProbe { get; set; }
 
-    public const string NoAiHint = "Set up local AI… (Tools → AI)";
+    public const string NoAiHint = "Use local AI (Tools → AI)";
 
     private readonly KnowledgeWorkspace _ws;
     private readonly Func<(KnowledgeCompletion? Complete, string Model)> _ai;

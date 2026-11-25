@@ -142,7 +142,7 @@ public sealed partial class ShellViewModel : ObservableObject
         Learn = new LearnViewModel();
         Settings = new SettingsViewModel();
         Assistant = new AssistantChatViewModel(s.Settings, new ApiKeyStore(), s.CreateHttpClient, () => CaseDir, () => CurrentPage,
-            allPages: () => new PageViewModel[] { Triage, Results, Explore, Findings, Learn, Tools, Settings });
+            allPages: () => new PageViewModel[] { Triage, Results, Explore, Findings, Learn, Tools, Settings }, localAi: s.LocalAi);
         Findings.AskSpectreHandler = Assistant.Ask;
 
         // Top: Ingest, Analyze, Explore, Review. Bottom zone: AI (the Learn page), Tools, Options.
@@ -173,6 +173,7 @@ public sealed partial class ShellViewModel : ObservableObject
             Selected = Items.FirstOrDefault(i => i.Page == Settings) ?? Selected;
             Settings.FocusIngestSelections();
         };
+        s.OptionsAiRequested += () => { Selected = OptionsItem; Settings.FocusAi(); };
         s.NavigationRequested += t => Selected = Items.FirstOrDefault(i => i.Page.GetType() == t) ?? Selected;
         s.JobRequested += j =>
         {
@@ -352,12 +353,12 @@ public sealed partial class ShellViewModel : ObservableObject
         try
         {
             // Status bar only (no banner): the setup installs a private .NET 9 by default, and the net4 builds work without it.
-            // A tool that exists only as a net9 build is simply not installed without .NET 9 (its job fails with "Tool not installed").
+            // A tool that exists only as a modern (.NET 10) build is simply not installed without .NET 9 (its job fails with "Tool not installed").
             var has = await _s.ProbeNet9Async();
             Net9Text = has ? ".NET 9 and 10: installed" : ".NET 9 and 10: not installed (using compatible builds)";
-            Net9Tip = has ? "The net9 builds of the EZ tools can run."
+            Net9Tip = has ? "The .NET 10 builds of the EZ tools can run."
                 : "Without .NET 9 and 10 the EZ tools run as their net4 builds, which need only the .NET Framework that ships with Windows. " +
-                  "A few net9-only tools need .NET 9 and 10: Run setup installs a private copy (no admin rights).";
+                  "A few tools that exist only as .NET 10 builds need .NET 9 and 10: Run setup installs a private copy (no admin rights).";
         }
         catch (Exception ex)
         {

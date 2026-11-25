@@ -13,46 +13,62 @@ public readonly record struct LocalAiProgress(string Text, double? Fraction);
 public interface ILocalAiOps
 {
     Task<OllamaState> ProbeAsync(CancellationToken ct);
-    /// <summary>Downloads the official installer and runs it per-user and silently.</summary>
-    Task InstallOllamaAsync(Action<LocalAiProgress> progress, CancellationToken ct);
+    /// <summary>ollama.exe when it is on disk (per-user install folder or PATH), else null.</summary>
+    string? FindExe() => null;
     /// <summary>Sets the recommended user variables (flash attention, 8-bit KV cache); returns the names that were set.</summary>
     IReadOnlyList<string> ApplyTuning();
-    /// <summary>Starts <c>ollama serve</c> (restarting a running Ollama first when asked) and waits until the API answers.</summary>
-    Task StartServerAsync(bool restart, CancellationToken ct);
+    /// <summary>The Ollama server address in use (no trailing slash).</summary>
+    string ServerUrl => AiHardware.OllamaApiRoot;
+    /// <summary>The server is on this PC (loopback): only then can the app start Ollama.</summary>
+    bool IsLocalServer => true;
+    /// <summary>Starts the installed Ollama (never kills a running one) and waits until the API answers.</summary>
+    Task StartServerAsync(CancellationToken ct);
     Task PullModelAsync(string model, Action<LocalAiProgress> progress, CancellationToken ct);
     /// <summary>Makes <paramref name="model"/> the assistant's model on the Ollama provider and saves the settings.</summary>
     void UseModel(string model);
 }
 
+/// <summary>Ollama is not on this PC. EzForensics does not install it; the UI tells the user to get it from ollama.com.</summary>
+public sealed class OllamaNotInstalledException : Exception
+{
+    public const string DownloadUrl = "https://ollama.com/download";
+    public const string Note = "Local AI needs Ollama (a separate, free app). Install it from ollama.com, then click Check again.";
+    public OllamaNotInstalledException() : base(Note) { }
+}
+
 public sealed record LocalAiSetupResult(string Summary, IReadOnlyList<string> Skipped);
 
-/// <summary>Installs Ollama and a model, then points the assistant at it. Steps that are already satisfied are skipped.</summary>
+/// <summary>Uses an installed Ollama: starts it if it is stopped, downloads the model if missing, then points the assistant at it.</summary>
 public static class LocalAiSetup
 {
-    public static async Task<LocalAiSetupResult> RunAsync(string model, ILocalAiOps ops, Action<LocalAiProgress>? progress = null, CancellationToken ct = default)
+    /// <summary>Whether Ollama is on this PC (the probe says so, the API answers, or ollama.exe is on disk).</summary>
+    public static bool IsInstalled(OllamaState state, ILocalAiOps ops) => state.Installed || state.Running || ops.FindExe() != null;
+
+    /// <summary>The line the summary gets when Ollama's speed settings were just turned on.</summary>
+    public const string TuningNote = "Also turned on two Ollama speed settings for your user: flash attention and an 8-bit cache.";
+
+    /// <param name="tunedBefore">Variables the caller already set while starting Ollama itself.</param>
+    /// <param name="startedHere">The caller just started Ollama, so it already has the speed settings.</param>
+    public static async Task<LocalAiSetupResult> RunAsync(string model, ILocalAiOps ops, Action<LocalAiProgress>? progress = null, CancellationToken ct = default,
+        IReadOnlyList<string>? tunedBefore = null, bool startedHere = false)
     {
         void Say(string t, double? f = null) => progress?.Invoke(new LocalAiProgress(t, f));
         var skipped = new List<string>();
 
         Say("Checking for Ollama…");
         var state = await ops.ProbeAsync(ct).ConfigureAwait(false);
-        bool installedNow = false;
-        if (!state.Installed)
-        {
-            Say("Downloading Ollama…", 0);
-            await ops.InstallOllamaAsync(p => progress?.Invoke(p), ct).ConfigureAwait(false);
-            installedNow = true;
-        }
-        else skipped.Add("Ollama is already installed.");
+        if (!IsInstalled(state, ops)) throw new OllamaNotInstalledException();
+        if (!state.Running && !ops.IsLocalServer)
+            throw new InvalidOperationException($"Ollama is not answering on {ops.ServerUrl}. Start it there, then click Check again.");
 
         ct.ThrowIfCancellationRequested();
-        var tuned = ops.ApplyTuning();
+        var tuned = (tunedBefore ?? Array.Empty<string>()).Concat(ops.ApplyTuning()).ToList();
 
-        if (!state.Running || installedNow || tuned.Count > 0)
+        if (!state.Running)
         {
-            Say(state.Running ? "Restarting Ollama…" : "Starting Ollama…");
-            // A server that was already up (or the installer started) does not have the new variables yet.
-            await ops.StartServerAsync(restart: installedNow || (state.Running && tuned.Count > 0), ct).ConfigureAwait(false);
+            Say("Starting Ollama…");
+            await ops.StartServerAsync(ct).ConfigureAwait(false);
+            startedHere = true;
         }
         else skipped.Add("Ollama is already running.");
 
@@ -67,96 +83,118 @@ public static class LocalAiSetup
 
         ops.UseModel(model);
         Say("Done.", 1);
-        return new LocalAiSetupResult($"Local AI is ready: Spectre will use {model} through Ollama.", skipped);
+        var summary = $"Local AI is ready: Spectre will use {model} through Ollama.";
+        if (tuned.Count > 0)
+        {
+            summary += " " + TuningNote;
+            if (!startedHere) summary += " They apply the next time Ollama starts.";
+        }
+        return new LocalAiSetupResult(summary, skipped);
     }
 }
 
-/// <summary>The real machine operations behind <see cref="LocalAiSetup"/>.</summary>
-public sealed class OllamaOps : ILocalAiOps
+/// <summary>The real machine operations behind <see cref="LocalAiSetup"/>. One HTTP client for the whole run; dispose the instance when the run is over.</summary>
+public sealed class OllamaOps : ILocalAiOps, IDisposable
 {
-    public const string InstallerUrl = "https://ollama.com/download/OllamaSetup.exe";
-    /// <summary>Authenticode checker for the downloaded installer. Replaceable for tests.</summary>
-    public IScriptSignatureVerifier SignatureVerifier { get; init; } = PowerShellSignatureVerifier.Instance;
     private readonly Func<HttpClient> _http;
     private readonly AppSettings _settings;
     private readonly Action _save;
+    private readonly string _root;
+    private HttpClient? _client;
 
-    public OllamaOps(Func<HttpClient> http, AppSettings settings, Action save) { _http = http; _settings = settings; _save = save; }
-
-    public Task<OllamaState> ProbeAsync(CancellationToken ct) => AiHardware.ProbeOllamaAsync(_http(), ct: ct);
-
-    public async Task InstallOllamaAsync(Action<LocalAiProgress> progress, CancellationToken ct)
+    /// <param name="http">Creates a client; called once, the instance owns and disposes it.</param>
+    /// <param name="serverUrl">Ollama's server root. Null = <see cref="OllamaEndpoint.Resolve"/> from the settings and OLLAMA_HOST.</param>
+    public OllamaOps(Func<HttpClient> http, AppSettings settings, Action save, string? serverUrl = null)
     {
-        var dir = Path.Combine(Path.GetTempPath(), "ezf-ollama-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(dir);
-        var exe = Path.Combine(dir, "OllamaSetup.exe");
-        try
+        _http = http; _settings = settings; _save = save;
+        _root = (serverUrl ?? OllamaEndpoint.Resolve(settings.AiProvider, settings.AiBaseUrl, Environment.GetEnvironmentVariable("OLLAMA_HOST"))).TrimEnd('/');
+    }
+
+    private HttpClient Http => _client ??= _http();
+
+    public void Dispose() { _client?.Dispose(); _client = null; }
+
+    public string ServerUrl => _root;
+    public bool IsLocalServer => OllamaEndpoint.IsLoopback(_root);
+
+    public Task<OllamaState> ProbeAsync(CancellationToken ct) => AiHardware.ProbeOllamaAsync(Http, apiRoot: _root, ct: ct);
+
+    public string? FindExe() => AiHardware.FindOllamaExe();
+
+    /// <summary>How long to wait for the API after Ollama was started.</summary>
+    public static TimeSpan ServerStartTimeout { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>The tray app of the install (it starts and supervises <c>ollama serve</c>): per-user folder, then %ProgramFiles%\Ollama.</summary>
+    public static string? FindOllamaAppExe(string? localAppData = null, string? programFiles = null)
+    {
+        localAppData ??= Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        programFiles ??= Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        foreach (var root in new[] { localAppData is { Length: > 0 } l ? Path.Combine(l, "Programs") : null, programFiles })
         {
-            using (var resp = await _http().GetAsync(InstallerUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
-            {
-                resp.EnsureSuccessStatusCode();
-                var finalUri = resp.RequestMessage?.RequestUri;
-                if (!OllamaInstallerPolicy.IsAllowedDownloadHost(finalUri))
-                    throw new InvalidOperationException($"The Ollama download came from an unexpected address ({finalUri?.Host ?? "unknown"}); it was not run.");
-                long? total = resp.Content.Headers.ContentLength;
-                await using var src = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                await using var dst = File.Create(exe);
-                var buf = new byte[81920];
-                long done = 0; int n;
-                while ((n = await src.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
-                {
-                    await dst.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
-                    done += n;
-                    progress(new LocalAiProgress($"Downloading Ollama ({done / 1048576} MB)…", total is > 0 ? Math.Min(0.99, done / (double)total.Value) : null));
-                }
-            }
-            progress(new LocalAiProgress("Checking the installer's signature…", null));
-            var sig = SignatureVerifier.Verify(exe);
-            var problem = OllamaInstallerPolicy.SignatureProblem(sig);
-            if (problem != null) throw new InvalidOperationException($"The Ollama installer was not run: {problem}.");
-            progress(new LocalAiProgress($"Installing Ollama (signed by {sig.SignerSubject})…", null));
-            var psi = new ProcessStartInfo(exe, "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES") { UseShellExecute = false, CreateNoWindow = true };
-            using var p = Process.Start(psi) ?? throw new InvalidOperationException("The Ollama installer did not start.");
-            await p.WaitForExitAsync(ct).ConfigureAwait(false);
-            if (p.ExitCode != 0) throw new InvalidOperationException($"The Ollama installer exited with code {p.ExitCode}.");
+            if (string.IsNullOrEmpty(root)) continue;
+            var p = Path.Combine(root, "Ollama", "ollama app.exe");
+            if (File.Exists(p)) return p;
         }
-        finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
+        return null;
     }
 
     public IReadOnlyList<string> ApplyTuning() => OllamaTuning.Apply();
 
-    public async Task StartServerAsync(bool restart, CancellationToken ct)
+    public async Task StartServerAsync(CancellationToken ct)
     {
-        if (restart)
+        if (!IsLocalServer) throw new InvalidOperationException($"Ollama is not answering on {_root}. Start it there, then click Check again.");
+        var sw = Stopwatch.StartNew();
+        async Task<bool> Answers() => await AiHardware.ListModelsAsync(Http, _root, ct).ConfigureAwait(false) != null;
+
+        if (!await Answers().ConfigureAwait(false))
         {
-            foreach (var name in new[] { "ollama app", "ollama" })
-                foreach (var p in Process.GetProcessesByName(name))
-                    try { p.Kill(true); p.WaitForExit(5000); } catch (Exception) { } finally { p.Dispose(); }
+            // Ollama already starting (its tray app was just opened): give it a moment before starting a second one.
+            if (IsOllamaProcessRunning())
+            {
+                var grace = TimeSpan.FromSeconds(Math.Min(30, ServerStartTimeout.TotalSeconds / 2));
+                while (sw.Elapsed < grace && !await Answers().ConfigureAwait(false)) await Task.Delay(500, ct).ConfigureAwait(false);
+            }
+            if (!await Answers().ConfigureAwait(false))
+            {
+                ProcessStartInfo psi;
+                if (FindOllamaAppExe() is { } app) psi = new ProcessStartInfo(app) { UseShellExecute = false, CreateNoWindow = true };
+                else
+                {
+                    var exe = AiHardware.FindOllamaExe() ?? throw new InvalidOperationException("ollama.exe was not found.");
+                    psi = new ProcessStartInfo(exe, "serve") { UseShellExecute = false, CreateNoWindow = true };
+                }
+                // The tuning variables were just set for the user; this process may predate them, so pass them along.
+                foreach (var kv in OllamaTuning.Recommended)
+                    if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(kv.Key))) psi.Environment[kv.Key] = kv.Value;
+                Process.Start(psi)?.Dispose();
+            }
         }
-        if (await AiHardware.ListModelsAsync(_http(), ct: ct).ConfigureAwait(false) == null)
+        while (!await Answers().ConfigureAwait(false))
         {
-            var exe = AiHardware.FindOllamaExe() ?? throw new InvalidOperationException("ollama.exe was not found after the install.");
-            var psi = new ProcessStartInfo(exe, "serve") { UseShellExecute = false, CreateNoWindow = true };
-            // The tuning variables were just set for the user; this process may predate them, so pass them along.
-            foreach (var kv in OllamaTuning.Recommended)
-                if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(kv.Key))) psi.Environment[kv.Key] = kv.Value;
-            Process.Start(psi)?.Dispose();
-        }
-        var deadline = DateTime.UtcNow.AddSeconds(60);
-        while (await AiHardware.ListModelsAsync(_http(), ct: ct).ConfigureAwait(false) == null)
-        {
-            if (DateTime.UtcNow > deadline) throw new TimeoutException("Ollama did not start within a minute.");
+            if (sw.Elapsed > ServerStartTimeout)
+                throw new TimeoutException($"Ollama did not answer on {_root} within {(int)ServerStartTimeout.TotalSeconds} seconds. Start Ollama from the Start menu, then click Check again.");
             await Task.Delay(500, ct).ConfigureAwait(false);
         }
     }
 
+    private static bool IsOllamaProcessRunning()
+    {
+        foreach (var name in new[] { "ollama app", "ollama" })
+        {
+            var ps = Process.GetProcessesByName(name);
+            try { if (ps.Length > 0) return true; }
+            finally { foreach (var p in ps) p.Dispose(); }
+        }
+        return false;
+    }
+
     public async Task PullModelAsync(string model, Action<LocalAiProgress> progress, CancellationToken ct)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, AiHardware.OllamaApiRoot + "/api/pull")
+        using var req = new HttpRequestMessage(HttpMethod.Post, _root + "/api/pull")
         {
             Content = new StringContent(JsonSerializer.Serialize(new { model, stream = true }), Encoding.UTF8, "application/json"),
         };
-        using var resp = await _http().SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
         using var reader = new StreamReader(await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false));
         var layers = new Dictionary<string, (long total, long done)>();

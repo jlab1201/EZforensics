@@ -18,6 +18,15 @@ public sealed class SetupStepContext
     public SetupPlan Plan { get; }
     public void Log(string line) => Step.Log(line);
 
+    /// <summary>
+    /// Registers a log file this step wrote (an installer's /LOG, a job log): shown as "Open log" in the wizard when the step fails,
+    /// named in app.log's failure line and recorded in the setup run folder.
+    /// </summary>
+    public void AddLogFile(string? path)
+    {
+        if (!string.IsNullOrWhiteSpace(path)) Step.AddLogFile(path);
+    }
+
     /// <summary>A running step's bar never reads full: only the runner sets 1, once the step is Done.</summary>
     public const double MaxRunningProgress = 0.99;
 
@@ -95,8 +104,31 @@ public sealed class StepProgressEstimate
 public sealed class SetupRunner
 {
     private readonly ISetupExecutor _executor;
+    private readonly Action<string>? _logger;
 
-    public SetupRunner(ISetupExecutor executor) => _executor = executor;
+    /// <param name="logger">
+    /// Receives one line per step start / end / failure for the host's app log (the step's own log stays in the wizard and in the
+    /// setup run folder). Exceptions it throws are ignored.
+    /// </param>
+    public SetupRunner(ISetupExecutor executor, Action<string>? logger = null)
+    {
+        _executor = executor;
+        _logger = logger;
+    }
+
+    private void HostLog(string line)
+    {
+        if (_logger == null) return;
+        try { _logger(line); } catch (Exception) { }
+    }
+
+    /// <summary>The app-log lines for one finished step: the end line (with the message, so warnings of a Done step show) and, on failure, the failure line.</summary>
+    public static IEnumerable<string> EndLines(SetupStep step, TimeSpan elapsed)
+    {
+        yield return $"Setup step end {step.Id} {step.State} {SetupPlan.FormatElapsed(elapsed)}: {step.Message}";
+        if (step.State == SetupStepState.Failed)
+            yield return $"Setup step FAILED {step.Id}: {step.Message} (log: {step.LogPath ?? "none, see the wizard's log"})";
+    }
 
     public bool IsRunning { get; private set; }
 
@@ -159,6 +191,7 @@ public sealed class SetupRunner
                 step.State = SetupStepState.Running;
                 step.Progress = null;
                 step.Log($"> {step.Title}");
+                HostLog($"Setup step start {step.Id} {step.Title}");
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var estimate = new StepProgressEstimate(step.EstimatedSeconds);
                 var context = new SetupStepContext(step, plan);
@@ -215,6 +248,7 @@ public sealed class SetupRunner
                 step.State = r.State; // first: a running step's bar never reads full
                 step.Progress = r.State is SetupStepState.Done or SetupStepState.AlreadyInstalled ? 1 : step.Progress;
                 step.Log($"{step.StateLabel}: {r.Message}");
+                foreach (var line in EndLines(step, sw.Elapsed)) HostLog(line);
                 Finished(step);
             }
         }

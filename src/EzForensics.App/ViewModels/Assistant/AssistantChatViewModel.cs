@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using EzForensics.App.Services;
 using EzForensics.Core.Assistant;
 using EzForensics.Core.Settings;
+using EzForensics.Core.Setup;
 
 namespace EzForensics.App.ViewModels;
 
@@ -51,8 +52,10 @@ public sealed partial class AssistantChatViewModel : ObservableObject, IAssistan
     public AssistantChatViewModel(AppSettings settings, ApiKeyStore keys, Func<HttpClient> http, Func<string?> caseDir, Func<PageViewModel?>? currentPage = null,
         Func<IModelClient>? createModel = null, Func<string, string, bool>? confirm = null, Action<Action>? ui = null,
         Func<string?, CancellationToken, Task<AssistantExtraTools?>>? connectSpectre = null, Func<IEnumerable<PageViewModel>>? allPages = null,
-        Func<IReadOnlyList<long>, string?>? pinnedKnowledge = null)
+        Func<IReadOnlyList<long>, string?>? pinnedKnowledge = null, LocalAiService? localAi = null)
     {
+        LocalAi = localAi ?? new LocalAiService(http, settings, SaveSettings);
+        LocalAi.Finished += OnLocalAiFinished;
         _pinnedKnowledge = pinnedKnowledge ?? (ids => EzForensics.Core.Knowledge.KnowledgeService.Default.NotesBlock(ids, AssistantContext.MaxKnowledgeChars));
         Current = this;
         _currentPage = currentPage ?? (() => null);
@@ -97,14 +100,61 @@ public sealed partial class AssistantChatViewModel : ObservableObject, IAssistan
 
     // ------------------------------------------------------------------ first run: local AI card and starter prompts
 
-    public const string LocalAiCardText = "Spectre needs a local AI model. Set it up once; it stays on this PC.";
+    public const string LocalAiCardText = "Spectre needs a local AI model. \"Use local AI\" uses Ollama (installed separately, free) and downloads the model for you; it stays on this PC.";
+
+    /// <summary>What the card says: <see cref="LocalAiCardText"/>, or the cloud advice when this PC is better suited to a cloud AI.</summary>
+    [ObservableProperty] private string _localAiCardMessage = LocalAiCardText;
+
+    /// <summary>This PC suits a cloud AI better: the card also offers "Use a cloud AI" (opens Options > AI).</summary>
+    [ObservableProperty] private bool _showCloudAiButton;
+
+    /// <summary>Test seam: what the hardware check recommends. Null = RAM and GPUs of this PC.</summary>
+    internal Func<LocalAiChoice>? RecommendChoice { get; set; }
+
+    /// <summary>Test seam for "Use a cloud AI". Null = Options > AI.</summary>
+    internal Action? OpenOptionsAi { get; set; }
+
+    private LocalAiChoice? _choice;
+
+    private async Task<LocalAiChoice> ChoiceAsync()
+    {
+        if (_choice is { } c) return c;
+        try
+        {
+            var f = RecommendChoice ?? (() => LocalAiAdvisor.Recommend(AiHardware.TotalRamBytes(), AiHardware.Gpus()).Choice);
+            _choice = await Task.Run(f);
+        }
+        catch (Exception ex) { AppLog.Info("Local AI card: hardware check failed: " + ex.Message); _choice = LocalAiChoice.Local; }
+        return _choice.Value;
+    }
+
+    /// <summary>The card's second button: Options > AI, to pick a cloud provider.</summary>
+    [RelayCommand]
+    private void UseCloudAi()
+    {
+        if (OpenOptionsAi != null) OpenOptionsAi();
+        else AppServices.Current?.ShowOptionsAi();
+    }
+
+    /// <summary>The shared "Use local AI" run (status, Cancel, log link, Ollama-missing note).</summary>
+    public LocalAiService LocalAi { get; }
+
+    /// <summary>The check that ran after a setup finished somewhere else (Options, Tools). Test hook.</summary>
+    internal Task? LocalAiRecheck { get; private set; }
+
+    private void OnLocalAiFinished(bool success)
+    {
+        if (!success || IsSettingUpLocalAi) return;
+        OnPropertyChanged(nameof(ModelLabel));
+        LocalAiRecheck = CheckProviderAsync();
+    }
 
     /// <summary>The three prompts shown as chips while the chat is empty.</summary>
     public static IReadOnlyList<string> StarterPrompts { get; } = new[] { "Any encoded PowerShell?", "Summarize this case", "What ran at logon?" };
 
     private readonly bool _autoProbe;
 
-    /// <summary>Local provider chosen but Ollama is not running or has no models: the chat shows a card with "Set up local AI".</summary>
+    /// <summary>Local provider chosen but Ollama is not running or has no models: the chat shows a card with "Use local AI".</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowLocalAiCard))]
     private bool _needsLocalAi;
@@ -113,7 +163,7 @@ public sealed partial class AssistantChatViewModel : ObservableObject, IAssistan
     [ObservableProperty] private string _localAiStatus = "";
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SetUpLocalAiCommand))]
+    [NotifyCanExecuteChangedFor(nameof(UseLocalAiCommand))]
     private bool _isSettingUpLocalAi;
 
     public bool ShowLocalAiCard => NeedsLocalAi;
@@ -128,46 +178,73 @@ public sealed partial class AssistantChatViewModel : ObservableObject, IAssistan
     }
 
     /// <summary>
-    /// Looks at the local provider: not running or no models installed shows the setup card, a ready provider hides it.
-    /// Other providers never show it (their problems are a missing key, which Options > AI explains).
+    /// Looks at the local provider: not running, no models installed, or the configured model not downloaded shows the setup card, a ready provider hides it.
+    /// Other providers never show it (their problems are a missing key, which Options > AI explains). Never throws.
     /// </summary>
     public async Task CheckProviderAsync(CancellationToken ct = default)
     {
-        var provider = _settings.AiProvider;
-        if (provider != "ollama") { _ui(() => NeedsLocalAi = false); return; }
-        bool missing;
         try
         {
-            using var http = _http();
-            http.Timeout = TimeSpan.FromSeconds(5);
-            var ids = await AiSettingsViewModel.ListModelsAsync(http, provider, _settings.AiBaseUrl, null, ct);
-            missing = ids.Count == 0;
+            var provider = _settings.AiProvider;
+            if (provider != "ollama") { _ui(() => NeedsLocalAi = false); return; }
+            bool missing;
+            try
+            {
+                using var http = _http();
+                http.Timeout = TimeSpan.FromSeconds(5);
+                var ids = await AiSettingsViewModel.ListModelsAsync(http, provider, _settings.AiBaseUrl, null, ct);
+                var model = _settings.AiModel;
+                missing = ids.Count == 0 || (!string.IsNullOrWhiteSpace(model) && !new OllamaState(true, true, ids).HasModel(model.Trim()));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception ex)
+            {
+                AppLog.Info("Local AI card: Ollama check failed: " + ex.Message);
+                missing = true;
+            }
+            var choice = missing ? await ChoiceAsync() : LocalAiChoice.Local;
+            _ui(() =>
+            {
+                NeedsLocalAi = missing && _settings.AiProvider == "ollama";
+                ShowCloudAiButton = NeedsLocalAi && choice != LocalAiChoice.Local;
+                LocalAiCardMessage = LocalAiAdvisor.ChatCardText(choice, LocalAiCardText);
+            });
         }
-        catch (Exception ex) when (ex is AssistantModelException or HttpRequestException or UriFormatException or OperationCanceledException) { missing = true; }
-        _ui(() => NeedsLocalAi = missing && _settings.AiProvider == "ollama");
+        catch (Exception ex) { AppLog.Info("Local AI card check failed: " + ex.Message); }
     }
 
-    /// <summary>The card's button: the same local AI setup as Options > AI > "Set up local AI…", saved at once.</summary>
-    [RelayCommand(CanExecute = nameof(CanSetUpLocalAi))]
-    private async Task SetUpLocalAiAsync()
+    /// <summary>The card's button: the same "Use local AI" run as Options > AI and Tools > AI, saved at once.</summary>
+    [RelayCommand(CanExecute = nameof(CanUseLocalAi))]
+    private async Task UseLocalAiAsync()
     {
         IsSettingUpLocalAi = true;
         try
         {
-            var summary = await (SetUpLocalAiOverride?.Invoke() ?? LocalAiRunner.RunAsync(_http, _settings, SaveSettings, t => _ui(() => LocalAiStatus = t)));
-            LocalAiStatus = summary;
-            OnPropertyChanged(nameof(ModelLabel));
-            await CheckProviderAsync();
+            string? summary;
+            if (UseLocalAiOverride != null)
+            {
+                try { summary = await UseLocalAiOverride(); LocalAiStatus = summary; }
+                catch (OperationCanceledException) { summary = null; LocalAiStatus = "Cancelled."; }
+                catch (Exception ex) { summary = null; LocalAiStatus = "Local AI setup failed: " + Scrub(ex.Message); }
+            }
+            else
+            {
+                summary = await LocalAi.StartAsync();
+                LocalAiStatus = LocalAi.Status;
+            }
+            if (summary != null)
+            {
+                OnPropertyChanged(nameof(ModelLabel));
+                await CheckProviderAsync();
+            }
         }
-        catch (OperationCanceledException) { LocalAiStatus = "Cancelled."; }
-        catch (Exception ex) { LocalAiStatus = "Local AI setup failed: " + Scrub(ex.Message); }
         finally { IsSettingUpLocalAi = false; }
     }
 
-    private bool CanSetUpLocalAi() => !IsSettingUpLocalAi;
+    private bool CanUseLocalAi() => !IsSettingUpLocalAi;
 
     /// <summary>Test seam for the setup run (returns its summary line).</summary>
-    internal Func<Task<string>>? SetUpLocalAiOverride { get; set; }
+    internal Func<Task<string>>? UseLocalAiOverride { get; set; }
 
     /// <summary>A starter chip: sends its prompt.</summary>
     [RelayCommand]

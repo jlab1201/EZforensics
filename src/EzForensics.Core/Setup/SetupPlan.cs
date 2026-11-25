@@ -25,8 +25,6 @@ public enum SetupStepKind
     InstallVolatilitySymbols,
     /// <summary>One Explore tool (DIE, ExifTool, CyberChef): pinned zip download, SHA-256 check, extract into the per-user tools folder. No admin.</summary>
     InstallExploreTool,
-    /// <summary>Local AI for Spectre: Ollama (official per-user installer), its tuning, the recommended model, then the assistant is pointed at it. No admin.</summary>
-    InstallLocalAi,
     /// <summary><c>wsl --install --no-distribution</c>, elevated (UAC); Windows must restart afterwards.</summary>
     EnableWsl,
     /// <summary>EZ Forensics' private WSL distro: pinned rootfs download + SHA-256, <c>wsl --import</c>, first-boot script (no admin).</summary>
@@ -79,11 +77,6 @@ public sealed class SetupSelection
             foreach (var i in b.Items.Where(i => !i.ComingSoon))
             {
                 if (i.Hidden) continue; // hidden items (the WSL distro) come in through Requires
-                if (i.Id == SetupIds.LocalAi) // Everything always ticks it (a weak PC gets the small model); Minimal only when this PC runs a local model well
-                {
-                    if (profile == SetupProfile.Everything || (system != null && Assistant.LocalAiAdvisor.Recommend(system).RecommendLocal)) s.Items.Add(i.Id);
-                    continue;
-                }
                 if (i.OptIn && profile != SetupProfile.Everything) continue; // opt-in extras: only Everything (or the user's tick)
                 if (i.Id == SetupIds.Dotnet9 && net9) continue;
                 bool on = profile == SetupProfile.Everything || i.DefaultOn;
@@ -155,6 +148,32 @@ public sealed class SetupStep : INotifyPropertyChanged
 
     public string LogText { get { lock (_log) return _log.ToString(); } }
 
+    private readonly List<string> _logFiles = new();
+
+    /// <summary>Log files written for this step in this run (job logs, an installer's own log), oldest first.</summary>
+    public IReadOnlyList<string> LogFiles { get { lock (_logFiles) return _logFiles.ToList(); } }
+
+    /// <summary>The step's most relevant log file (the last one registered), or null. The wizard's "Open log" opens it.</summary>
+    public string? LogPath { get { lock (_logFiles) return _logFiles.Count > 0 ? _logFiles[^1] : null; } }
+
+    public bool HasLogPath => LogPath != null;
+
+    /// <summary>Registers a log file (registering one again makes it the <see cref="LogPath"/>).</summary>
+    public void AddLogFile(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        lock (_logFiles)
+        {
+            _logFiles.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            _logFiles.Add(path);
+        }
+        Post(() =>
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LogPath)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasLogPath)));
+        });
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
     /// <summary>Raised for every log line (on the runner's synchronization context).</summary>
     public event Action<SetupStep, string>? LogLine;
@@ -172,6 +191,13 @@ public sealed class SetupStep : INotifyPropertyChanged
         State = SetupStepState.Queued;
         Message = null;
         Progress = null;
+        bool had;
+        lock (_logFiles) { had = _logFiles.Count > 0; _logFiles.Clear(); } // a retry writes new logs in its own run folder
+        if (had) Post(() =>
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LogPath)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasLogPath)));
+        });
     }
 
     private void Set<T>(ref T field, T value, params string[] names)
@@ -300,7 +326,7 @@ public static class SetupPlanner
                 Add(new SetupStep { Id = id, Kind = SetupStepKind.BuiltIn, ItemId = id, Title = item.Title, Detail = item.Description, State = SetupStepState.Done, Message = "Ready (part of EZ Forensics)." });
             }
 
-        // .NET 9 (private) before the EZ tools, so their net9 builds are chosen.
+        // .NET 9 (private) before the EZ tools, so their .NET 10 builds are chosen.
         SetupStep? dotnet = null;
         if (sel.Has(SetupIds.Dotnet9))
         {
@@ -327,14 +353,14 @@ public static class SetupPlanner
         {
             var net9Only = zips.Where(catalog.IsNet9Only).ToList();
             if (!net9 && net9Only.Count > 0)
-                notes.Add($"Without .NET 9 these tools exist only as net9 builds and are skipped: {string.Join(", ", net9Only.Select(z => Path.GetFileNameWithoutExtension(z)))}.");
+                notes.Add($"Without .NET 9 these tools exist only as .NET 10 builds and are skipped: {string.Join(", ", net9Only.Select(z => Path.GetFileNameWithoutExtension(z)))}.");
             var toGet = zips.Where(z => net9 || !catalog.IsNet9Only(z)).ToList();
             var missing = toGet.Where(z => !system.InstalledZips.Contains(z, StringComparer.OrdinalIgnoreCase)).ToList();
             int dl = SetupCatalog.ZipsMB(missing);
             ez = Add(new SetupStep
             {
                 Id = "ez-tools", Kind = SetupStepKind.DownloadEzTools, ItemId = SetupIds.EzCli,
-                Title = $"Download Eric Zimmerman's tools ({toGet.Count} {(net9 ? "net9" : "net4")} build{(toGet.Count == 1 ? "" : "s")})",
+                Title = $"Download Eric Zimmerman's tools ({toGet.Count} {(net9 ? ".NET 10" : "net4")} build{(toGet.Count == 1 ? "" : "s")})",
                 Detail = $"Downloads {string.Join(", ", toGet.Select(Path.GetFileNameWithoutExtension))} from download.ericzimmermanstools.com into the tools folder.",
                 DependsOn = dotnet != null && dotnet.State != SetupStepState.AlreadyInstalled ? new[] { dotnet.Id } : Array.Empty<string>(),
                 DownloadMB = dl, DiskMB = (int)(dl * 2.4), EstimatedSeconds = Secs(dl, 10 + 2 * missing.Count),
@@ -454,20 +480,6 @@ public static class SetupPlanner
             };
             Add(step);
             if (system.ExploreCurrent.Contains(spec.Tool.ToString())) { step.State = SetupStepState.AlreadyInstalled; step.Message = $"{spec.Name} {spec.Version} is already installed."; }
-        }
-
-        if (sel.Has(SetupIds.LocalAi))
-        {
-            var (model, gb) = Assistant.LocalAiAdvisor.ModelToInstall(Assistant.LocalAiAdvisor.Recommend(system));
-            int dl = (int)(gb * 1024) + (system.Ollama.Installed ? 0 : 1300);
-            var step = new SetupStep
-            {
-                Id = SetupIds.LocalAi, Kind = SetupStepKind.InstallLocalAi, ItemId = SetupIds.LocalAi, Title = $"Local AI: Ollama + {model}",
-                Detail = $"Installs Ollama from ollama.com (per user, no admin), downloads {model} (≈{gb:0.#} GB) and points Spectre at it. Anything already there is skipped.",
-                DownloadMB = dl, DiskMB = dl * 2, EstimatedSeconds = Secs(dl, 40),
-                Args = new Dictionary<string, string> { ["model"] = model },
-            };
-            Add(step); // never "already installed": the step also points Spectre at the model, and skips what is there
         }
 
         if (sel.Has(SetupIds.Zeek) || sel.Has(SetupIds.EzDistro) || sel.Has(SetupIds.Rita)) PlanNetwork(sel, system, notes, Add);

@@ -105,4 +105,60 @@ public class SetupLoggingTests
         step.LogText.Should().NotContain("Still installing");
         StepHeartbeat.Format("Still x", TimeSpan.FromSeconds(160)).Should().Be("Still x (elapsed 2:40).");
     }
+
+    private sealed class LogExec : ISetupExecutor
+    {
+        public Task<SetupStepResult> ExecuteAsync(SetupStepContext c, CancellationToken ct) => c.Step.Id switch
+        {
+            "ok" => Task.FromResult(SetupStepResult.Ok("Maps not updated for RECmd (timeout). Log: C:\\l\\recmd.log")),
+            "fail" => Fail(c),
+            _ => throw new InvalidOperationException("The pip install exited with code 5. Installer log: C:\\l\\pip-install.log"),
+        };
+
+        private static Task<SetupStepResult> Fail(SetupStepContext c)
+        {
+            c.AddLogFile(@"C:\l\job.log");
+            c.AddLogFile(@"C:\l\pip-install.log");
+            return Task.FromResult(SetupStepResult.Fail("It failed. See the log."));
+        }
+    }
+
+    [Fact]
+    public async Task Runner_sends_start_end_and_failure_lines_with_the_log_path_to_the_host_logger()
+    {
+        var plan = new SetupPlan
+        {
+            Selection = new SetupSelection(),
+            Steps = new[]
+            {
+                new SetupStep { Id = "ok", Kind = SetupStepKind.SyncMaps, Title = "Maps" },
+                new SetupStep { Id = "fail", Kind = SetupStepKind.InstallRita, Title = "RITA" },
+                new SetupStep { Id = "throws", Kind = SetupStepKind.InstallPlaso, Title = "plaso" },
+            },
+        };
+        var lines = new List<string>();
+        await new SetupRunner(new LogExec(), lines.Add).RunAsync(plan);
+
+        lines.Should().Contain("Setup step start ok Maps");
+        lines.Should().Contain(l => l.StartsWith("Setup step end ok Done ") && l.EndsWith("Maps not updated for RECmd (timeout). Log: C:\\l\\recmd.log"),
+            "a Done step's warning reaches app.log too");
+        lines.Should().Contain("Setup step start fail RITA");
+        lines.Should().Contain(l => l.StartsWith("Setup step end fail Failed "));
+        lines.Should().Contain(@"Setup step FAILED fail: It failed. See the log. (log: C:\l\pip-install.log)", "the last registered log is the one to open");
+        lines.Should().Contain(l => l.StartsWith("Setup step FAILED throws: The pip install exited with code 5."));
+        lines.Should().NotContain(l => l.StartsWith("Setup step FAILED ok"));
+
+        plan.Steps[1].LogFiles.Should().Equal(@"C:\l\job.log", @"C:\l\pip-install.log");
+        plan.Steps[1].LogPath.Should().Be(@"C:\l\pip-install.log");
+        plan.Steps[1].HasLogPath.Should().BeTrue();
+        plan.Steps[0].HasLogPath.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_throwing_logger_never_breaks_the_run()
+    {
+        var plan = new SetupPlan { Selection = new SetupSelection(), Steps = new[] { new SetupStep { Id = "ok", Kind = SetupStepKind.SyncMaps, Title = "Maps" } } };
+        await new SetupRunner(new LogExec(), _ => throw new IOException("disk full")).RunAsync(plan);
+        plan.Steps[0].State.Should().Be(SetupStepState.Done);
+    }
 }

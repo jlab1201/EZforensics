@@ -8,13 +8,14 @@ using EzForensics.Core.Setup;
 namespace EzForensics.App.ViewModels;
 
 /// <summary>
-/// The "AI" entry of the Tools page: AI status and "Set up local AI…". The documents the assistant searches (adding, review, sources)
+/// The "AI" entry of the Tools page: AI status and "Use local AI". The documents the assistant searches (adding, review, sources)
 /// live on the Learn page; the "Manage knowledge in Learn" button goes there.
 /// </summary>
 public sealed partial class AiDocumentsViewModel : ObservableObject
 {
     private readonly Func<bool> _spectreConnected;
     private readonly Action<string, InfoSeverity> _onMessage;
+    private readonly Func<Task<OllamaState>>? _probe;
 
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _progressText = "";
@@ -23,10 +24,17 @@ public sealed partial class AiDocumentsViewModel : ObservableObject
     /// <summary>Ollama is installed (the Tools list shows the entry as set up).</summary>
     [ObservableProperty] private bool _localAiInstalled;
 
-    public AiDocumentsViewModel(Func<bool> spectreConnected, Action<string, InfoSeverity> onMessage)
+    /// <summary>The app-wide "Use local AI" run (shared with Options > AI and the chat card).</summary>
+    public LocalAiService LocalAi { get; }
+
+    public AiDocumentsViewModel(Func<bool> spectreConnected, Action<string, InfoSeverity> onMessage, LocalAiService? localAi = null, Func<Task<OllamaState>>? probe = null)
     {
         _spectreConnected = spectreConnected;
         _onMessage = onMessage;
+        _probe = probe;
+        LocalAi = localAi ?? AppServices.Current?.LocalAi ?? new LocalAiService(() => new System.Net.Http.HttpClient(), new EzForensics.Core.Settings.AppSettings(), () => { });
+        LocalAi.PropertyChanged += OnLocalAiChanged;
+        LocalAi.Finished += OnLocalAiFinished;
     }
 
     private static AppServices S => AppServices.Current;
@@ -37,30 +45,45 @@ public sealed partial class AiDocumentsViewModel : ObservableObject
         string local;
         try
         {
-            var st = await AiHardware.ProbeOllamaAsync(S.CreateHttpClient());
+            var st = _probe != null ? await _probe() : await ProbeAsync();
             LocalAiInstalled = st.Installed;
             local = st.Installed ? (st.Running ? "installed, running" : "installed, not running") : "not installed";
         }
         catch (Exception) { local = "unknown"; }
-        var s = S.Settings;
+        var s = S?.Settings ?? new EzForensics.Core.Settings.AppSettings();
         AiStatus = $"Provider: {s.AiProvider}   Model: {(s.AiModel.Length == 0 ? "not chosen" : s.AiModel)}   Local AI (Ollama): {local}   Spectre engine: {(_spectreConnected() ? "connected" : "not connected")}";
     }
 
-    [RelayCommand(CanExecute = nameof(CanRun))]
-    private async Task SetUpLocalAiAsync()
+    /// <summary>Ollama on the configured address (Options > AI base URL, OLLAMA_HOST, else localhost).</summary>
+    private static async Task<OllamaState> ProbeAsync()
     {
-        IsBusy = true;
-        var ctx = SynchronizationContext.Current;
-        try
+        var s = S.Settings;
+        var root = OllamaEndpoint.Resolve(s.AiProvider, s.AiBaseUrl, Environment.GetEnvironmentVariable("OLLAMA_HOST"));
+        using var http = S.CreateHttpClient();
+        return await AiHardware.ProbeOllamaAsync(http, apiRoot: root);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRun))]
+    private async Task UseLocalAiAsync()
+    {
+        var summary = await LocalAi.StartAsync();
+        if (summary != null) { Message = summary; _onMessage(summary, InfoSeverity.Success); }
+        else Message = LocalAi.Status;
+    }
+
+    private void OnLocalAiChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LocalAiService.Status)) ProgressText = LocalAi.IsRunning ? LocalAi.Status : "";
+        else if (e.PropertyName == nameof(LocalAiService.IsRunning))
         {
-            var summary = await LocalAiRunner.RunAsync(S.CreateHttpClient, S.Settings, S.SaveSettings, t => ctx?.Post(_ => ProgressText = t, null));
-            Message = summary;
-            _onMessage(summary, InfoSeverity.Success);
+            IsBusy = LocalAi.IsRunning;
+            if (!LocalAi.IsRunning) { ProgressText = ""; Message = LocalAi.Status; }
         }
-        catch (OperationCanceledException) { Message = "Cancelled."; }
-        catch (Exception ex) { Message = "Local AI setup failed: " + ex.Message; AppLog.Error("Local AI setup failed", ex); }
-        finally { IsBusy = false; ProgressText = ""; }
-        await RefreshAsync();
+    }
+
+    private void OnLocalAiFinished(bool success)
+    {
+        if (success) _ = RefreshAsync();
     }
 
     [RelayCommand]
@@ -68,5 +91,5 @@ public sealed partial class AiDocumentsViewModel : ObservableObject
 
     private bool CanRun() => !IsBusy;
 
-    partial void OnIsBusyChanged(bool value) => SetUpLocalAiCommand.NotifyCanExecuteChanged();
+    partial void OnIsBusyChanged(bool value) => UseLocalAiCommand.NotifyCanExecuteChanged();
 }

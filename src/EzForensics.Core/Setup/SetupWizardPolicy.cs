@@ -101,25 +101,22 @@ public static class SetupWizardPolicy
 
     public const string FailureHint = "Fix it and click Retry, or Finish.";
 
-    /// <summary>The Install page's failure box: one short line per failed step ("Title: first sentence of its message"), then <see cref="FailureHint"/>.</summary>
+    /// <summary>
+    /// The Install page's failure box: one line per failed step ("Title: whole first line of its message", never cut: the box wraps
+    /// and scrolls, and a cut message hid the log path), then <see cref="FailureHint"/>.
+    /// </summary>
     public static string FailureText(IEnumerable<SetupStep> failed)
     {
         var lines = failed.Select(s =>
         {
             var title = s.Title.Replace(" (after the restart)", "");
-            var why = FirstSentence(s.Message, 90);
+            var why = FirstLine(s.Message);
             return why.Length > 0 ? $"{title}: {why}" : $"{title}: failed.";
         });
         return string.Join(Environment.NewLine, lines.Append(FailureHint));
     }
 
-    private static string FirstSentence(string? text, int max)
-    {
-        var line = (text ?? "").Split(LineBreaks, 2, StringSplitOptions.TrimEntries)[0];
-        int dot = line.IndexOf(". ", StringComparison.Ordinal);
-        if (dot > 0) line = line[..(dot + 1)];
-        return line.Length <= max ? line : line[..(max - 1)].TrimEnd() + "…";
-    }
+    private static string FirstLine(string? text) => (text ?? "").Split(LineBreaks, 2, StringSplitOptions.TrimEntries)[0];
 
     private static readonly char[] LineBreaks = { '\r', '\n' };
 }

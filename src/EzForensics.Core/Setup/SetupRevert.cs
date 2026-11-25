@@ -45,6 +45,8 @@ public sealed class SetupRevertPaths
     public required string DistroInstallDir { get; init; }
 
     public string ToolsNet9 => System.IO.Path.Combine(ToolsRoot, "net9");
+    /// <summary>Modern (.NET 9/10) EZ builds extract here (older installs used <see cref="ToolsNet9"/>).</summary>
+    public string ToolsNet => System.IO.Path.Combine(ToolsRoot, "net");
     public string VolatilityVenv => System.IO.Path.Combine(VolatilityRoot, "venv");
     public string VolatilityCache => System.IO.Path.Combine(VolatilityRoot, "cache");
     public string VolatilitySymbols => System.IO.Path.Combine(VolatilityRoot, "symbols");
@@ -68,12 +70,12 @@ public sealed class SetupRevertPaths
     }
 
     /// <summary>Folders whose top-level entries are recorded one by one (several steps add to them).</summary>
-    internal IEnumerable<string> Containers => new[] { ToolsRoot, ToolsNet9, VolatilitySymbols };
+    internal IEnumerable<string> Containers => new[] { ToolsRoot, ToolsNet9, ToolsNet, VolatilitySymbols };
 
     /// <summary>Folders recorded as existing or not.</summary>
     internal IEnumerable<string> Folders => new[]
     {
-        ToolsRoot, ToolsNet9, DotnetDir, PlasoRoot, PythonDir, PlasoVenv, VolatilityRoot, VolatilityVenv, VolatilityCache, VolatilitySymbols,
+        ToolsRoot, ToolsNet9, ToolsNet, DotnetDir, PlasoRoot, PythonDir, PlasoVenv, VolatilityRoot, VolatilityVenv, VolatilityCache, VolatilitySymbols,
         AutorunsRoot, System.IO.Path.GetDirectoryName(AutorunsRoot) ?? AutorunsRoot, WslRoot, DistroInstallDir,
     };
 }
@@ -163,7 +165,7 @@ public static class SetupRevert
 
         // legacy: a leftover Autoruns lives inside the tools folder (Sysinternals\Autoruns): never counted as one of the EZ tools'.
         var autorunsTop = TopUnder(paths.AutorunsRoot, paths.ToolsRoot);
-        var toolsExclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Norm(paths.ToolsNet9) };
+        var toolsExclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Norm(paths.ToolsNet9), Norm(paths.ToolsNet) };
         if (autorunsTop != null) toolsExclude.Add(autorunsTop);
 
         foreach (var s in steps.Where(Ran))
@@ -178,6 +180,7 @@ public static class SetupRevert
                 case SetupStepKind.DownloadEzTools:
                     NewEntries(paths.ToolsRoot, what, toolsExclude);
                     NewEntries(paths.ToolsNet9, what, Array.Empty<string>());
+                    NewEntries(paths.ToolsNet, what, Array.Empty<string>());
                     break;
                 case SetupStepKind.ProvisionPython:
                     Add(RevertKind.Path, paths.PythonDir, what);

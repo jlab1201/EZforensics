@@ -10,7 +10,7 @@ public sealed record DistillPlan(int Documents, int Sections, int PendingNotes, 
 /// <summary>The AI actions the Inbox and the Library share: the runner (busy, progress, cancel, errors), labelling and distilling.</summary>
 public static class KnowledgeAiRun
 {
-    public const string NoAiHint = "Set up local AI… (Tools → AI)";
+    public const string NoAiHint = "Use local AI (Tools → AI)";
     private static int _runs;
 
     /// <summary>How many runs went through <see cref="RunAsync"/> (tests check that both view models use it).</summary>

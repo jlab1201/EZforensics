@@ -9,7 +9,7 @@ namespace EzForensics.App.ViewModels.Learn;
 /// </summary>
 public sealed class KnowledgeAiGate
 {
-    public const string UnreachableHint = "Local AI isn't running. Start Ollama or check Tools → AI.";
+    public const string UnreachableHint = "Local AI needs Ollama (free, installed separately from ollama.com), then Tools → AI.";
 
     private readonly Func<(KnowledgeCompletion? Complete, string Model)> _ai;
     private readonly Func<Task<bool>> _probe;

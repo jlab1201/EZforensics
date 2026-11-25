@@ -7,6 +7,7 @@ namespace EzForensics.Core.Tools;
 public enum RemoteFileStatus { UpToDate, New, Changed }
 
 public sealed record RemoteToolFile(string Name, string Url, string? ETag, long Size, bool IsNet9, RemoteFileStatus Status);
+// IsNet9 = modern .NET 9/10 build (see ToolUpdater.IsModernUrl); the name is kept for the details file column.
 
 public sealed record UpdateProgress(string Name, int FileIndex, int FileCount, long BytesReceived, long? TotalBytes, string Phase);
 
@@ -52,7 +53,7 @@ public sealed class ToolUpdater
             var name = FileNameOf(url);
             if (!IsSafeFileName(name)) continue;
             if (Excluded.Any(e => e.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
-            bool net9 = IsNet9Url(url);
+            bool net9 = IsModernUrl(url);
             bool always = name.Equals("Get-ZimmermanTools.zip", StringComparison.OrdinalIgnoreCase);
             if (!always)
             {
@@ -73,7 +74,23 @@ public sealed class ToolUpdater
         name.IndexOfAny(new[] { ':', '/', '\\' }) < 0 && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 &&
         Path.GetFileName(name) == name;
 
-    public static bool IsNet9Url(string url) => url.Contains("/net9/", StringComparison.OrdinalIgnoreCase);
+    /// <summary>True for a modern .NET 9/10 build: the index now links them under /net/ (older indexes used /net9/ or /net10/).</summary>
+    public static bool IsModernUrl(string url) =>
+        url.Contains("/net/", StringComparison.OrdinalIgnoreCase) || url.Contains("/net9/", StringComparison.OrdinalIgnoreCase) ||
+        url.Contains("/net10/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Folder under the tools root that modern builds extract to.</summary>
+    public const string ModernFolder = "net";
+
+    /// <summary>Picks the build of <paramref name="zip"/> to install: the modern one when wanted and available, else (only if modern is wanted) the net4 one, flagged by <paramref name="fellBack"/>.</summary>
+    public static RemoteToolFile? PickBuild(IEnumerable<RemoteToolFile> all, string zip, bool wantModern, out bool fellBack)
+    {
+        fellBack = false;
+        var cands = all.Where(f => f.Name.Equals(zip, StringComparison.OrdinalIgnoreCase)).ToList();
+        var want = cands.FirstOrDefault(f => f.IsNet9 == wantModern);
+        if (want == null && wantModern && cands.Count > 0) { want = cands[0]; fellBack = true; }
+        return want;
+    }
 
     public static string FileNameOf(string url) => url[(url.LastIndexOf('/') + 1)..];
 
@@ -190,7 +207,7 @@ public sealed class ToolUpdater
                     catch (HttpRequestException) { }
                     if (etag is null) await Task.Delay(TimeSpan.FromSeconds(attempt), ct).ConfigureAwait(false); // transient CDN error
                 }
-                return new RemoteToolFile(FileNameOf(url), url, etag, size, IsNet9Url(url), RemoteFileStatus.New);
+                return new RemoteToolFile(FileNameOf(url), url, etag, size, IsModernUrl(url), RemoteFileStatus.New);
             }
             finally { gate.Release(); }
         }).ToList();
@@ -241,7 +258,7 @@ public sealed class ToolUpdater
         {
             ct.ThrowIfCancellationRequested();
             var f = files[i];
-            var targetDir = f.IsNet9 ? Path.Combine(root, "net9") : root;
+            var targetDir = f.IsNet9 ? Path.Combine(root, ModernFolder) : root;
             Directory.CreateDirectory(targetDir);
             var zipPath = Path.Combine(targetDir, Path.GetFileName(f.Name));
             var etagSeen = f.ETag;
@@ -320,6 +337,7 @@ public sealed class ToolUpdater
                         continue; // keep the previous version and do not record it as updated
                     }
                     CopyTree(staging, targetDir);
+                    if (f.IsNet9) RemoveStaleNet4Copies(staging, root, f.Name, log);
                 }
                 finally { try { Directory.Delete(staging, true); } catch { } }
                 File.Delete(zipPath);
@@ -350,6 +368,37 @@ public sealed class ToolUpdater
                 return $"{zipName} was not installed: {Path.GetFileName(exe)} failed the signature check ({why}). The previous version was kept.";
         }
         return null;
+    }
+
+    /// <summary>
+    /// After a modern copy of a zip is installed, removes the old .NET Framework copy of the same tool from the tools root: only the managed
+    /// top-level exes this zip contains (and their .config), nothing else (shared dlls, maps and folders stay). Never touches anything outside <paramref name="root"/>.
+    /// </summary>
+    public static void RemoveStaleNet4Copies(string staging, string root, string zipName, Action<string>? log)
+    {
+        try
+        {
+            var rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            foreach (var exe in Directory.EnumerateFiles(staging, "*.exe", SearchOption.TopDirectoryOnly))
+            {
+                var name = Path.GetFileName(exe);
+                var old = Path.GetFullPath(Path.Combine(root, name));
+                if (!old.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase) || !File.Exists(old)) continue;
+                if (ToolLocator.Classify(old) != BuildFlavor.Net4) continue;
+                try
+                {
+                    File.Delete(old);
+                    log?.Invoke($"Removed the old .NET Framework copy of {name} ({zipName}) from {root}; the modern build is in {Path.Combine(root, ModernFolder)}.");
+                    var cfg = old + ".config";
+                    if (File.Exists(cfg)) File.Delete(cfg);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    log?.Invoke($"Could not remove the old .NET Framework copy of {name} ({ex.Message}); the modern build is preferred anyway.");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     private static void CopyTree(string from, string to)

@@ -22,6 +22,7 @@ public sealed class AppServices
         Locator = new ToolLocator();
         Catalog = ToolCatalog.LoadEmbedded();
         Output = new JobOutputHub();
+        LocalAi = new LocalAiService(CreateHttpClient, settings, SaveSettings);
         // Must be constructed on the UI thread: Jobs and job events marshal to this SynchronizationContext.
         Queue = new JobQueue(Locator, settings.MaxParallel, TimeSpan.FromMinutes(Math.Max(1, settings.JobTimeoutMinutes)))
         {
@@ -65,6 +66,8 @@ public sealed class AppServices
     /// </summary>
     public MaintenanceRunner Maintenance { get; }
     public JobOutputHub Output { get; }
+    /// <summary>"Use local AI" (Ollama + model): one run at a time for Options, Tools and the Spectre chat card.</summary>
+    public LocalAiService LocalAi { get; }
 
     /// <summary>True while a job whose tool id starts with one of <paramref name="toolIdPrefixes"/> is queued or running, on the analysis queue or on
     /// the private maintenance queue (so an install started by setup is seen too).</summary>
@@ -106,6 +109,10 @@ public sealed class AppServices
     }
 
     public void ShowJob(Job job) => JobRequested?.Invoke(job);
+
+    /// <summary>Raised to open Options and scroll to the AI card.</summary>
+    public event Action? OptionsAiRequested;
+    public void ShowOptionsAi() => OptionsAiRequested?.Invoke();
 
     public void Navigate<TViewModel>() => NavigationRequested?.Invoke(typeof(TViewModel));
     public void Navigate(Type viewModel) => NavigationRequested?.Invoke(viewModel);

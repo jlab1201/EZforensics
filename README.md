@@ -1,30 +1,18 @@
 # EZ Forensics
 
-**A Windows app for DFIR: give it the evidence, get back an attack story mapped to MITRE ATT&CK.**
+**The standard open-source forensic tools, made easy to install and use, in one Windows app.**
 
-EZ Forensics installs and runs the standard open-source forensic tools for you:
-- **Windows artifacts:** Eric Zimmerman's tools.
-- **Memory:** Volatility 3.
-- **Super timeline:** plaso.
-- **Network:** Zeek and RITA.
+What EZ Forensics gives you:
 
-All results go into one case folder. Every tool run is logged with the tool version, the exact command and SHA-256 hashes.
-
-Then it connects the results:
-- **Process tree:** rebuilt from memory and event logs. Hollowed, injected and hidden processes are flagged, and so are wrong parents.
-- **Persistence:** run keys, services, scheduled tasks and WMI, read from the evidence offline.
-
-You go through the rows in a fast table, flag what matters, and turn it into findings with ATT&CK technique IDs. From those you get a timeline, an attack flow, slides and an HTML report.
-
-**Spectre**, the built-in AI analyst, can do much of this for you:
-- **Analyses the case on its own.** After Ingest it reads the results and drafts findings, each with a technique, a confidence level and the rows that prove it. You confirm or reject every one.
-- **Works the app from chat.** Ask a question and it runs queries, filters, flags rows and opens files for you.
-- **Uses your own notes (RAG).** It searches your knowledge base by keyword and by meaning, and tells you which notes it used.
-- **Stays on your PC.** It uses a local model by default. A cloud model is used only if you turn it on.
+1. **Forensic tools without the setup work.** One wizard installs Eric Zimmerman's tools, Volatility 3, plaso, Zeek and RITA. Point Ingest at the evidence and it picks the right tool for each artifact and runs it. No hunting for flags, no tools to update by hand. When you need it, you can still change the exact command each tool runs. Every run is logged with the tool version, the exact command and SHA-256 hashes.
+2. **Analysis that fills the gaps between tools.** Ingest, analyse, explore and review the evidence in one app. It has the things you usually miss or do by hand: a table that opens CSVs with millions of rows, search across all columns, merging files into one view, row flags, saved filters, a process tree rebuilt from memory and event logs, persistence read offline, and warnings when timestamps can't be trusted.
+3. **Review and report.** Turn flagged rows into findings with ATT&CK technique IDs, confirm or reject each one, and get a timeline, an attack flow, slides and an HTML report.
+4. **Compare your analysis with AI.** Spectre, the built-in AI analyst, works through the same case on its own and builds its own findings. They go in the same list as yours, so you can see what it found that you missed, and the other way round. Keep what it got right in your analysis; you decide what goes in the report. It runs on a local model by default.
+5. **Your own knowledge base for the AI.** Add your notes, playbooks, Obsidian vaults or ready-made packs. You decide which documents Spectre may use, and it tells you which ones it used for each answer.
 
 ![Story: the key events of a case on one timeline](docs/images/story-timeline.png)
 
-*Story view of the demo case analysed by Spectre: 7 key events on one timeline.*
+*Story view of the demo case: 7 key events on one timeline.*
 
 **Try it without evidence:** click **Load demo case** on the Ingest or Review page. It opens a made-up attack on one PC, and the other screenshots below come from it. No internet or AI needed. The attack has eight steps:
 1. RDP sign-in with a valid account (T1078).
@@ -56,7 +44,7 @@ You go through the rows in a fast table, flag what matters, and turn it into fin
   - Volatility 3, with an optional offline Windows symbol pack.
   - Zeek and RITA.
   - Detect It Easy, ExifTool and CyberChef.
-  - A local AI model (Ollama).
+- Local AI is not part of setup. EZ Forensics does not install Ollama: install it yourself from ollama.com, then use Tools, AI, Use local AI to download a model.
 - Pick Minimal, Everything, or your own list. You see the download size first.
 - Admin rights and one restart are needed only for Zeek and RITA.
 - Tools are downloaded only from their official sites over HTTPS, and each download's SHA-256 is logged.
@@ -143,14 +131,17 @@ You go through the rows in a fast table, flag what matters, and turn it into fin
 
 - **Report:** one HTML file that opens in any browser and prints well, or Markdown.
 
-### Spectre (AI analyst)
+### Spectre (AI)
 
 ![Spectre chat panel](docs/images/spectre.png)
 
-- **Analyses the case for you:**
+Spectre is a second opinion, not a replacement for your own analysis.
+
+- **Analyses the case on its own, so you can compare:**
   - Starts by itself after Ingest (Options › AI › Run Spectre after Ingest), or when you click **Run Spectre** on Review.
   - Reads every result, up to and including the super timeline, in several passes.
   - Drafts findings with a technique, a confidence level and the supporting rows, then builds the story timeline.
+  - Its findings appear in the same list as yours on Review, so you can compare the two.
   - Running it again keeps your edits. Spectre never confirms its own findings; you do.
 - **Works the app from chat:**
   - It has nearly 40 actions, picked for the page you are on. Examples: query a CSV, count values, filter, sort and flag the table, open a file, start Ingest, install a tool, search files, edit a finding, retry a job.
@@ -162,7 +153,7 @@ You go through the rows in a fast table, flag what matters, and turn it into fin
 - **Your choice of model:** a local Ollama model by default. Anthropic, OpenAI and OpenRouter work with your own API key. Case data is sent to a cloud model only after you agree for that case.
 - Set it up in **Options › AI**. See [docs/SETUP.md](docs/SETUP.md).
 
-#### AI page: the knowledge base
+#### AI page: customise what Spectre knows
 
 ![AI page: knowledge graph](docs/images/ai-graph.png)
 

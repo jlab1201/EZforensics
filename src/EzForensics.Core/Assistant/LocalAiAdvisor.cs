@@ -40,5 +40,34 @@ public static class LocalAiAdvisor
         return new(LocalAiChoice.Cloud, null, 0, $"{gpuNote} and {Round(ram)} GB of RAM: a cloud AI is the better fit.");
     }
 
+    /// <summary>A model that can chat: embedding models (nomic-embed-text, bge-m3, all-minilm, ...) are not.</summary>
+    public static bool IsChatModel(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        var n = name.Trim().ToLowerInvariant();
+        var bare = n.Contains('/') ? n[(n.LastIndexOf('/') + 1)..] : n;
+        string[] markers = { "embed", "minilm", "bge-", "bge:", "granite-embedding" };
+        if (markers.Any(n.Contains)) return false;
+        return !bare.StartsWith("bge");
+    }
+
+    /// <summary>The chat model to offer when the recommended one is not downloaded: the one with the most parameters in its name ("14b"), else the first.</summary>
+    public static string? PickExistingChatModel(IEnumerable<string> installed)
+    {
+        string? best = null;
+        double bestSize = -1;
+        foreach (var m in installed.Where(IsChatModel))
+        {
+            var mt = System.Text.RegularExpressions.Regex.Match(m, @"(?<![\d.])(\d+(?:\.\d+)?)b(?![a-z])", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var size = mt.Success && double.TryParse(mt.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+            if (size > bestSize) { best = m; bestSize = size; }
+        }
+        return best;
+    }
+
+    /// <summary>Text for the chat card: what this PC suits. The small-PC advice comes first, then what Ollama can still do.</summary>
+    public static string ChatCardText(LocalAiChoice choice, string baseText) => choice == LocalAiChoice.Local ? baseText
+        : "This PC is better suited to a cloud AI. You can still use a local model if Ollama is installed.";
+
     private static string Round(double gb) => Math.Round(gb).ToString("0");
 }
